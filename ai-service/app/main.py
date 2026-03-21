@@ -248,10 +248,10 @@ async def lifespan(app: FastAPI):
         device=DEVICE
     )
 
-    # 2. Milvus vector store
+    # 2. Milvus vector store (using Milvus Lite with local SQLite)
     vectorstore = Milvus(
         embedding_function=embedding_model,
-        connection_args={"uri": MILVUS_URI},
+        connection_args={"db_path": MILVUS_URI},
         collection_name=COLLECTION_NAME,
         drop_old=False,
         auto_id=True

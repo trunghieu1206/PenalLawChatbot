@@ -55,7 +55,7 @@ def load_embedding_model() -> SentenceTransformer:
 
 def setup_milvus_collection():
     """Create Milvus collection if not exists."""
-    connections.connect(uri=MILVUS_URI)
+    connections.connect(db_path=MILVUS_URI)
     if utility.has_collection(COLLECTION_NAME):
         print(f"Collection '{COLLECTION_NAME}' already exists.")
         return Collection(COLLECTION_NAME)
