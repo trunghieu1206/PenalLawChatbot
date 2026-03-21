@@ -1,0 +1,91 @@
+/* Auth pages shared module CSS */
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.bg {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(99,102,241,0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 90%, rgba(245,158,11,0.08) 0%, transparent 60%),
+    var(--bg-base);
+  z-index: 0;
+}
+
+.container {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 420px;
+  padding: 40px 36px;
+}
+
+.logo {
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.logoIcon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 0 20px rgba(99,102,241,0.5));
+}
+
+.logoText {
+  font-family: var(--font-display);
+  font-size: 30px;
+  background: linear-gradient(135deg, #818cf8, #6366f1);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 6px;
+}
+
+.logoSub {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.form { display: flex; flex-direction: column; gap: 18px; }
+
+.field { display: flex; flex-direction: column; }
+
+.error {
+  padding: 12px 14px;
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: var(--radius-md);
+  color: #f87171;
+  font-size: 14px;
+}
+
+.submitBtn {
+  width: 100%;
+  justify-content: center;
+  padding: 13px;
+  font-size: 15px;
+  margin-top: 4px;
+}
+
+.footer {
+  text-align: center;
+  margin-top: 24px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.link {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 600;
+  transition: var(--transition);
+}
+.link:hover { color: var(--primary-dark); text-decoration: underline; }

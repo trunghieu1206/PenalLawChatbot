@@ -1,0 +1,89 @@
+version: '3.9'
+
+services:
+  # ---- POSTGRESQL ----
+  postgres:
+    image: postgres:16-alpine
+    container_name: penallaw-postgres
+    environment:
+      POSTGRES_DB: penallaw
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---- SPRING BOOT BACKEND ----
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: penallaw-backend
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: penallaw
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET}
+      AI_SERVICE_URL: http://ai-service:8000
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---- PYTHON AI SERVICE ----
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: penallaw-ai-service
+    environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      HF_TOKEN: ${HF_TOKEN}
+      MILVUS_URI: /data/VN_law_lora.db
+      COLLECTION_NAME: ${COLLECTION_NAME:-legal_rag_lora}
+      LLM_MODEL: ${LLM_MODEL:-google/gemini-2.5-flash}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: penallaw
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - ai_data:/data
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # ---- REACT FRONTEND ----
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: penallaw-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  ai_data:
