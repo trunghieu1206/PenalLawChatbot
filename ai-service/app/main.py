@@ -31,7 +31,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-import importlib
+
 from langgraph.graph import END, StateGraph, START
 from langgraph.graph.message import add_messages
 from langchain_openai import ChatOpenAI
@@ -248,31 +248,20 @@ async def lifespan(app: FastAPI):
         device=DEVICE
     )
 
-    # 2. Milvus-Lite (local) — delay importing modules that initialize pymilvus
-    # Remove any MILVUS_URI value from env before importing pymilvus to avoid
-    # import-time URI validation, then connect using db_path.
-    original_milvus_env = os.environ.pop("MILVUS_URI", None)
-    try:
-        # Import pymilvus connections module and connect to local DB file
-        pymilvus_connections = importlib.import_module("pymilvus.orm.connections")
-        pymilvus_connections.connections.connect(db_path=MILVUS_URI)
-
-        # Now import the langchain Milvus wrapper and construct vectorstore
-        langchain_milvus = importlib.import_module("langchain_milvus")
-        Milvus = getattr(langchain_milvus, "Milvus")
-
-        vectorstore = Milvus(
-            embedding_function=embedding_model,
-            connection_args={"db_path": MILVUS_URI},
-            collection_name=COLLECTION_NAME,
-            drop_old=False,
-            auto_id=True,
-        )
-        retriever = vectorstore.as_retriever(search_kwargs={"k": TOP_K})
-    finally:
-        # restore original env var if present
-        if original_milvus_env is not None:
-            os.environ["MILVUS_URI"] = original_milvus_env
+    # 2. Milvus-Lite vector store
+    # Key: use uri= (Milvus Lite file path) and text_field="content"
+    # (the embed script stores article text in the "content" field, not "text")
+    print(f"📦 Connecting to Milvus Lite DB: {MILVUS_URI}")
+    vectorstore = Milvus(
+        embedding_function=embedding_model,
+        connection_args={"uri": MILVUS_URI},
+        collection_name=COLLECTION_NAME,
+        text_field="content",
+        drop_old=False,
+        auto_id=True,
+    )
+    retriever = vectorstore.as_retriever(search_kwargs={"k": TOP_K})
+    print(f"✅ Milvus ready — collection '{COLLECTION_NAME}'")
 
     # 3. LLM (OpenRouter)
     llm = ChatOpenAI(

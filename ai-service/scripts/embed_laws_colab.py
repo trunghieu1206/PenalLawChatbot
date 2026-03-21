@@ -10,7 +10,7 @@
 # ============================================================
 
 # ── Cell 1: Install dependencies ────────────────────────────
-# !pip install -q sentence-transformers pymilvus[model] huggingface_hub
+# !pip install -q pymilvus==2.4.4 milvus-lite==2.4.8 "marshmallow<4.0.0" sentence-transformers huggingface_hub peft
 
 # ── Cell 2: Mount Google Drive ───────────────────────────────
 # from google.colab import drive
@@ -42,7 +42,7 @@ JSON_FILES = [
 COLLECTION_NAME = "legal_rag_lora"
 EMBEDDING_MODEL  = "BAAI/bge-m3"      
 LORA_ADAPTER     = "trunghieu1206/lawchatbot-40k"   
-BATCH_SIZE       = 32
+BATCH_SIZE       = 4
 VECTOR_DIM       = 1024               
 
 # ── Load all articles from JSON files ──────────────────────
