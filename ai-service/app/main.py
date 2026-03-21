@@ -262,6 +262,7 @@ async def lifespan(app: FastAPI):
         connection_args={"uri": MILVUS_URI},
         collection_name=COLLECTION_NAME,
         text_field="content",
+        output_fields=["content", "article_number", "title", "chapter", "source", "effective_start", "effective_end"],
         drop_old=False,
         auto_id=True,
     )
