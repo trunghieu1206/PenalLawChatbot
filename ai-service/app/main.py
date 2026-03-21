@@ -40,7 +40,7 @@ from langchain_openai import ChatOpenAI
 load_dotenv()
 
 # --- CONFIGURATION ---
-MILVUS_URI = os.getenv("MILVUS_DB_PATH", "./VN_law_lora.db")
+MILVUS_URI = os.getenv("MILVUS_URI", "./VN_law_lora.db")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "legal_rag_lora")
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 TOP_K = int(os.getenv("TOP_K", "15"))

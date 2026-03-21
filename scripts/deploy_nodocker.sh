@@ -101,8 +101,11 @@ POSTGRES_PORT=5432
 POSTGRES_DB=${POSTGRES_DB:-penallaw}
 POSTGRES_USER=${POSTGRES_USER:-postgres}
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-MILVUS_DB_PATH=${PROJECT_DIR}/ai-service/VN_law_lora.db
-LLM_MODEL=${LLM_MODEL:-google/gemini-2.5-flash-preview:thinking}
+MILVUS_URI=${PROJECT_DIR}/ai-service/VN_law_lora.db
+COLLECTION_NAME=legal_rag_lora
+LLM_MODEL=${LLM_MODEL:-google/gemini-2.5-flash}
+TOP_K=15
+EMBEDDING_ADAPTER=trunghieu1206/lawchatbot-40k
 EOF
 
 # Kill existing
@@ -178,6 +181,10 @@ server {
     }
 }
 NGINX
+
+# Fix permissions — nginx runs as www-data which can't enter /root by default
+chmod 755 /root
+chmod -R 755 "$PROJECT_DIR/frontend/dist/"
 
 # Enable site
 ln -sf /etc/nginx/sites-available/penallaw /etc/nginx/sites-enabled/penallaw
