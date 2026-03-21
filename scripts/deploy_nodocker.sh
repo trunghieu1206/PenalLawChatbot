@@ -101,7 +101,7 @@ POSTGRES_PORT=5432
 POSTGRES_DB=${POSTGRES_DB:-penallaw}
 POSTGRES_USER=${POSTGRES_USER:-postgres}
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-MILVUS_URI=${PROJECT_DIR}/ai-service/VN_law_lora.db
+MILVUS_DB_PATH=${PROJECT_DIR}/ai-service/VN_law_lora.db
 COLLECTION_NAME=legal_rag_lora
 LLM_MODEL=${LLM_MODEL:-google/gemini-2.5-flash}
 TOP_K=15
@@ -111,6 +111,10 @@ EOF
 # Kill existing
 pkill -f "uvicorn app.main:app" 2>/dev/null || true
 sleep 1
+
+# Ensure MILVUS_URI is NOT in the shell environment when uvicorn starts
+# (pymilvus reads it at import time and crashes if it contains a file path)
+unset MILVUS_URI
 
 nohup uvicorn app.main:app \
     --host 0.0.0.0 \
