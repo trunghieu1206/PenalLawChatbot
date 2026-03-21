@@ -31,7 +31,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-
+from langchain_milvus import Milvus
 from langgraph.graph import END, StateGraph, START
 from langgraph.graph.message import add_messages
 from langchain_openai import ChatOpenAI
