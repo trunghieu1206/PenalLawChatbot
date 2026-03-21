@@ -9,6 +9,11 @@ Enhanced LangGraph pipeline with:
 """
 
 import os
+# ⚠️ MUST be before any pymilvus/langchain_milvus imports:
+# pymilvus reads MILVUS_URI from os.environ at import time (Connections singleton).
+# If it contains a file path instead of http://..., it crashes immediately.
+os.environ.pop("MILVUS_URI", None)
+
 import re
 import json
 import numpy as np
