@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # =============================================================
 # deploy.sh
-# Clone project, transfer data files, configure env, and start
-# all services with Docker Compose.
+# Clone project, configure env, and start all services.
+# Works on containerized GPU servers (no systemd).
 #
-# Usage (on the GPU server, after running setup_server.sh):
+# Usage (already root, after setup_server.sh):
 #   bash deploy.sh
 # =============================================================
 set -euo pipefail
@@ -14,12 +14,26 @@ info()  { echo -e "${GREEN}[INFO]${NC}  $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 error() { echo -e "${RED}[ERR]${NC}   $*"; exit 1; }
 
-# ── CONFIG — edit these before running ──────────────────────
-REPO_URL="https://github.com/YOUR_USERNAME/PenalLawChatbot.git"
+# ── CONFIG ───────────────────────────────────────────────────
+REPO_URL="https://github.com/trunghieu1206/PenalLawChatbot"
 PROJECT_DIR="/root/PenalLawChatbot"
-# ────────────────────────────────────────────────────────────
 
-# ── 1. Clone repo ───────────────────────────────────────────
+# ── 0. Ensure dockerd is running (no systemd in container) ───
+if ! docker ps &>/dev/null; then
+    info "Starting Docker daemon (dockerd)..."
+    dockerd > /root/dockerd.log 2>&1 &
+    info "Waiting for Docker to be ready..."
+    for i in $(seq 1 30); do
+        docker ps &>/dev/null && break
+        sleep 1
+    done
+    docker ps &>/dev/null || error "Docker failed to start. Check: cat /root/dockerd.log"
+    info "Docker is ready."
+else
+    info "Docker is already running."
+fi
+
+# ── 1. Clone / pull repo ────────────────────────────────────
 if [ -d "$PROJECT_DIR" ]; then
     warn "Project directory exists. Pulling latest changes..."
     git -C "$PROJECT_DIR" pull
@@ -29,53 +43,49 @@ else
 fi
 cd "$PROJECT_DIR"
 
-# ── 2. Create .env from example ─────────────────────────────
+# ── 2. Create .env ───────────────────────────────────────────
 if [ ! -f ".env" ]; then
     cp .env.example .env
-    warn "Created .env from .env.example."
-    warn ">>> IMPORTANT: Edit .env now and fill in your API keys! <<<"
+    warn ">>> IMPORTANT: Fill in your API keys in .env <<<"
     warn "    nano .env"
     warn ""
-    warn "Required values:"
+    warn "Required:"
     warn "  OPENROUTER_API_KEY=..."
     warn "  HF_TOKEN=..."
-    warn "  JWT_SECRET=...  (use: openssl rand -base64 64)"
+    warn "  JWT_SECRET=$(openssl rand -base64 32)"
     echo ""
-    read -p "Press ENTER after you have edited .env to continue..." _
+    read -p "Press ENTER after editing .env..." _
 fi
 
-# Validate required env vars
+# Validate
 source .env
-[ -z "${OPENROUTER_API_KEY:-}" ] && error "OPENROUTER_API_KEY is not set in .env"
-[ -z "${HF_TOKEN:-}"           ] && error "HF_TOKEN is not set in .env"
-[ -z "${JWT_SECRET:-}"         ] && error "JWT_SECRET is not set in .env"
+[ -z "${OPENROUTER_API_KEY:-}" ] && error "OPENROUTER_API_KEY not set in .env"
+[ -z "${HF_TOKEN:-}"           ] && error "HF_TOKEN not set in .env"
+[ -z "${JWT_SECRET:-}"         ] && error "JWT_SECRET not set in .env"
 info ".env validated."
 
-# ── 3. Check data files ─────────────────────────────────────
+# ── 3. Check Milvus DB file ──────────────────────────────────
 DB_PATH="$PROJECT_DIR/ai-service/VN_law_lora.db"
 if [ ! -f "$DB_PATH" ]; then
-    warn "VN_law_lora.db not found at $DB_PATH"
-    warn "Transfer it from your Mac or Google Drive:"
-    warn "  scp user@your-mac:/path/to/VN_law_lora.db $DB_PATH"
-    warn "Continuing without it — AI service will start but RAG won't work until DB is present."
+    warn "VN_law_lora.db not found — AI RAG won't work until you upload it:"
+    warn "  scp -P 1894 VN_law_lora.db root@n1.ckey.vn:$DB_PATH"
 fi
 
-# ── 4. Build & start with Docker Compose ────────────────────
-info "Building and starting all services..."
+# ── 4. Build & start ────────────────────────────────────────
+info "Building and starting all services (this may take a while)..."
 docker compose up --build -d
 
-info "Waiting 10s for services to initialize..."
-sleep 10
+info "Waiting 15s for services to initialize..."
+sleep 15
 
-# ── 5. Health checks ────────────────────────────────────────
+# ── 5. Health checks ─────────────────────────────────────────
 info "Running health checks..."
-
 check_service() {
     local name=$1 url=$2
     if curl -sf "$url" > /dev/null 2>&1; then
-        info "  ✅ $name is up ($url)"
+        info "  ✅ $name is up"
     else
-        warn "  ⚠️  $name may not be ready yet ($url) — check: docker compose logs $name"
+        warn "  ⚠️  $name not ready yet — run: docker compose logs"
     fi
 }
 
@@ -83,18 +93,18 @@ check_service "AI Service"  "http://localhost:8000/health"
 check_service "Backend API" "http://localhost:8080/actuator/health"
 check_service "Frontend"    "http://localhost:80"
 
-# ── 6. Done ─────────────────────────────────────────────────
-SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || echo "YOUR_SERVER_IP")
+# ── 6. Done ──────────────────────────────────────────────────
 echo ""
 info "=============================================="
 info "✅  Deployment complete!"
 info "=============================================="
-info "  Frontend  → http://$SERVER_IP"
-info "  Backend   → http://$SERVER_IP:8080"
-info "  AI API    → http://$SERVER_IP:8000/docs"
+info "Access via mapped ports:"
+info "  Frontend  → http://n1.ckey.vn:1895"
+info "  AI API    → http://n1.ckey.vn:1897/docs"
+info "  Backend   → http://n1.ckey.vn:1898"
 info ""
 info "Useful commands:"
-info "  docker compose logs -f ai-service   # watch AI logs"
-info "  docker compose logs -f backend"
-info "  docker compose ps                   # check status"
-info "  docker compose down                 # stop all"
+info "  docker compose logs -f ai-service    # AI service logs"
+info "  docker compose logs -f backend       # backend logs"
+info "  docker compose ps                    # service status"
+info "  docker compose down                  # stop everything"

@@ -11,6 +11,7 @@ Enhanced LangGraph pipeline with:
 import os
 import re
 import json
+import numpy as np
 import torch
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -21,6 +22,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from huggingface_hub import login
+from transformers import AutoModel, AutoTokenizer
+from peft import PeftModel
 
 # LangChain & AI Imports
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
@@ -32,13 +35,12 @@ from langchain_milvus import Milvus
 from langgraph.graph import END, StateGraph, START
 from langgraph.graph.message import add_messages
 from langchain_openai import ChatOpenAI
-from sentence_transformers import SentenceTransformer
 
 # Load Environment Variables
 load_dotenv()
 
 # --- CONFIGURATION ---
-MILVUS_URI = os.getenv("MILVUS_URI", "./VN_law_lora.db")
+MILVUS_URI = os.getenv("MILVUS_DB_PATH", "./VN_law_lora.db")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "legal_rag_lora")
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 TOP_K = int(os.getenv("TOP_K", "15"))
@@ -48,24 +50,70 @@ app_state: Dict[str, Any] = {}
 
 
 # ===========================================================
-# CUSTOM EMBEDDING CLASS
+# CUSTOM EMBEDDING CLASS — uses PEFT to load LoRA adapter
 # ===========================================================
 class LoRABGEM3Embeddings(Embeddings):
     def __init__(self, base_model_name: str, adapter_name: str, device: str = "cuda"):
-        print(f"🔄 Initializing BGE-M3 Base on {device}...")
-        self.model = SentenceTransformer(base_model_name, trust_remote_code=True, device=device)
-        print(f"⬇️  Loading LoRA Adapter: {adapter_name}")
+        print(f"🔄 Loading BGE-M3 base model on {device}...")
+        self.device = device
+
+        # Load tokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            base_model_name, trust_remote_code=True
+        )
+
+        # Load base transformer model
+        base_model = AutoModel.from_pretrained(
+            base_model_name, trust_remote_code=True
+        )
+
+        # Apply LoRA via PEFT (handles base_model.model.* keys correctly)
+        print(f"⬇️  Applying LoRA adapter via PEFT: {adapter_name}")
         try:
-            self.model.load_adapter(adapter_name)
-            print("✅ Adapter loaded successfully!")
+            peft_model = PeftModel.from_pretrained(base_model, adapter_name)
+            # Merge weights into base model for faster inference
+            self.model = peft_model.merge_and_unload()
+            print("✅ LoRA adapter merged successfully — no key mismatches!")
         except Exception as e:
-            print(f"⚠️  Could not load adapter (may work with base model): {e}")
+            print(f"⚠️  Could not load LoRA adapter: {e}. Falling back to base model.")
+            self.model = base_model
+
+        self.model = self.model.to(device)
+        self.model.eval()
+
+    def _mean_pooling(self, model_output, attention_mask):
+        """Mean pool token embeddings, weighted by attention mask."""
+        token_embeddings = model_output[0]  # (batch, seq, hidden)
+        mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+        return torch.sum(token_embeddings * mask_expanded, 1) / torch.clamp(
+            mask_expanded.sum(1), min=1e-9
+        )
+
+    def _encode_batch(self, texts: List[str]) -> np.ndarray:
+        encoded = self.tokenizer(
+            texts,
+            padding=True,
+            truncation=True,
+            max_length=512,
+            return_tensors="pt",
+        )
+        encoded = {k: v.to(self.device) for k, v in encoded.items()}
+        with torch.no_grad():
+            output = self.model(**encoded)
+        embeddings = self._mean_pooling(output, encoded["attention_mask"])
+        embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
+        return embeddings.cpu().numpy()
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        return self.model.encode(texts, normalize_embeddings=True, batch_size=32).tolist()
+        all_embeddings: List[List[float]] = []
+        batch_size = 32
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i : i + batch_size]
+            all_embeddings.extend(self._encode_batch(batch).tolist())
+        return all_embeddings
 
     def embed_query(self, text: str) -> List[float]:
-        return self.model.encode(text, normalize_embeddings=True).tolist()
+        return self._encode_batch([text])[0].tolist()
 
 
 # ===========================================================

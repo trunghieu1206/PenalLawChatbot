@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 # =============================================================
 # setup_server.sh
-# Full dependency installer for PenalLawChatbot on a fresh
-# Ubuntu 20.04/22.04 GPU server (runs in one shot).
+# Dependency installer for PenalLawChatbot on a containerized
+# GPU server (Ubuntu 22.04, root user, NO systemd).
 #
-# Usage:
+# Usage (already root — no sudo needed):
 #   chmod +x setup_server.sh
-#   sudo bash setup_server.sh
+#   bash setup_server.sh
 # =============================================================
 set -euo pipefail
-LOG="/var/log/penallaw_setup.log"
+
+# Log to file + stdout (use /root/ since /var/log may be restricted)
+LOG="/root/penallaw_setup.log"
 exec > >(tee -a "$LOG") 2>&1
 
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
@@ -18,48 +20,60 @@ warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 
 # ── 0. Detect OS ────────────────────────────────────────────
 . /etc/os-release
-info "Detected OS: $NAME $VERSION_ID"
+info "Detected OS: $NAME $VERSION_ID (running as $(whoami))"
 
 # ── 1. System packages ──────────────────────────────────────
-info "Installing system packages..."
+info "Updating apt and installing system packages..."
 apt-get update -qq
-apt-get install -y --no-install-recommends \
-    git curl wget unzip zip \
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    git curl wget unzip zip nano \
     build-essential ca-certificates gnupg lsb-release \
     software-properties-common apt-transport-https \
-    libpq-dev postgresql-client \
-    net-tools htop nvtop \
+    net-tools htop \
     nginx
 
-# ── 2. Git (latest) ─────────────────────────────────────────
-info "Git version: $(git --version)"
-
-# ── 3. Python 3.11 ──────────────────────────────────────────
-info "Installing Python 3.11..."
-add-apt-repository -y ppa:deadsnakes/ppa 2>/dev/null || true
+# ── 1b. PostgreSQL 16 (official PGDG repo) ──────────────────
+info "Adding PostgreSQL 16 repository..."
+curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    | gpg --dearmor -o /usr/share/keyrings/postgresql-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/postgresql-keyring.gpg] \
+    https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+    > /etc/apt/sources.list.d/pgdg.list
 apt-get update -qq
-apt-get install -y python3.11 python3.11-venv python3.11-dev python3-pip
+DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-16 postgresql-client-16 libpq-dev
+info "PostgreSQL 16 installed."
 
-update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
-update-alternatives --install /usr/bin/python  python  /usr/bin/python3.11 1
+
+info "Git: $(git --version)"
+
+# ── 2. Python 3.11 ──────────────────────────────────────────
+info "Installing Python 3.11..."
+# Try deadsnakes PPA, fall back silently if it fails in container
+add-apt-repository -y ppa:deadsnakes/ppa 2>/dev/null || true
+apt-get update -qq 2>/dev/null || true
+DEBIAN_FRONTEND=noninteractive apt-get install -y python3.11 python3.11-venv python3.11-dev python3-pip 2>/dev/null \
+    || DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-pip  # fallback
+
+update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 2>/dev/null || true
+update-alternatives --install /usr/bin/python  python  /usr/bin/python3.11 1 2>/dev/null || true
 python3 -m pip install --upgrade pip setuptools wheel
 info "Python: $(python3 --version)"
 
-# ── 4. Node.js 20 LTS ───────────────────────────────────────
+# ── 3. Node.js 20 LTS ───────────────────────────────────────
 info "Installing Node.js 20 LTS..."
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-apt-get install -y nodejs
+DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
 info "Node: $(node --version)  npm: $(npm --version)"
 
-# ── 5. Java 21 (for Spring Boot) ────────────────────────────
-info "Installing Java 21..."
-apt-get install -y openjdk-21-jdk maven
+# ── 4. Java 21 ──────────────────────────────────────────────
+info "Installing Java 21 + Maven..."
+DEBIAN_FRONTEND=noninteractive apt-get install -y openjdk-21-jdk maven
 export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))
-echo "JAVA_HOME=$JAVA_HOME" >> /etc/environment
+echo "export JAVA_HOME=$JAVA_HOME" >> /root/.bashrc
 info "Java: $(java --version 2>&1 | head -1)"
 info "Maven: $(mvn --version | head -1)"
 
-# ── 6. Docker & Docker Compose v2 ───────────────────────────
+# ── 5. Docker (install only — no systemctl) ─────────────────
 info "Installing Docker..."
 if ! command -v docker &>/dev/null; then
     install -m 0755 -d /etc/apt/keyrings
@@ -72,39 +86,70 @@ if ! command -v docker &>/dev/null; then
         $(lsb_release -cs) stable" \
         > /etc/apt/sources.list.d/docker.list
     apt-get update -qq
-    apt-get install -y docker-ce docker-ce-cli containerd.io \
-                       docker-buildx-plugin docker-compose-plugin
-    systemctl enable --now docker
-    info "Docker: $(docker --version)"
-    info "Docker Compose: $(docker compose version)"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        docker-ce docker-ce-cli containerd.io \
+        docker-buildx-plugin docker-compose-plugin
+    info "Docker installed: $(docker --version)"
 else
-    warn "Docker already installed, skipping."
+    warn "Docker already installed: $(docker --version)"
 fi
 
-# ── 7. NVIDIA Container Toolkit (GPU Docker support) ────────
-info "Installing NVIDIA Container Toolkit..."
+# ── 6. Start dockerd (no systemd in container environment) ──
+info "Starting Docker daemon (dockerd)..."
+if ! pgrep -x dockerd > /dev/null; then
+    # Create required dir for docker socket
+    mkdir -p /var/run
+    # Start dockerd in background, redirect logs
+    dockerd > /root/dockerd.log 2>&1 &
+    DOCKERD_PID=$!
+    info "dockerd started (PID $DOCKERD_PID). Waiting for socket..."
+    # Wait up to 30s for docker to become ready
+    for i in $(seq 1 30); do
+        if docker ps &>/dev/null; then
+            info "Docker is ready!"
+            break
+        fi
+        sleep 1
+    done
+    docker ps &>/dev/null || warn "Docker socket not ready yet — run 'dockerd &' manually before deploying."
+else
+    info "dockerd is already running."
+fi
+
+# ── 7. NVIDIA Container Toolkit ─────────────────────────────
 if command -v nvidia-smi &>/dev/null; then
+    info "GPU detected: $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)"
+    info "Installing NVIDIA Container Toolkit..."
     curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
         | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
     curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
         | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
         > /etc/apt/sources.list.d/nvidia-container-toolkit.list
     apt-get update -qq
-    apt-get install -y nvidia-container-toolkit
+    DEBIAN_FRONTEND=noninteractive apt-get install -y nvidia-container-toolkit
+    # Configure for dockerd (no systemctl restart — just reconfigure)
     nvidia-ctk runtime configure --runtime=docker
-    systemctl restart docker
-    info "NVIDIA Container Toolkit installed."
+    # Restart dockerd to pick up NVIDIA runtime
+    pkill dockerd 2>/dev/null || true
+    sleep 2
+    dockerd > /root/dockerd.log 2>&1 &
+    sleep 5
+    info "NVIDIA Container Toolkit ready."
 else
-    warn "nvidia-smi not found — skipping GPU Docker toolkit. Install GPU driver first if needed."
+    warn "nvidia-smi not found — skipping GPU toolkit."
 fi
 
-# ── 8. Python dependencies for ai-service ───────────────────
-info "Installing Python AI service dependencies..."
-pip install --upgrade \
-    fastapi uvicorn[standard] \
+# ── 8. Python AI service dependencies ───────────────────────
+info "Installing uv (fast pip replacement that handles complex deps)..."
+pip install uv
+
+info "Installing Python packages via uv..."
+uv pip install --system \
+    fastapi "uvicorn[standard]" \
     pydantic python-dotenv \
-    langchain langchain-core langchain-community langchain-openai langchain-milvus \
-    langgraph \
+    "langchain==0.3.21" "langchain-core==0.3.51" \
+    langchain-community langchain-openai langchain-milvus \
+    "langgraph==0.3.21" \
     sentence-transformers \
     "pymilvus==2.4.4" "milvus-lite==2.4.8" "marshmallow<4.0.0" \
     peft \
@@ -113,20 +158,18 @@ pip install --upgrade \
     huggingface_hub \
     python-docx \
     pandas
-
 info "Python packages installed."
 
+
+# ── Done ────────────────────────────────────────────────────
 info "=============================================="
-info "✅  All dependencies installed successfully!"
+info "✅  Setup complete!"
 info "=============================================="
-info "Versions summary:"
 info "  Python  : $(python3 --version)"
 info "  Node    : $(node --version)"
 info "  Java    : $(java --version 2>&1 | head -1)"
-info "  Maven   : $(mvn --version | head -1)"
 info "  Docker  : $(docker --version)"
 info "  Git     : $(git --version)"
 info ""
 info "Log saved to: $LOG"
-info ""
-info "Next: run deploy.sh to clone & start the project."
+info "Next step: bash deploy.sh"
