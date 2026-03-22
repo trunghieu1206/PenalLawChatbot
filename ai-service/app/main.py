@@ -135,6 +135,7 @@ class AgentState(TypedDict):
     mapped_laws: Optional[List[Dict[str, str]]]
     rebuttal_against: Optional[str]
     sentencing_data: Optional[Dict[str, Any]]
+    chat_history: Optional[List[Dict[str, str]]]
 
 
 # ===========================================================
@@ -144,12 +145,13 @@ class RequestBody(BaseModel):
     case_content: str
     role: Literal["defense", "victim", "neutral"] = "neutral"
     rebuttal_against: Optional[str] = None
+    conversation_history: Optional[List[Dict[str, str]]] = Field(default_factory=list)
 
 
 class PredictResponse(BaseModel):
     result: str
     extracted_facts: Optional[Dict[str, Any]] = None
-    mapped_laws: Optional[List[Dict[str, str]]] = None
+    mapped_laws: Optional[List[Dict[str, Optional[str]]]] = None
     sentencing_data: Optional[Dict[str, Any]] = None
 
 
@@ -477,6 +479,7 @@ OUTPUT: CHỈ JSON array hợp lệ."""
         role = state.get("user_role", "neutral")
         sentencing_data = state.get("sentencing_data", {})
         mapped_laws = state.get("mapped_laws", [])
+        history = state.get("chat_history", [])
 
         if not documents:
             return {"messages": [AIMessage(content="Xin lỗi, tôi chưa tìm thấy văn bản luật phù hợp.")]}
@@ -578,17 +581,35 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 """
 
         prompt = ChatPromptTemplate.from_template(prompt_template)
+        
+        # Biến đổi history thành dạng List[BaseMessage]
+        history_msgs = []
+        if history:
+            # Lấy 4 tin nhắn gần nhất để tránh tràn context
+            for msg in history[-4:]:
+                if msg.get("role") == "user":
+                    history_msgs.append(HumanMessage(content=msg.get("content", "")))
+                else:
+                    history_msgs.append(AIMessage(content=msg.get("content", "")))
+        
         chain = prompt | llm | StrOutputParser()
 
         try:
-            response = chain.invoke({
-                "role_instruction": role_instruction,
-                "advice_section_instruction": advice_section_instruction,
-                "context": context_text,
-                "case_details": case_details,
-                "deterministic_context": det_context,
-                "mapped_context": mapped_context,
-            })
+            # Tạo prompt chính thức
+            formatted_prompt = prompt.format_messages(
+                role_instruction=role_instruction,
+                advice_section_instruction=advice_section_instruction,
+                context=context_text,
+                case_details=case_details,
+                deterministic_context=det_context,
+                mapped_context=mapped_context,
+            )
+            
+            # Nối lịch sử vào TRƯỚC prompt chính nhưng SAU system prompt (nếu có thể),
+            # hoặc đơn giản là ghép tất cả lại. ChatPromptTemplate trả ra List[BaseMessage]
+            final_messages = history_msgs + formatted_prompt
+            
+            response = llm.invoke(final_messages).content
         except Exception as e:
             return {"messages": [AIMessage(content=f"Lỗi xử lý: {e}")]}
 
@@ -727,15 +748,25 @@ async def predict_judgment(req: RequestBody):
         "mapped_laws": None,
         "sentencing_data": None,
         "rebuttal_against": req.rebuttal_against,
+        "chat_history": req.conversation_history,
     }
 
     try:
         output = await graph.ainvoke(inputs)
         final_answer = output["messages"][-1].content
+
+        # Sanitize mapped_laws: replace any None field values with "" to
+        # avoid Pydantic validation errors when no legal content was found
+        raw_laws = output.get("mapped_laws") or []
+        clean_laws = [
+            {k: (v if v is not None else "") for k, v in law.items()}
+            for law in raw_laws
+        ] or None
+
         return PredictResponse(
             result=final_answer,
             extracted_facts=output.get("extracted_facts"),
-            mapped_laws=output.get("mapped_laws"),
+            mapped_laws=clean_laws,
             sentencing_data=output.get("sentencing_data"),
         )
     except Exception as e:

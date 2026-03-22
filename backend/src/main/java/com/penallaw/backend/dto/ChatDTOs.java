@@ -11,12 +11,14 @@ import java.util.UUID;
 public class ChatDTOs {
 
     public record CreateSessionRequest(
-            String mode  // "defense", "victim", "neutral"
+            String mode,    // "defense", "victim", "neutral"
+            String guestId  // nullable — for anonymous guest sessions
     ) {}
 
     public record SessionResponse(
             UUID id,
             String mode,
+            String title,
             LocalDateTime createdAt
     ) {}
 
@@ -31,13 +33,16 @@ public class ChatDTOs {
             String role,
             String content,
             @JsonProperty("extracted_facts") Map<String, Object> extractedFacts,
-            @JsonProperty("mapped_laws") List<Map<String, String>> mappedLaws,
+            @JsonProperty("mapped_laws") List<Map<String, Object>> mappedLaws,
             LocalDateTime createdAt
     ) {}
 
     public record ConversationHistoryResponse(
             UUID sessionId,
             String mode,
+            String title,
             List<MessageResponse> messages
     ) {}
+
+    public record DeleteSessionResponse(UUID id, String message) {}
 }

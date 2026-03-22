@@ -1,37 +1,50 @@
 import axios from 'axios';
 
-// ---- DIRECT AI SERVICE CLIENT (no auth required) ----
-// In dev: Vite proxies /ai-api → http://localhost:8000
-// In production (Docker): nginx proxies /ai-api → ai-service:8000
-const aiClient = axios.create({
-  baseURL: '/ai-api',
-  headers: { 'Content-Type': 'application/json' },
-  timeout: 130000, // 130s — LLM calls can be slow
-});
-
-export const aiApi = {
-  /**
-   * Call the AI service directly.
-   * @param {string} caseContent - case text or question
-   * @param {'defense'|'victim'|'neutral'} role
-   * @param {string|null} rebuttalAgainst - optional opposing argument to counter
-   */
-  predict: (caseContent, role = 'neutral', rebuttalAgainst = null) =>
-    aiClient.post('/predict', {
-      case_content: caseContent,
-      role,
-      rebuttal_against: rebuttalAgainst,
-    }).then(r => r.data),
-
-  health: () => aiClient.get('/health').then(r => r.data),
-};
-
-// ---- BACKEND API (kept for future use) ----
-const api = axios.create({
+// ---- BACKEND API CLIENT ----
+// In dev: Vite proxies /api → http://localhost:8080 or equivalent backend port
+// In production (Docker): nginx proxies /api → backend:8080
+const apiClient = axios.create({
   baseURL: '/api',
   headers: { 'Content-Type': 'application/json' },
-  timeout: 130000,
+  timeout: 130000, // 130s — Backend waits for AI service
 });
 
-export default api;
+// ---- GUEST ID MANAGEMENT ----
+export const getGuestId = () => {
+  let guestId = localStorage.getItem('guestId');
+  if (!guestId) {
+    guestId = 'guest_' + Math.random().toString(36).substring(2, 15);
+    localStorage.setItem('guestId', guestId);
+  }
+  return guestId;
+};
+
+// ---- CHAT API METHODS ----
+export const chatApi = {
+  // Get all sessions for the current guest
+  getSessions: () => 
+    apiClient.get(`/chat/guest/${getGuestId()}/sessions`).then(r => r.data),
+
+  // Create a new session
+  createSession: (requestBody = {}) => 
+    apiClient.post(`/chat/guest/${getGuestId()}/sessions`, requestBody).then(r => r.data),
+
+  // Send a message within an existing session
+  sendMessage: (sessionId, caseContent, role = 'neutral', rebuttalAgainst = null) =>
+    apiClient.post(`/chat/sessions/${sessionId}/messages`, {
+      caseContent,
+      role,
+      rebuttalAgainst
+    }).then(r => r.data),
+
+  // Load message history for a session
+  getHistory: (sessionId) =>
+    apiClient.get(`/chat/sessions/${sessionId}/messages`).then(r => r.data),
+
+  // Delete a session
+  deleteSession: (sessionId) =>
+    apiClient.delete(`/chat/sessions/${sessionId}`).then(r => r.data),
+};
+
+export default apiClient;
 

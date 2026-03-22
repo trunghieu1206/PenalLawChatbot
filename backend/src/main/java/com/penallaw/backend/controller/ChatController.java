@@ -19,17 +19,34 @@ public class ChatController {
 
     private final ChatService chatService;
 
-    /** Create a new chat session */
+    // ── GUEST SESSIONS (no login required) ──────────────────────
+
+    @PostMapping("/guest/{guestId}/sessions")
+    public ResponseEntity<ChatDTOs.SessionResponse> createGuestSession(
+            @PathVariable String guestId,
+            @RequestBody(required = false) ChatDTOs.CreateSessionRequest request
+    ) {
+        return ResponseEntity.ok(chatService.createGuestSession(guestId, request));
+    }
+
+    @GetMapping("/guest/{guestId}/sessions")
+    public ResponseEntity<List<ChatDTOs.SessionResponse>> getGuestSessions(
+            @PathVariable String guestId
+    ) {
+        return ResponseEntity.ok(chatService.getGuestSessions(guestId));
+    }
+
+    // ── AUTHENTICATED SESSIONS ───────────────────────────────────
+
     @PostMapping("/sessions")
     public ResponseEntity<ChatDTOs.SessionResponse> createSession(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestBody(required = false) ChatDTOs.CreateSessionRequest request
     ) {
-        if (request == null) request = new ChatDTOs.CreateSessionRequest("neutral");
+        if (request == null) request = new ChatDTOs.CreateSessionRequest("neutral", null);
         return ResponseEntity.ok(chatService.createSession(userDetails.getUsername(), request));
     }
 
-    /** List all sessions for current user */
     @GetMapping("/sessions")
     public ResponseEntity<List<ChatDTOs.SessionResponse>> getSessions(
             @AuthenticationPrincipal UserDetails userDetails
@@ -37,22 +54,28 @@ public class ChatController {
         return ResponseEntity.ok(chatService.getUserSessions(userDetails.getUsername()));
     }
 
-    /** Send a message in a session — calls AI service and stores response */
+    // ── MESSAGES (works for both guest and auth sessions by sessionId) ──
+
     @PostMapping("/sessions/{sessionId}/messages")
     public ResponseEntity<ChatDTOs.MessageResponse> sendMessage(
-            @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable UUID sessionId,
             @Valid @RequestBody ChatDTOs.SendMessageRequest request
     ) {
-        return ResponseEntity.ok(chatService.sendMessage(userDetails.getUsername(), sessionId, request));
+        return ResponseEntity.ok(chatService.sendMessage(sessionId, request));
     }
 
-    /** Get full conversation history of a session */
     @GetMapping("/sessions/{sessionId}/messages")
     public ResponseEntity<ChatDTOs.ConversationHistoryResponse> getHistory(
-            @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable UUID sessionId
     ) {
-        return ResponseEntity.ok(chatService.getHistory(userDetails.getUsername(), sessionId));
+        return ResponseEntity.ok(chatService.getHistory(sessionId));
+    }
+
+    @DeleteMapping("/sessions/{sessionId}")
+    public ResponseEntity<ChatDTOs.DeleteSessionResponse> deleteSession(
+            @PathVariable UUID sessionId
+    ) {
+        chatService.deleteSession(sessionId);
+        return ResponseEntity.ok(new ChatDTOs.DeleteSessionResponse(sessionId, "Session deleted"));
     }
 }

@@ -1,22 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { aiApi } from '../services/api.js';
+import { chatApi } from '../services/api.js';
 import MessageBubble from '../components/MessageBubble.jsx';
 import RoleSelector from '../components/RoleSelector.jsx';
 import styles from './ChatPage.module.css';
 
-// Local conversation stored in memory (resets on page refresh)
-let localSessionCounter = 0;
-
-function makeSession(role) {
-  localSessionCounter += 1;
-  return { id: `local-${localSessionCounter}`, mode: role, createdAt: new Date().toISOString() };
-}
-
 export default function ChatPage() {
   const navigate = useNavigate();
 
-  const [sessions, setSessions] = useState([]); // local history list
+  const [sessions, setSessions] = useState([]); // backend history list
   const [currentSession, setCurrentSession] = useState(null);
   const [messages, setMessages] = useState([]);
   const [role, setRole] = useState('neutral');
@@ -26,33 +18,54 @@ export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showRoleModal, setShowRoleModal] = useState(false);
 
-  // Map: sessionId → messages[]  (in-memory store)
+  // Map: sessionId → messages[]  (in-memory cache still useful)
   const [sessionMessages, setSessionMessages] = useState({});
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
 
+  // Load guest sessions on initial render
+  useEffect(() => {
+    chatApi.getSessions().then(data => {
+      setSessions(data);
+    }).catch(err => {
+      console.error("Failed to load sessions:", err);
+    });
+  }, []);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const createNewSession = () => {
-    const session = makeSession(role);
-    setSessions(prev => [session, ...prev]);
-    setCurrentSession(session);
-    setMessages([]);
+  const createNewSession = async () => {
+    try {
+      const data = await chatApi.createSession({ role });
+      setSessions(prev => [data, ...prev]);
+      setCurrentSession(data);
+      setMessages([]);
+      setRole(role); // ensure UI matches
+    } catch (err) {
+      console.error("Create session failed:", err);
+      setError("Không thể tạo phiên mới.");
+    }
   };
 
   const handleSend = async () => {
     const content = input.trim();
     if (!content || loading) return;
 
+    let activeSession = currentSession;
+    
     // Create session on first message if none exists
-    let session = currentSession;
-    if (!session) {
-      session = makeSession(role);
-      setSessions(prev => [session, ...prev]);
-      setCurrentSession(session);
+    if (!activeSession) {
+      try {
+        activeSession = await chatApi.createSession({ role });
+        setSessions(prev => [activeSession, ...prev]);
+        setCurrentSession(activeSession);
+      } catch (err) {
+        setError("Lỗi tạo phiên. Vui lòng thử lại.");
+        return;
+      }
     }
 
     const userMsg = {
@@ -69,19 +82,28 @@ export default function ChatPage() {
     setError('');
 
     try {
-      const data = await aiApi.predict(content, role);
+      // Backend orchestrates: saves User Msg -> sends to AI args -> saves AI Msg -> returns AI Msg
+      const aiResponse = await chatApi.sendMessage(activeSession.id, content, activeSession.mode || role);
+      
       const aiMsg = {
-        id: Date.now() + 1,
-        role: 'assistant',
-        content: data.result,
-        mappedLaws: data.mapped_laws || [],
-        extractedFacts: data.extracted_facts,
-        createdAt: new Date().toISOString(),
+        id: aiResponse.id || Date.now() + 1,
+        role: aiResponse.role || 'assistant',
+        content: aiResponse.content,
+        mappedLaws: aiResponse.mappedLaws || [],
+        extractedFacts: aiResponse.extractedFacts,
+        createdAt: aiResponse.createdAt || new Date().toISOString(),
       };
+      
       const finalMessages = [...nextMessages, aiMsg];
       setMessages(finalMessages);
-      // Persist to in-memory session store
-      setSessionMessages(prev => ({ ...prev, [session.id]: finalMessages }));
+      setSessionMessages(prev => ({ ...prev, [activeSession.id]: finalMessages }));
+      
+      // Update session title locally if needed (backend auto-generates it on first message)
+      if (nextMessages.length === 1 && activeSession.title === 'Cuộc trò chuyện mới') {
+        const newTitle = content.length > 50 ? content.substring(0, 50) + "..." : content;
+        setSessions(prev => prev.map(s => s.id === activeSession.id ? { ...s, title: newTitle } : s));
+        setCurrentSession(prev => ({ ...prev, title: newTitle }));
+      }
     } catch (err) {
       const msg = err.response?.data?.detail || err.message || 'Đã xảy ra lỗi. Vui lòng thử lại.';
       setError(msg);
@@ -98,11 +120,48 @@ export default function ChatPage() {
     }
   };
 
-  const handleSessionClick = (session) => {
+  const handleSessionClick = async (session) => {
+    if (loading) return;
     setCurrentSession(session);
     setRole(session.mode);
-    setMessages(sessionMessages[session.id] || []);
     setError('');
+    
+    // Check if we already loaded it
+    if (sessionMessages[session.id]) {
+       setMessages(sessionMessages[session.id]);
+       return;
+    }
+    
+    // Otherwise fetch from backend
+    try {
+      const history = await chatApi.getHistory(session.id);
+      setMessages(history.messages || []);
+      setSessionMessages(prev => ({ ...prev, [session.id]: history.messages || [] }));
+    } catch (err) {
+      setError("Không thể tải lịch sử trò chuyện.");
+      setMessages([]);
+    }
+  };
+
+  const handleDeleteSession = async (e, sessionId) => {
+    e.stopPropagation(); // prevent clicking the session
+    if (!window.confirm("Bạn có chắc chắn muốn xóa cuộc trò chuyện này?")) return;
+    
+    try {
+      await chatApi.deleteSession(sessionId);
+      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      setSessionMessages(prev => {
+        const copy = { ...prev };
+        delete copy[sessionId];
+        return copy;
+      });
+      if (currentSession?.id === sessionId) {
+        setCurrentSession(null);
+        setMessages([]);
+      }
+    } catch (err) {
+      alert("Xóa thất bại. Vui lòng thử lại.");
+    }
   };
 
   const charCount = input.length;
@@ -132,16 +191,29 @@ export default function ChatPage() {
                 <p className={styles.emptyNote}>Chưa có cuộc hội thoại nào</p>
               )}
               {sessions.map(s => (
-                <button
-                  key={s.id}
-                  className={`${styles.sessionItem} ${currentSession?.id === s.id ? styles.sessionActive : ''}`}
-                  onClick={() => handleSessionClick(s)}
-                >
-                  <span className={`badge badge-${s.mode}`}>{s.mode}</span>
-                  <span className={styles.sessionDate}>
-                    {new Date(s.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </button>
+                <div key={s.id} className={`${styles.sessionItemWrapper} ${currentSession?.id === s.id ? styles.sessionActive : ''}`}>
+                  <button
+                    className={styles.sessionItem}
+                    onClick={() => handleSessionClick(s)}
+                  >
+                    <div className={styles.sessionItemHeader}>
+                      <span className={`badge badge-${s.mode}`}>{s.mode}</span>
+                      <span className={styles.sessionDate}>
+                        {new Date(s.createdAt).toLocaleDateString('vi-VN')}
+                      </span>
+                    </div>
+                    <div className={styles.sessionTitle} title={s.title}>
+                      {s.title || (s.id ? `Phiên #${s.id.substring(0, 8)}` : 'Cuộc trò chuyện mới')}
+                    </div>
+                  </button>
+                  <button 
+                     className={styles.deleteSessionBtn} 
+                     onClick={(e) => handleDeleteSession(e, s.id)}
+                     title="Xóa phiên"
+                  >
+                     ✕
+                  </button>
+                </div>
               ))}
             </div>
 
@@ -167,7 +239,7 @@ export default function ChatPage() {
         <header className={styles.header}>
           <div className={styles.headerLeft}>
             <h2 className={styles.headerTitle}>
-              {currentSession ? `Phiên #${currentSession.id.replace('local-', '')}` : 'Phân tích vụ án mới'}
+              {currentSession ? currentSession.title : 'Phân tích vụ án mới'}
             </h2>
           </div>
           <div className={styles.headerRight}>

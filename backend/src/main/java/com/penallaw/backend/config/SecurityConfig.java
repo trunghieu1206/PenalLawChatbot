@@ -44,6 +44,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/api/auth/**",
+                                "/api/chat/guest/**",          // anonymous guest sessions
+                                "/api/chat/sessions/*/messages", // send & get messages (session-id gated)
+                                "/api/chat/sessions/*",         // delete session
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()

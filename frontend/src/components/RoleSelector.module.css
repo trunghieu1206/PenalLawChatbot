@@ -40,11 +40,11 @@
   border-color: var(--role-color);
   color: var(--text-primary);
   transform: translateY(-1px);
-  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 15px rgba(140, 115, 85, 0.15);
 }
 
 .role.active {
-  box-shadow: 0 0 0 2px var(--role-color), 0 4px 15px rgba(0,0,0,0.3);
+  box-shadow: 0 0 0 2px var(--role-color), 0 4px 15px rgba(140, 115, 85, 0.15);
 }
 
 .icon { font-size: 22px; position: relative; z-index: 1; }

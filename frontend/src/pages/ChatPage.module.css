@@ -73,18 +73,22 @@
   margin-top: 20px;
 }
 
-.sessionItem {
+.sessionItemWrapper {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 10px;
+  position: relative;
+}
+
+.sessionItem {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
   border-radius: var(--radius-md);
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  color: var(--text-secondary);
   transition: var(--transition);
   text-align: left;
 }
@@ -92,16 +96,61 @@
 .sessionItem:hover {
   background: var(--bg-hover);
   border-color: var(--border);
-  color: var(--text-primary);
 }
 
-.sessionActive {
+.sessionActive .sessionItem {
   background: var(--bg-surface);
   border-color: var(--border-accent);
-  color: var(--text-primary);
 }
 
-.sessionDate { color: var(--text-muted); font-size: 11px; margin-left: auto; }
+.sessionItemHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.sessionTitle {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 20px; /* space for delete btn */
+}
+
+.deleteSessionBtn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(198, 40, 40, 0.1);
+  color: #C62828;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0;
+  transition: var(--transition);
+}
+
+.sessionItemWrapper:hover .deleteSessionBtn {
+  opacity: 1;
+}
+
+.deleteSessionBtn:hover {
+  background: #C62828;
+  color: white;
+}
+
+.sessionDate { color: var(--text-muted); font-size: 11px; }
 
 .userSection {
   padding: 12px;

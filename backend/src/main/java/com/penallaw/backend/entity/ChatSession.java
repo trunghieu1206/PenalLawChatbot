@@ -26,6 +26,13 @@ public class ChatSession {
     @JoinColumn(name = "user_id")
     private User user;
 
+    /** For anonymous/guest sessions (no login required). */
+    @Column(name = "guest_id", length = 64)
+    private String guestId;
+
+    @Column(length = 200)
+    private String title;
+
     @Column(length = 20)
     @Builder.Default
     private String mode = "neutral";
