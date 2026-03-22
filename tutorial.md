@@ -1,3 +1,6 @@
+# open following ports on server
+22,80,8000,8080,7681
+
 # upload the setup scripts to server
 scp -P 1894 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh root@n1.ckey.vn:/root/
 
