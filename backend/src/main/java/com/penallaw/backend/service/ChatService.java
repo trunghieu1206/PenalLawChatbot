@@ -38,7 +38,7 @@ public class ChatService {
     private ChatDTOs.MessageResponse toMessageResponse(ChatMessage m) {
         return new ChatDTOs.MessageResponse(
                 m.getId(), m.getRole(), m.getContent(),
-                m.getExtractedFacts(), null, m.getCreatedAt()
+                m.getExtractedFacts(), m.getMappedLaws(), m.getCreatedAt()
         );
     }
 
@@ -128,14 +128,24 @@ public class ChatService {
             throw new RuntimeException("Dịch vụ AI không khả dụng. Vui lòng thử lại sau. (" + e.getMessage() + ")");
         }
 
-        // Save AI message
-        ChatMessage aiMessage = ChatMessage.builder()
-                .session(session).role("assistant")
-                .content(aiResponse.result())
-                .extractedFacts(aiResponse.extractedFacts())
-                .mappedLaws(aiResponse.mappedLaws())
-                .build();
-        messageRepository.save(aiMessage);
+        // Save AI message — wrap with explicit try-catch for clear error logging
+        ChatMessage aiMessage;
+        try {
+            aiMessage = ChatMessage.builder()
+                    .session(session).role("assistant")
+                    .content(aiResponse.result())
+                    .extractedFacts(aiResponse.extractedFacts())
+                    .mappedLaws(aiResponse.mappedLaws())
+                    .build();
+            aiMessage = messageRepository.save(aiMessage);
+        } catch (Exception e) {
+            log.error("CRITICAL: Failed to save AI message to DB for session {}. Error: {}", sessionId, e.getMessage(), e);
+            // Return a response anyway so the user can still see the AI result
+            return new ChatDTOs.MessageResponse(
+                    null, "assistant", aiResponse.result(),
+                    aiResponse.extractedFacts(), aiResponse.mappedLaws(), null
+            );
+        }
 
         return new ChatDTOs.MessageResponse(
                 aiMessage.getId(), "assistant", aiResponse.result(),
