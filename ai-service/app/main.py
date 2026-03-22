@@ -36,7 +36,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from langchain_milvus import Milvus
+from pymilvus import MilvusClient
 from langgraph.graph import END, StateGraph, START
 from langgraph.graph.message import add_messages
 from langchain_openai import ChatOpenAI
@@ -253,20 +253,49 @@ async def lifespan(app: FastAPI):
         device=DEVICE
     )
 
-    # 2. Milvus-Lite vector store
-    # Key: use uri= (Milvus Lite file path) and text_field="content"
-    # (the embed script stores article text in the "content" field, not "text")
+    # 2. Milvus-Lite vector store — use MilvusClient directly
+    # (avoids langchain_milvus version issues and MILVUS_URI env collision)
     print(f"📦 Connecting to Milvus Lite DB: {MILVUS_URI}")
-    vectorstore = Milvus(
-        embedding_function=embedding_model,
-        connection_args={"uri": MILVUS_URI},
-        collection_name=COLLECTION_NAME,
-        text_field="content",
-        output_fields=["content", "article_number", "title", "chapter", "source", "effective_start", "effective_end"],
-        drop_old=False,
-        auto_id=True,
+    milvus_client = MilvusClient(uri=MILVUS_URI)
+
+    _OUTPUT_FIELDS = [
+        "content", "article_number", "title",
+        "chapter", "source", "effective_start", "effective_end",
+    ]
+
+    class _MilvusRetriever:
+        """Thin retriever wrapping MilvusClient for similarity search."""
+        def __init__(self, client, emb_fn, collection, top_k, output_fields):
+            self._client = client
+            self._emb = emb_fn
+            self._col = collection
+            self._k = top_k
+            self._fields = output_fields
+
+        def invoke(self, query: str):
+            vec = self._emb.embed_query(query)
+            results = self._client.search(
+                collection_name=self._col,
+                data=[vec],
+                limit=self._k,
+                output_fields=self._fields,
+                search_params={"metric_type": "COSINE"},
+            )[0]
+            docs = []
+            for r in results:
+                entity = r["entity"]
+                docs.append(Document(
+                    page_content=entity.get("content", ""),
+                    metadata={
+                        k: entity.get(k, "")
+                        for k in self._fields if k != "content"
+                    },
+                ))
+            return docs
+
+    retriever = _MilvusRetriever(
+        milvus_client, embedding_model, COLLECTION_NAME, TOP_K, _OUTPUT_FIELDS
     )
-    retriever = vectorstore.as_retriever(search_kwargs={"k": TOP_K})
     print(f"✅ Milvus ready — collection '{COLLECTION_NAME}'")
 
     # 3. LLM (OpenRouter)
