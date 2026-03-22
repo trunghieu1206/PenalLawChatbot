@@ -26,15 +26,20 @@ export const chatApi = {
     apiClient.get(`/chat/guest/${getGuestId()}/sessions`).then(r => r.data),
 
   // Create a new session
+  // Backend CreateSessionRequest expects: { mode, guestId }
   createSession: (requestBody = {}) => 
-    apiClient.post(`/chat/guest/${getGuestId()}/sessions`, requestBody).then(r => r.data),
+    apiClient.post(`/chat/guest/${getGuestId()}/sessions`, {
+      mode: requestBody.role || requestBody.mode || 'neutral',
+    }).then(r => r.data),
 
   // Send a message within an existing session
-  sendMessage: (sessionId, caseContent, role = 'neutral', rebuttalAgainst = null) =>
+  // Backend SendMessageRequest expects: { content, role, rebuttal_against }
+  // NOTE: 'content' is @NotBlank — must not be empty or missing!
+  sendMessage: (sessionId, content, role = 'neutral', rebuttalAgainst = null) =>
     apiClient.post(`/chat/sessions/${sessionId}/messages`, {
-      caseContent,
+      content,                              // ← must be 'content', NOT 'caseContent'
       role,
-      rebuttalAgainst
+      rebuttal_against: rebuttalAgainst,   // ← must match @JsonProperty("rebuttal_against")
     }).then(r => r.data),
 
   // Load message history for a session

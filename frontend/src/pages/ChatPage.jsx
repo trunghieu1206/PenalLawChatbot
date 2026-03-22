@@ -89,8 +89,9 @@ export default function ChatPage() {
         id: aiResponse.id || Date.now() + 1,
         role: aiResponse.role || 'assistant',
         content: aiResponse.content,
-        mappedLaws: aiResponse.mappedLaws || [],
-        extractedFacts: aiResponse.extractedFacts,
+        // Backend uses @JsonProperty("mapped_laws") and @JsonProperty("extracted_facts")
+        mappedLaws: aiResponse.mapped_laws || aiResponse.mappedLaws || [],
+        extractedFacts: aiResponse.extracted_facts || aiResponse.extractedFacts,
         createdAt: aiResponse.createdAt || new Date().toISOString(),
       };
       
@@ -98,12 +99,13 @@ export default function ChatPage() {
       setMessages(finalMessages);
       setSessionMessages(prev => ({ ...prev, [activeSession.id]: finalMessages }));
       
-      // Update session title locally if needed (backend auto-generates it on first message)
-      if (nextMessages.length === 1 && activeSession.title === 'Cuộc trò chuyện mới') {
+      // Update session title locally (backend sets "Phiên mới" as default)
+      if (nextMessages.length === 1 && (activeSession.title === 'Phiên mới' || !activeSession.title)) {
         const newTitle = content.length > 50 ? content.substring(0, 50) + "..." : content;
         setSessions(prev => prev.map(s => s.id === activeSession.id ? { ...s, title: newTitle } : s));
         setCurrentSession(prev => ({ ...prev, title: newTitle }));
       }
+
     } catch (err) {
       const msg = err.response?.data?.detail || err.message || 'Đã xảy ra lỗi. Vui lòng thử lại.';
       setError(msg);
