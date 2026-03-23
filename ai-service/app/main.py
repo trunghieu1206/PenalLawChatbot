@@ -283,6 +283,13 @@ async def lifespan(app: FastAPI):
                 output_fields=self._fields,
                 search_params={"metric_type": "COSINE"},
             )[0]
+            # --- LOG RAG CHUNK IDs ---
+            print(f"  [RAG] Retrieved {len(results)} chunks:")
+            for r in results:
+                ch  = r['entity'].get('chapter', '?')
+                art = r['entity'].get('article_number', '?')
+                print(f"    ID={r['id']}  score={r['distance']:.4f}  | Chương: {ch}  Điều: {art}")
+            # -------------------------
             docs = []
             for r in results:
                 entity = r["entity"]
@@ -521,7 +528,112 @@ OUTPUT: CHỈ JSON array hợp lệ."""
                 for m in mapped_laws
             ])
 
-        prompt_template = """{role_instruction}
+        # ─────────────────────────────────────────────────────────────────
+        # ROLE-SPECIFIC PROMPT TEMPLATES
+        # Each template has its own persona, output structure, and framing
+        # ─────────────────────────────────────────────────────────────────
+        if role == "defense":
+            prompt_template = """{role_instruction}
+
+Nhiệm vụ: Đọc kỹ hồ sơ vụ án và SOẠN LUẬN ĐIỂM BÀO CHỮA để giảm nhẹ tối đa hình phạt cho thân chủ.
+
+--- DỮ LIỆU ---
+<legal_context>
+{context}
+</legal_context>
+
+<case_details>
+{case_details}
+</case_details>
+
+{deterministic_context}
+{mapped_context}
+----------------
+
+LƯU Ý KHI BÀO CHỮA:
+1. Ưu tiên tìm tình tiết giảm nhẹ (Điều 51 BLHS): thành khẩn, bồi thường, nhân thân tốt, phạm tội lần đầu.
+2. Phân tích xem có thể đề nghị án treo không (án ≤ 3 năm + không tái phạm + có nơi cư trú ổn định).
+3. Nếu có nhiều tội, đề xuất tách riêng hoặc giảm nhẹ từng tội.
+4. Trích dẫn chính xác điều khoản luật để tăng tính thuyết phục.
+5. Kiểm tra thời gian tạm giam để đề nghị khấu trừ.
+
+QUY TRÌNH TƯ DUY (BẮT BUỘC):
+BƯỚC 1: XÁC ĐỊNH tình tiết giảm nhẹ có lợi nhất.
+BƯỚC 2: ĐỀ XUẤT định tội danh nhẹ nhất có thể lập luận được.
+BƯỚC 3: TÍNH khung hình phạt thấp nhất + khấu trừ tạm giam.
+BƯỚC 4: Đánh giá khả năng án treo.
+
+---------------------------------------------------------
+CẤU TRÚC OUTPUT BẮT BUỘC:
+
+**I. LUẬN ĐIỂM BÀO CHỮA:**
+1. **Về định tội danh:** (phân tích theo hướng có lợi cho bị cáo)
+2. **Tình tiết giảm nhẹ đề xuất (Điều 51):**
+   - (liệt kê từng tình tiết + căn cứ pháp lý)
+3. **Phân tích nhân thân bị cáo:**
+
+**II. ĐỀ NGHỊ CỦA LUẬT SƯ BÀO CHỮA:**
+1. Tội danh đề nghị: ...
+2. Điều khoản áp dụng: ...
+3. HÌNH PHẠT ĐỀ NGHỊ: (mức thấp nhất trong khung, hoặc dưới khung nếu có căn cứ)
+4. Đề nghị án treo / cải tạo không giam giữ (nếu đủ điều kiện)
+5. Khấu trừ thời gian tạm giam: ...
+
+**III. KHUYẾN NGHỊ CHO THÂN CHỦ:**
+(Các bước cụ thể: bồi thường, viết đơn xin khoan hồng, xin giấy bãi nại, nộp án phí...)
+"""
+        elif role == "victim":
+            prompt_template = """{role_instruction}
+
+Nhiệm vụ: Đọc kỹ hồ sơ vụ án và SOẠN LUẬN ĐIỂM BẢO VỆ QUYỀN LỢI BỊ HẠI, yêu cầu xử nghiêm minh và bồi thường tối đa.
+
+--- DỮ LIỆU ---
+<legal_context>
+{context}
+</legal_context>
+
+<case_details>
+{case_details}
+</case_details>
+
+{deterministic_context}
+{mapped_context}
+----------------
+
+LƯU Ý KHI BẢO VỆ BỊ HẠI:
+1. Tập trung làm rõ tình tiết tăng nặng (Điều 52 BLHS): có tổ chức, tái phạm, hậu quả nghiêm trọng.
+2. Phân tích mức độ thiệt hại để yêu cầu bồi thường dân sự tối đa.
+3. Phản bác các tình tiết giảm nhẹ mà bị cáo có thể viện dẫn.
+4. Đề nghị mức án cao nhất trong khung có thể lập luận.
+5. Yêu cầu tịch thu công cụ, phương tiện phạm tội.
+
+QUY TRÌNH TƯ DUY (BẮT BUỘC):
+BƯỚC 1: XÁC ĐỊNH tình tiết tăng nặng có thể áp dụng.
+BƯỚC 2: ĐỀ XUẤT định tội danh và khung nặng nhất phù hợp.
+BƯỚC 3: TÍNH thiệt hại thực tế để yêu cầu bồi thường.
+BƯỚC 4: Đề nghị mức án cụ thể.
+
+---------------------------------------------------------
+CẤU TRÚC OUTPUT BẮT BUỘC:
+
+**I. LUẬN ĐIỂM BẢO VỆ BỊ HẠI:**
+1. **Về định tội danh:** (phân tích theo hướng tội nặng nhất có thể áp dụng)
+2. **Tình tiết tăng nặng đề nghị áp dụng (Điều 52):**
+   - (liệt kê từng tình tiết + căn cứ pháp lý)
+3. **Mức độ thiệt hại và yêu cầu bồi thường:**
+
+**II. ĐỀ NGHỊ CỦA LUẬT SƯ BỊ HẠI:**
+1. Tội danh đề nghị: ...
+2. Điều khoản áp dụng: ...
+3. HÌNH PHẠT ĐỀ NGHỊ: (mức cao nhất trong khung phù hợp)
+4. Không chấp nhận án treo (nếu có căn cứ)
+5. TRÁCH NHIỆM DÂN SỰ: (yêu cầu bồi thường cụ thể)
+
+**III. KHUYẾN NGHỊ CHO GIA ĐÌNH BỊ HẠI:**
+(Hướng dẫn thu thập hóa đơn, chứng từ thiệt hại, yêu cầu cấp dưỡng, bảo vệ quyền lợi dài hạn...)
+"""
+        else:  # neutral — judge perspective
+            prompt_template = """{role_instruction}
 
 Nhiệm vụ: Dựa trên dữ liệu vụ án (coi là sự thật duy nhất) và văn bản luật, hãy ra PHÁN QUYẾT CỤ THỂ.
 
@@ -544,7 +656,7 @@ MỘT VÀI LƯU Ý:
    - Kiểm tra nhân thân nạn nhân với Khoản 2 Điều 255.
 2. Tình tiết giảm nhẹ: Điều 51 BLHS mới (hoặc Điều 46 cũ).
 3. Tình tiết tăng nặng: Điều 52 BLHS mới (hoặc Điều 48 cũ).
-4. Tội kinh tế: kiểm tra xem có thể phạt tiền thay phạt tù không (ưu tiên phạt tiền với Điều 201).
+4. Tội kinh tế: kiểm tra xem có thể phạt tiền thay phạt tù không.
 5. Phạm tội chưa đạt (Điều 15, 57): áp dụng quy tắc 3/4.
 
 QUY TRÌNH TƯ DUY LƯỢNG HÌNH (BẮT BUỘC THEO THỨ TỰ):
@@ -576,8 +688,6 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 3. HÌNH PHẠT: (tù giam HOẶC phạt tiền, chọn 1)
 4. TRÁCH NHIỆM DÂN SỰ & XỬ LÝ VẬT CHỨNG
 5. ÁN PHÍ: 200.000 đồng
-
-{advice_section_instruction}
 """
 
         prompt = ChatPromptTemplate.from_template(prompt_template)
@@ -598,7 +708,6 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
             # Tạo prompt chính thức
             formatted_prompt = prompt.format_messages(
                 role_instruction=role_instruction,
-                advice_section_instruction=advice_section_instruction,
                 context=context_text,
                 case_details=case_details,
                 deterministic_context=det_context,

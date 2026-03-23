@@ -83,7 +83,8 @@ export default function ChatPage() {
 
     try {
       // Backend orchestrates: saves User Msg -> sends to AI args -> saves AI Msg -> returns AI Msg
-      const aiResponse = await chatApi.sendMessage(activeSession.id, content, activeSession.mode || role);
+      // IMPORTANT: use `role` (current UI state) not `activeSession.mode` (stale value from session creation)
+      const aiResponse = await chatApi.sendMessage(activeSession.id, content, role);
       
       const aiMsg = {
         id: aiResponse.id || Date.now() + 1,
@@ -199,9 +200,11 @@ export default function ChatPage() {
                     onClick={() => handleSessionClick(s)}
                   >
                     <div className={styles.sessionItemHeader}>
-                      <span className={`badge badge-${s.mode}`}>{s.mode}</span>
                       <span className={styles.sessionDate}>
-                        {new Date(s.createdAt).toLocaleDateString('vi-VN')}
+                        {new Date(s.createdAt).toLocaleDateString('vi-VN', {
+                          day: '2-digit', month: '2-digit', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit'
+                        })}
                       </span>
                     </div>
                     <div className={styles.sessionTitle} title={s.title}>

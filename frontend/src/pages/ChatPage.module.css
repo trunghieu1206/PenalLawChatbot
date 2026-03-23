@@ -91,6 +91,9 @@
   cursor: pointer;
   transition: var(--transition);
   text-align: left;
+  min-width: 0;        /* allow flex child to shrink */
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .sessionItem:hover {
@@ -108,6 +111,8 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .sessionTitle {
