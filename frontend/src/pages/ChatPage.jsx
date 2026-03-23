@@ -8,28 +8,36 @@ import styles from './ChatPage.module.css';
 export default function ChatPage() {
   const navigate = useNavigate();
 
-  const [sessions, setSessions] = useState([]); // backend history list
+  const [sessions, setSessions] = useState([]);
   const [currentSession, setCurrentSession] = useState(null);
   const [messages, setMessages] = useState([]);
+  // `role` is only used for the pre-session flow; once a session exists,
+  // activeRole is always derived from currentSession.mode (source of truth)
   const [role, setRole] = useState('neutral');
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [showRoleModal, setShowRoleModal] = useState(false);
 
-  // Map: sessionId → messages[]  (in-memory cache still useful)
+  // Role modal: shown before session creation to force role selection
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  // pendingContent: message the user typed before a session existed
+  const [pendingContent, setPendingContent] = useState('');
+
+  // In-memory message cache per session
   const [sessionMessages, setSessionMessages] = useState({});
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
 
-  // Load guest sessions on initial render
+  // Always read role from the active session — never stale
+  const activeRole = currentSession?.mode || role;
+
   useEffect(() => {
     chatApi.getSessions().then(data => {
       setSessions(data);
     }).catch(err => {
-      console.error("Failed to load sessions:", err);
+      console.error('Failed to load sessions:', err);
     });
   }, []);
 
@@ -37,37 +45,40 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const createNewSession = async () => {
+  // Called when user clicks "New session" — show role modal FIRST
+  const createNewSession = () => {
+    setPendingContent('');
+    setShowRoleModal(true);
+  };
+
+  // Called after user picks a role in the modal — now create session
+  const handleRoleConfirmed = async (selectedRole) => {
+    setRole(selectedRole);
+    setShowRoleModal(false);
+
+    let newSession;
     try {
-      const data = await chatApi.createSession({ role });
-      setSessions(prev => [data, ...prev]);
-      setCurrentSession(data);
+      newSession = await chatApi.createSession({ role: selectedRole });
+      setSessions(prev => [newSession, ...prev]);
+      setCurrentSession(newSession);
       setMessages([]);
-      setRole(role); // ensure UI matches
     } catch (err) {
-      console.error("Create session failed:", err);
-      setError("Không thể tạo phiên mới.");
+      console.error('Create session failed:', err);
+      setError('Không thể tạo phiên mới.');
+      return;
+    }
+
+    // If user had typed a message before session existed, send it now
+    if (pendingContent.trim()) {
+      const content = pendingContent.trim();
+      setPendingContent('');
+      setInput('');
+      await doSend(newSession, content, selectedRole);
     }
   };
 
-  const handleSend = async () => {
-    const content = input.trim();
-    if (!content || loading) return;
-
-    let activeSession = currentSession;
-    
-    // Create session on first message if none exists
-    if (!activeSession) {
-      try {
-        activeSession = await chatApi.createSession({ role });
-        setSessions(prev => [activeSession, ...prev]);
-        setCurrentSession(activeSession);
-      } catch (err) {
-        setError("Lỗi tạo phiên. Vui lòng thử lại.");
-        return;
-      }
-    }
-
+  // Core send logic — separated so it can be called from two entry points
+  const doSend = async (activeSession, content, sendRole) => {
     const userMsg = {
       id: Date.now(),
       role: 'user',
@@ -77,43 +88,54 @@ export default function ChatPage() {
 
     const nextMessages = [...messages, userMsg];
     setMessages(nextMessages);
-    setInput('');
     setLoading(true);
     setError('');
 
     try {
-      // Backend orchestrates: saves User Msg -> sends to AI args -> saves AI Msg -> returns AI Msg
-      // IMPORTANT: use `role` (current UI state) not `activeSession.mode` (stale value from session creation)
-      const aiResponse = await chatApi.sendMessage(activeSession.id, content, role);
-      
+      const aiResponse = await chatApi.sendMessage(activeSession.id, content, sendRole);
+
       const aiMsg = {
         id: aiResponse.id || Date.now() + 1,
         role: aiResponse.role || 'assistant',
         content: aiResponse.content,
-        // Backend uses @JsonProperty("mapped_laws") and @JsonProperty("extracted_facts")
         mappedLaws: aiResponse.mapped_laws || aiResponse.mappedLaws || [],
         extractedFacts: aiResponse.extracted_facts || aiResponse.extractedFacts,
         createdAt: aiResponse.createdAt || new Date().toISOString(),
       };
-      
+
       const finalMessages = [...nextMessages, aiMsg];
       setMessages(finalMessages);
       setSessionMessages(prev => ({ ...prev, [activeSession.id]: finalMessages }));
-      
-      // Update session title locally (backend sets "Phiên mới" as default)
+
+      // Auto-title on first message
       if (nextMessages.length === 1 && (activeSession.title === 'Phiên mới' || !activeSession.title)) {
-        const newTitle = content.length > 50 ? content.substring(0, 50) + "..." : content;
+        const newTitle = content.length > 50 ? content.substring(0, 50) + '...' : content;
         setSessions(prev => prev.map(s => s.id === activeSession.id ? { ...s, title: newTitle } : s));
         setCurrentSession(prev => ({ ...prev, title: newTitle }));
       }
-
     } catch (err) {
       const msg = err.response?.data?.detail || err.message || 'Đã xảy ra lỗi. Vui lòng thử lại.';
       setError(msg);
-      setMessages(nextMessages.slice(0, -1)); // remove optimistic user msg
+      setMessages(nextMessages.slice(0, -1));
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSend = async () => {
+    const content = input.trim();
+    if (!content || loading) return;
+
+    // No session yet → save content, show role selection modal
+    if (!currentSession) {
+      setPendingContent(content);
+      setShowRoleModal(true);
+      return;
+    }
+
+    setInput('');
+    // Role is always locked to session.mode once session exists
+    await doSend(currentSession, content, currentSession.mode);
   };
 
   const handleKeyDown = (e) => {
@@ -126,30 +148,29 @@ export default function ChatPage() {
   const handleSessionClick = async (session) => {
     if (loading) return;
     setCurrentSession(session);
-    setRole(session.mode);
+    // Always sync role from session.mode — fixes the "reset to neutral" bug
+    setRole(session.mode || 'neutral');
     setError('');
-    
-    // Check if we already loaded it
+
     if (sessionMessages[session.id]) {
-       setMessages(sessionMessages[session.id]);
-       return;
+      setMessages(sessionMessages[session.id]);
+      return;
     }
-    
-    // Otherwise fetch from backend
+
     try {
       const history = await chatApi.getHistory(session.id);
       setMessages(history.messages || []);
       setSessionMessages(prev => ({ ...prev, [session.id]: history.messages || [] }));
     } catch (err) {
-      setError("Không thể tải lịch sử trò chuyện.");
+      setError('Không thể tải lịch sử trò chuyện.');
       setMessages([]);
     }
   };
 
   const handleDeleteSession = async (e, sessionId) => {
-    e.stopPropagation(); // prevent clicking the session
-    if (!window.confirm("Bạn có chắc chắn muốn xóa cuộc trò chuyện này?")) return;
-    
+    e.stopPropagation();
+    if (!window.confirm('Bạn có chắc chắn muốn xóa cuộc trò chuyện này?')) return;
+
     try {
       await chatApi.deleteSession(sessionId);
       setSessions(prev => prev.filter(s => s.id !== sessionId));
@@ -161,12 +182,15 @@ export default function ChatPage() {
       if (currentSession?.id === sessionId) {
         setCurrentSession(null);
         setMessages([]);
+        setRole('neutral');
       }
     } catch (err) {
-      alert("Xóa thất bại. Vui lòng thử lại.");
+      alert('Xóa thất bại. Vui lòng thử lại.');
     }
   };
 
+  const roleLabel = activeRole === 'defense' ? 'Bào chữa' : activeRole === 'victim' ? 'Bị hại' : 'Trung lập';
+  const roleIcon  = activeRole === 'defense' ? '🛡️' : activeRole === 'victim' ? '🔴' : '⚖️';
   const charCount = input.length;
 
   return (
@@ -195,10 +219,7 @@ export default function ChatPage() {
               )}
               {sessions.map(s => (
                 <div key={s.id} className={`${styles.sessionItemWrapper} ${currentSession?.id === s.id ? styles.sessionActive : ''}`}>
-                  <button
-                    className={styles.sessionItem}
-                    onClick={() => handleSessionClick(s)}
-                  >
+                  <button className={styles.sessionItem} onClick={() => handleSessionClick(s)}>
                     <div className={styles.sessionItemHeader}>
                       <span className={styles.sessionDate}>
                         {new Date(s.createdAt).toLocaleDateString('vi-VN', {
@@ -211,12 +232,12 @@ export default function ChatPage() {
                       {s.title || (s.id ? `Phiên #${s.id.substring(0, 8)}` : 'Cuộc trò chuyện mới')}
                     </div>
                   </button>
-                  <button 
-                     className={styles.deleteSessionBtn} 
-                     onClick={(e) => handleDeleteSession(e, s.id)}
-                     title="Xóa phiên"
+                  <button
+                    className={styles.deleteSessionBtn}
+                    onClick={(e) => handleDeleteSession(e, s.id)}
+                    title="Xóa phiên"
                   >
-                     ✕
+                    ✕
                   </button>
                 </div>
               ))}
@@ -240,7 +261,6 @@ export default function ChatPage() {
 
       {/* MAIN CHAT AREA */}
       <main className={styles.main}>
-        {/* Header */}
         <header className={styles.header}>
           <div className={styles.headerLeft}>
             <h2 className={styles.headerTitle}>
@@ -248,19 +268,20 @@ export default function ChatPage() {
             </h2>
           </div>
           <div className={styles.headerRight}>
+            {/* Role badge — clickable only before session exists, locked after */}
             <button
-              className={`btn btn-ghost ${styles.roleBtn}`}
-              onClick={() => setShowRoleModal(true)}
+              className={`btn btn-ghost ${styles.roleBtn} ${currentSession ? styles.roleLocked : ''}`}
+              onClick={() => !currentSession && setShowRoleModal(true)}
+              title={currentSession ? 'Vai trò đã được khóa cho phiên này' : 'Chọn vai trò phân tích'}
+              style={{ cursor: currentSession ? 'default' : 'pointer' }}
             >
-              {role === 'defense' && '🛡️'}{role === 'victim' && '🔴'}{role === 'neutral' && '⚖️'}
-              <span className={`badge badge-${role}`}>
-                {role === 'defense' ? 'Bào chữa' : role === 'victim' ? 'Bị hại' : 'Trung lập'}
-              </span>
+              {roleIcon}
+              <span className={`badge badge-${activeRole}`}>{roleLabel}</span>
+              {currentSession && <span className={styles.roleLockIcon}>🔒</span>}
             </button>
           </div>
         </header>
 
-        {/* Messages */}
         <div className={`${styles.messages} scroll-area`}>
           {messages.length === 0 && (
             <div className={styles.welcome}>
@@ -279,7 +300,7 @@ export default function ChatPage() {
 
           {messages.map((msg, i) => (
             <div key={msg.id || i} className="animate-fade-in">
-              <MessageBubble message={msg} role={role} />
+              <MessageBubble message={msg} role={activeRole} />
             </div>
           ))}
 
@@ -292,14 +313,10 @@ export default function ChatPage() {
             </div>
           )}
 
-          {error && (
-            <div className={styles.errorBanner}>{error}</div>
-          )}
-
+          {error && <div className={styles.errorBanner}>{error}</div>}
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Area */}
         <div className={styles.inputArea}>
           <div className={styles.inputWrapper}>
             <textarea
@@ -326,12 +343,29 @@ export default function ChatPage() {
         </div>
       </main>
 
-      {/* Role Modal */}
+      {/* Role Selection Modal — forced before session creation */}
       {showRoleModal && (
-        <div className={styles.modalOverlay} onClick={() => setShowRoleModal(false)}>
+        <div
+          className={styles.modalOverlay}
+          onClick={() => { if (!pendingContent) setShowRoleModal(false); }}
+        >
           <div className={`${styles.modal} card`} onClick={e => e.stopPropagation()}>
             <h3 className={styles.modalTitle}>Chọn vai trò phân tích</h3>
-            <RoleSelector selected={role} onChange={(r) => { setRole(r); setShowRoleModal(false); }} />
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px', marginTop: '-12px' }}>
+              {pendingContent
+                ? '⚠️ Chọn vai trò trước khi bắt đầu. Vai trò sẽ không thể thay đổi sau khi phiên bắt đầu.'
+                : 'Vai trò sẽ được khóa cho toàn bộ phiên hội thoại này.'}
+            </p>
+            <RoleSelector selected={role} onChange={handleRoleConfirmed} />
+            {!pendingContent && (
+              <button
+                className="btn btn-ghost"
+                style={{ marginTop: '12px', width: '100%' }}
+                onClick={() => setShowRoleModal(false)}
+              >
+                Hủy
+              </button>
+            )}
           </div>
         </div>
       )}

@@ -241,6 +241,16 @@
   font-size: 14px;
 }
 
+.roleLocked {
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.roleLockIcon {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
 /* --- MESSAGES --- */
 .messages {
   flex: 1;
