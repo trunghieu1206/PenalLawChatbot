@@ -54,25 +54,29 @@ if ! pg_isready -q 2>/dev/null; then
 fi
 
 echo "🗑️  Dropping existing database..."
-if su -c "dropdb --if-exists $DB_NAME" postgres 2>/dev/null; then
+if su - postgres -c "dropdb --if-exists \"$DB_NAME\"" 2>/dev/null; then
     echo "   ✓ Database dropped (or didn't exist)"
 else
-    echo "   ⚠️  Could not drop database (may already be gone)"
+    echo "   ⚠️  Attempting alternative drop method..."
+    su - postgres -c "psql -c 'DROP DATABASE IF EXISTS $DB_NAME;'" 2>/dev/null || true
 fi
 
 echo "📥 Creating new database..."
-if su -c "createdb $DB_NAME" postgres 2>/dev/null; then
+if su - postgres -c "createdb \"$DB_NAME\"" 2>/dev/null; then
     echo "   ✓ Database created"
 else
     echo "   ❌ Failed to create database"
+    echo "   Running diagnostics..."
+    su - postgres -c "psql -l"
     exit 1
 fi
 
 echo "📝 Restoring from backup..."
-if su -c "psql $DB_NAME < '$BACKUP_FILE'" postgres 2>/dev/null; then
+if su - postgres -c "psql \"$DB_NAME\" < \"$BACKUP_FILE\"" 2>/dev/null; then
     echo "   ✓ Restore completed"
 else
-    echo "   ❌ Restore failed - check SQL file"
+    echo "   ❌ Restore failed - trying with verbose output..."
+    su - postgres -c "psql \"$DB_NAME\" < \"$BACKUP_FILE\""
     exit 1
 fi
 
