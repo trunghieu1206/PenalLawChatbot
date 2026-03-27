@@ -4,7 +4,7 @@
 # upload the setup scripts to server
 scp -P 2219 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@n3.ckey.vn:/root/ 
 
-# 3. Upload the DB backup
+# Upload the DB backup
 ssh -p 2219 root@n3.ckey.vn "mkdir -p ~/PenalLawChatbot/database/backups"
 scp -P 2219 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260327_051640.sql \
     root@n3.ckey.vn:~/PenalLawChatbot/database/backups/
