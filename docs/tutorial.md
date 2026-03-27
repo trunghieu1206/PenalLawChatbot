@@ -8,7 +8,7 @@ scp -P 2219 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh
 chmod +x setup_server.sh deploy.sh
 bash setup_server.sh
 
-# note: if the server itself is a Docker container run this script instead of setup_server.sh
+# note: if the server itself is a Docker container run this script instead of setup_server.sh (restore db first before running)
 bash deploy_nodocker.sh
 
 # then deploy the server
@@ -23,7 +23,7 @@ chmod 777 ./PenalLawChatbot/database/backups
 ./backup_database.sh
 
 ## download backup to local
-scp -P 2219 'root@n3.ckey.vn:~/PenalLawChatbot/database/backups/penallaw_backup_*.sql' ~/Desktop/Projects/PenalLawChatbot/database/
+scp -P 2219 'root@n3.ckey.vn:~/PenalLawChatbot/database/backups/penallaw_backup_*.sql' ~/Desktop/Projects/PenalLawChatbot/database/backups/
 
 # how to upload backup db file to server
 ssh -p 2219 root@n3.ckey.vn "mkdir -p ~/PenalLawChatbot/database/backups"
