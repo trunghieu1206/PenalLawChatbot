@@ -773,6 +773,107 @@ Cấu trúc:
             return {"messages": [AIMessage(content=f"Lỗi: {e}")]}
 
     # -------------------------------------------------------
+    # INTENT CLASSIFICATION — routes new_case vs follow-up
+    # -------------------------------------------------------
+    def classify_intent(state: AgentState) -> str:
+        """
+        Route to 'followup' for elaboration/questions about a prior response,
+        or 'new_case' to run the full RAG pipeline.
+        Returns: 'followup' | 'new_case'
+        """
+        history = state.get("chat_history", []) or []
+        question = state["question"]
+
+        # No history → always a new case
+        if not history:
+            print("  [INTENT] No history → new_case")
+            return "new_case"
+
+        # Very long input (> 500 chars) is almost certainly a case dump, not a follow-up
+        if len(question) > 500:
+            print("  [INTENT] Long input → new_case")
+            return "new_case"
+
+        classification_prompt = (
+            f"Lịch sử hội thoại có {len(history)} tin nhắn.\n"
+            f"Tin nhắn mới của người dùng: \"{question[:400]}\"\n\n"
+            "Phân loại tin nhắn này:\n"
+            "- \"followup\": Người dùng hỏi thêm, yêu cầu giải thích, phân tích lại điểm cụ thể, "
+            "đặt câu hỏi VỀ phân tích AI vừa trả lời, hoặc cung cấp thêm thông tin để AI xem xét lại.\n"
+            "- \"new_case\": Hồ sơ vụ án hoàn toàn mới, câu hỏi pháp lý độc lập không liên quan đến cuộc hội thoại hiện tại.\n\n"
+            "Chỉ trả về đúng một từ: \"followup\" hoặc \"new_case\"."
+        )
+        try:
+            result = llm.invoke([HumanMessage(content=classification_prompt)]).content.strip().lower()
+            intent = "followup" if "followup" in result else "new_case"
+        except Exception:
+            intent = "new_case"  # fail safe: run full pipeline
+
+        print(f"  [INTENT] Classified as: {intent} | query='{question[:80]}'")
+        return intent
+
+    # NODE: FOLLOW-UP GENERATE
+    def followup_generate(state: AgentState) -> dict:
+        """
+        Fast-path node for follow-up questions.
+        Skips retrieval — uses existing documents + full history to answer.
+        Supports: elaboration, specific-point questions, re-assessment, statements.
+        """
+        print("---FOLLOW-UP RESPONSE---")
+        question = state["question"]
+        role = state.get("user_role", "neutral")
+        history = state.get("chat_history", []) or []
+        documents = state.get("documents", []) or []
+
+        # Use documents that were retrieved earlier in session (if any)
+        context = ""
+        if documents:
+            context = "\n\n".join([
+                f"[{d.metadata.get('article_number', '?')}] {d.page_content[:600]}"
+                for d in documents[:6]
+            ])
+
+        role_persona = {
+            "defense": "Bạn là luật sư bào chữa đang bảo vệ quyền lợi tối đa cho bị cáo.",
+            "victim":  "Bạn là luật sư bảo vệ quyền lợi bị hại, yêu cầu xử lý nghiêm minh.",
+            "neutral": "Bạn là một chuyên gia pháp lý trung lập, phân tích khách quan.",
+        }.get(role, "Bạn là chuyên gia pháp lý.")
+
+        system_prompt = (
+            f"{role_persona}\n"
+            "Nhiệm vụ: Trả lời câu hỏi tiếp theo của người dùng dựa trên cuộc hội thoại đang diễn ra.\n\n"
+            "QUY TẮC:\n"
+            "1. Trả lời trực tiếp, cụ thể về đúng điểm người dùng hỏi.\n"
+            "2. Trích dẫn điều khoản luật cụ thể nếu cần.\n"
+            "3. Nếu người dùng đưa ra thêm thông tin/chứng cứ → xem xét lại và cập nhật nhận định.\n"
+            "4. Nếu người dùng yêu cầu giải thích rõ hơn → giải thích chi tiết, dễ hiểu.\n"
+            "5. Giữ nhất quán với vai trò và lập luận đã trình bày trước đó.\n"
+        )
+        if context:
+            system_prompt += f"\nVĂN BẢN LUẬT THAM CHIẾU:\n{context}\n"
+
+        # Build conversation: history + current question
+        history_msgs = []
+        for msg in history[-8:]:  # last 8 msgs for context
+            if msg.get("role") == "user":
+                history_msgs.append(HumanMessage(content=msg["content"]))
+            else:
+                history_msgs.append(AIMessage(content=msg["content"]))
+
+        all_messages = [
+            SystemMessage(content=system_prompt),
+            *history_msgs,
+            HumanMessage(content=question),
+        ]
+
+        try:
+            response = llm.invoke(all_messages).content
+        except Exception as e:
+            response = f"Lỗi xử lý câu hỏi: {e}"
+
+        return {"messages": [AIMessage(content=response)]}
+
+    # -------------------------------------------------------
     # BUILD LANGGRAPH
     # -------------------------------------------------------
     workflow = StateGraph(AgentState)
@@ -784,9 +885,14 @@ Cấu trúc:
     workflow.add_node("map_laws", map_laws_node)
     workflow.add_node("generate", generate)
     workflow.add_node("rebuttal", rebuttal_node)
+    workflow.add_node("followup", followup_generate)  # ← new fast-path node
 
-    # Edges
-    workflow.add_edge(START, "rewrite")
+    # START → intent router → 'new_case' runs full pipeline, 'followup' short-circuits
+    workflow.add_conditional_edges(
+        START,
+        classify_intent,
+        {"new_case": "rewrite", "followup": "followup"}
+    )
     workflow.add_edge("rewrite", "retrieve")
     workflow.add_edge("retrieve", "grade_documents")
     workflow.add_conditional_edges(
@@ -802,6 +908,7 @@ Cấu trúc:
     workflow.add_edge("map_laws", "generate")
     workflow.add_edge("generate", END)
     workflow.add_edge("rebuttal", END)
+    workflow.add_edge("followup", END)  # ← fast path ends here
 
     app_compiled = workflow.compile()
     app_state["graph"] = app_compiled

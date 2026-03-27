@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./database/postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
@@ -58,7 +58,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     volumes:
-      - ai_data:/data
+      - ./database/ai_data:/data
     ports:
       - "8000:8000"
     deploy:
@@ -83,7 +83,3 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
-
-volumes:
-  postgres_data:
-  ai_data:
