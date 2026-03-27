@@ -322,7 +322,7 @@ async def lifespan(app: FastAPI):
     # NODE: EXTRACT FACTS
     def extract_facts_node(state: AgentState) -> dict:
         """Extract structured legal facts from case text."""
-        print("---EXTRACTING FACTS---")
+        print("[NODE: extract_facts]")
         case_text = state.get("full_case_content", state["question"])
 
         system_prompt = """Bạn là một chuyên gia phân tích hồ sơ pháp lý.
@@ -370,7 +370,7 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
 
     # NODE: REWRITE
     def rewrite_question(state: AgentState) -> dict:
-        print("---REWRITING QUERY---")
+        print("[NODE: rewrite]")
         role = state.get("user_role", "neutral")
         question = state["question"]
 
@@ -400,13 +400,13 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
 
     # NODE: RETRIEVE
     def retrieve_node(state: AgentState) -> dict:
-        print("---RETRIEVING---")
+        print("[NODE: retrieve]")
         docs = retriever.invoke(state["question"])
         return {"documents": docs}
 
     # NODE: GRADE DOCUMENTS
     def grade_documents(state: AgentState) -> dict:
-        print("---GRADING DOCUMENTS---")
+        print("[NODE: grade_documents]")
         question = state["question"]
         documents = state["documents"]
         structured_llm = llm.with_structured_output(GradeDocuments)
@@ -444,7 +444,7 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
     # NODE: MAP LAWS
     def map_laws_node(state: AgentState) -> dict:
         """Map extracted facts to specific law articles."""
-        print("---MAPPING LAWS---")
+        print("[NODE: map_laws]")
         facts = state.get("extracted_facts", {})
         documents = state["documents"]
         case_text = state.get("full_case_content", state["question"])
@@ -480,7 +480,7 @@ OUTPUT: CHỈ JSON array hợp lệ."""
 
     # NODE: GENERATE
     def generate(state: AgentState) -> dict:
-        print("---GENERATING JUDGMENT---")
+        print("[NODE: generate]")
         case_details = state.get("full_case_content", state["question"])
         documents = state["documents"]
         role = state.get("user_role", "neutral")
@@ -727,7 +727,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
     # NODE: REBUTTAL
     def rebuttal_node(state: AgentState) -> dict:
         """Generate legally sound counter-argument against provided argument."""
-        print("---GENERATING REBUTTAL---")
+        print("[NODE: rebuttal]")
         role = state.get("user_role", "neutral")
         opposing_arg = state.get("rebuttal_against", "")
         documents = state["documents"]
@@ -773,53 +773,98 @@ Cấu trúc:
             return {"messages": [AIMessage(content=f"Lỗi: {e}")]}
 
     # -------------------------------------------------------
-    # INTENT CLASSIFICATION — routes new_case vs follow-up
+    # INTENT CLASSIFICATION — 3-way router
     # -------------------------------------------------------
     def classify_intent(state: AgentState) -> str:
         """
-        Route to 'followup' for elaboration/questions about a prior response,
-        or 'new_case' to run the full RAG pipeline.
-        Returns: 'followup' | 'new_case'
+        Route messages into one of 3 paths:
+          'casual'   — greeting, chit-chat, off-topic → simple canned response
+          'followup' — elaboration/question about a prior AI response
+          'new_case' — penal law case or legal question → full RAG pipeline
         """
         history = state.get("chat_history", []) or []
-        question = state["question"]
+        question = state["question"].strip()
 
-        # No history → always a new case
-        if not history:
-            print("  [INTENT] No history → new_case")
-            return "new_case"
+        # Fast rule: very short input with no legal keywords → likely casual
+        LEGAL_KEYWORDS = ["điều", "khoản", "bộ luật", "tội", "hình phạt", "bị cáo",
+                          "bị hại", "tòa án", "viện kiểm sát", "ngày", "năm", "tháng",
+                          "tạm giam", "xét xử", "phạt", "án", "hành vi", "law", "penal"]
+        is_short = len(question) < 120
+        has_legal = any(kw in question.lower() for kw in LEGAL_KEYWORDS)
 
-        # Very long input (> 500 chars) is almost certainly a case dump, not a follow-up
+        if is_short and not has_legal and not history:
+            print(f"  [INTENT] Short + no legal keywords + no history → casual")
+            return "casual"
+
+        # Long input is almost certainly a new case dump
         if len(question) > 500:
             print("  [INTENT] Long input → new_case")
             return "new_case"
 
+        # No history → first message, send to full pipeline
+        if not history:
+            print("  [INTENT] No history → new_case")
+            return "new_case"
+
         classification_prompt = (
+            "Bạn là bộ phân loại đầu vào cho một hệ thống chatbot pháp luật hình sự Việt Nam.\n"
             f"Lịch sử hội thoại có {len(history)} tin nhắn.\n"
             f"Tin nhắn mới của người dùng: \"{question[:400]}\"\n\n"
-            "Phân loại tin nhắn này:\n"
-            "- \"followup\": Người dùng hỏi thêm, yêu cầu giải thích, phân tích lại điểm cụ thể, "
-            "đặt câu hỏi VỀ phân tích AI vừa trả lời, hoặc cung cấp thêm thông tin để AI xem xét lại.\n"
-            "- \"new_case\": Hồ sơ vụ án hoàn toàn mới, câu hỏi pháp lý độc lập không liên quan đến cuộc hội thoại hiện tại.\n\n"
-            "Chỉ trả về đúng một từ: \"followup\" hoặc \"new_case\"."
+            "Phân loại tin nhắn này thành MỘT trong ba loại:\n"
+            "- \"casual\": Chào hỏi, hỏi chatbot là gì, nói chuyện phiếm, hoặc nội dung "
+            "HOÀN TOÀN không liên quan đến pháp luật hình sự.\n"
+            "- \"followup\": Hỏi thêm, yêu cầu giải thích, phân tích lại điểm cụ thể, "
+            "cung cấp thêm thông tin mới để AI xem xét lại — LIÊN QUAN đến phân tích AI đã trả lời.\n"
+            "- \"new_case\": Hồ sơ vụ án mới hoàn toàn hoặc câu hỏi pháp lý mới "
+            "không liên quan đến cuộc hội thoại hiện tại.\n\n"
+            "Chỉ trả về đúng một từ: \"casual\", \"followup\", hoặc \"new_case\"."
         )
         try:
             result = llm.invoke([HumanMessage(content=classification_prompt)]).content.strip().lower()
-            intent = "followup" if "followup" in result else "new_case"
+            if "casual" in result:
+                intent = "casual"
+            elif "followup" in result:
+                intent = "followup"
+            else:
+                intent = "new_case"
         except Exception:
-            intent = "new_case"  # fail safe: run full pipeline
+            intent = "new_case"  # fail-safe
 
-        print(f"  [INTENT] Classified as: {intent} | query='{question[:80]}'")
+        print(f"  [INTENT] → {intent} | query='{question[:80]}'")
         return intent
+
+    # NODE: CASUAL RESPOND
+    def casual_respond(state: AgentState) -> dict:
+        """Handle greetings, off-topic, and unrelated queries."""
+        print("[NODE: casual_respond]")
+        question = state["question"].strip().lower()
+
+        # Detect greeting
+        GREETINGS = ["hi", "hello", "chào", "xin chào", "hey", "helo", "ola"]
+        is_greeting = any(q in question for q in GREETINGS) or len(question) <= 10
+
+        if is_greeting:
+            reply = (
+                "Xin chào! 👋 Tôi là **Trợ lý Pháp luật Hình sự AI**.\n\n"
+                "Tôi có thể giúp bạn:\n"
+                "- 📋 **Phân tích vụ án hình sự** — định tội danh, lượng hình\n"
+                "- ⚖️ **Nhận định của tòa án** hoặc lập luận theo vai trò **bào chữa / bị hại**\n"
+                "- 📜 **Trích dẫn Bộ luật Hình sự** điều khoản liên quan\n"
+                "- 💬 **Giải thích chi tiết** bất kỳ điểm nào trong phân tích\n\n"
+                "Hãy dán nội dung hồ sơ vụ án hoặc đặt câu hỏi pháp lý để bắt đầu!"
+            )
+        else:
+            reply = (
+                "Xin lỗi, tôi chỉ có thể hỗ trợ các vấn đề liên quan đến **pháp luật hình sự Việt Nam**.\n\n"
+                "Nếu bạn có hồ sơ vụ án hoặc câu hỏi về tội danh, khung hình phạt, "
+                "hay tình tiết tăng nặng/giảm nhẹ, hãy cho tôi biết nhé! ⚖️"
+            )
+
+        return {"messages": [AIMessage(content=reply)]}
 
     # NODE: FOLLOW-UP GENERATE
     def followup_generate(state: AgentState) -> dict:
-        """
-        Fast-path node for follow-up questions.
-        Skips retrieval — uses existing documents + full history to answer.
-        Supports: elaboration, specific-point questions, re-assessment, statements.
-        """
-        print("---FOLLOW-UP RESPONSE---")
+        print("[NODE: followup_generate]")
         question = state["question"]
         role = state.get("user_role", "neutral")
         history = state.get("chat_history", []) or []
@@ -885,13 +930,14 @@ Cấu trúc:
     workflow.add_node("map_laws", map_laws_node)
     workflow.add_node("generate", generate)
     workflow.add_node("rebuttal", rebuttal_node)
-    workflow.add_node("followup", followup_generate)  # ← new fast-path node
+    workflow.add_node("followup", followup_generate)
+    workflow.add_node("casual", casual_respond)   # ← new casual path
 
-    # START → intent router → 'new_case' runs full pipeline, 'followup' short-circuits
+    # START → 3-way intent router
     workflow.add_conditional_edges(
         START,
         classify_intent,
-        {"new_case": "rewrite", "followup": "followup"}
+        {"new_case": "rewrite", "followup": "followup", "casual": "casual"}
     )
     workflow.add_edge("rewrite", "retrieve")
     workflow.add_edge("retrieve", "grade_documents")
@@ -908,7 +954,8 @@ Cấu trúc:
     workflow.add_edge("map_laws", "generate")
     workflow.add_edge("generate", END)
     workflow.add_edge("rebuttal", END)
-    workflow.add_edge("followup", END)  # ← fast path ends here
+    workflow.add_edge("followup", END)
+    workflow.add_edge("casual", END)   # ← casual path ends here
 
     app_compiled = workflow.compile()
     app_state["graph"] = app_compiled

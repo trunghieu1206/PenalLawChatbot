@@ -23,6 +23,8 @@ export default function ChatPage() {
   const [showRoleModal, setShowRoleModal] = useState(false);
   // pendingContent: message the user typed before a session existed
   const [pendingContent, setPendingContent] = useState('');
+  // showRoleLockPopup: brief tooltip shown when user clicks locked role button
+  const [showRoleLockPopup, setShowRoleLockPopup] = useState(false);
 
   // In-memory message cache per session
   const [sessionMessages, setSessionMessages] = useState({});
@@ -193,6 +195,16 @@ export default function ChatPage() {
   const roleIcon  = activeRole === 'defense' ? '🛡️' : activeRole === 'victim' ? '🔴' : '⚖️';
   const charCount = input.length;
 
+  const handleRoleBtnClick = () => {
+    if (currentSession) {
+      // Show lock popup and auto-dismiss after 2.5s
+      setShowRoleLockPopup(true);
+      setTimeout(() => setShowRoleLockPopup(false), 2500);
+    } else {
+      setShowRoleModal(true);
+    }
+  };
+
   return (
     <div className={styles.layout}>
       {/* SIDEBAR */}
@@ -243,6 +255,14 @@ export default function ChatPage() {
               ))}
             </div>
 
+            {/* Training Mode Button — prominent */}
+            <button
+              className={styles.trainingBtn}
+              onClick={() => navigate('/training')}
+            >
+              🎓 Chế độ Luyện tập
+            </button>
+
             <div className={styles.userSection}>
               <div className={styles.userInfo}>
                 <span className={styles.userAvatar}>⚖️</span>
@@ -250,9 +270,6 @@ export default function ChatPage() {
                   <div className={styles.userName}>Khách</div>
                   <div className={styles.userEmail}>Không cần đăng nhập</div>
                 </div>
-              </div>
-              <div className={styles.userActions}>
-                <button className="btn btn-ghost" onClick={() => navigate('/training')} title="Chế độ luyện tập">🎓</button>
               </div>
             </div>
           </>
@@ -268,17 +285,23 @@ export default function ChatPage() {
             </h2>
           </div>
           <div className={styles.headerRight}>
-            {/* Role badge — clickable only before session exists, locked after */}
-            <button
-              className={`btn btn-ghost ${styles.roleBtn} ${currentSession ? styles.roleLocked : ''}`}
-              onClick={() => !currentSession && setShowRoleModal(true)}
-              title={currentSession ? 'Vai trò đã được khóa cho phiên này' : 'Chọn vai trò phân tích'}
-              style={{ cursor: currentSession ? 'default' : 'pointer' }}
-            >
-              {roleIcon}
-              <span className={`badge badge-${activeRole}`}>{roleLabel}</span>
-              {currentSession && <span className={styles.roleLockIcon}>🔒</span>}
-            </button>
+            {/* Role badge — clickable always; shows lock popup when session is active */}
+            <div className={styles.roleBtnWrapper}>
+              <button
+                className={`btn btn-ghost ${styles.roleBtn} ${currentSession ? styles.roleLocked : ''}`}
+                onClick={handleRoleBtnClick}
+                title={currentSession ? 'Vai trò đã được khóa cho phiên này' : 'Chọn vai trò phân tích'}
+              >
+                {roleIcon}
+                <span className={`badge badge-${activeRole}`}>{roleLabel}</span>
+                {currentSession && <span className={styles.roleLockIcon}>🔒</span>}
+              </button>
+              {showRoleLockPopup && (
+                <div className={styles.roleLockPopup}>
+                  🔒 Vai trò đã được khóa. Bạn không thể thay đổi vai trò trong phiên đang diễn ra.
+                </div>
+              )}
+            </div>
           </div>
         </header>
 

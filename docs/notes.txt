@@ -1,0 +1,1 @@
+- implement logic of studying mode

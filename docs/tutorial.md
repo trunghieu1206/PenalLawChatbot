@@ -20,12 +20,12 @@ cd ~/PenalLawChatbot
 ./scripts/backup_database.sh
 
 ## download backup to local
-scp -P 1894 root@n1.ckey.vn:~/PenalLawChatbot/database/backups/penallaw_backup_*.sql ~/Desktop/db-backups/
+scp -P 2219 'root@n3.ckey.vn:~/PenalLawChatbot/database/backups/penallaw_backup_*.sql' ~/Desktop/Projects/PenalLawChatbot/database/
 
 # how to upload backup db file to server
-ssh -p 1894 root@newserver.com "mkdir -p ~/PenalLawChatbot/database/backups"
+ssh -p 2219 root@newserver.com "mkdir -p ~/PenalLawChatbot/database/backups"
 
-scp -P 1894 ~/Desktop/db-backups/penallaw_backup_20240315_143022.sql root@newserver.com:~/PenalLawChatbot/database/backups/
+scp -P 2219 ~/Desktop/db-backups/penallaw_backup_20240315_143022.sql root@newserver.com:~/PenalLawChatbot/database/backups/
 
 ## verify 
 ls -lh ~/PenalLawChatbot/database/backups/
