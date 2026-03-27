@@ -27,9 +27,26 @@ mkdir -p "$LOG_DIR"
 chmod 777 "$LOG_DIR"  # postgres user needs write access
 
 # ── 1. Clone / pull repo ─────────────────────────────────────
-if [ -d "$PROJECT_DIR" ]; then
+if [ -d "$PROJECT_DIR/.git" ]; then
     warn "Repo exists — pulling latest..."
     git -C "$PROJECT_DIR" pull
+elif [ -d "$PROJECT_DIR" ]; then
+    warn "Directory exists but is NOT a git repo (likely uploaded via scp)."
+    warn "Backing up existing directory to ${PROJECT_DIR}.bak and cloning fresh..."
+    mv "$PROJECT_DIR" "${PROJECT_DIR}.bak"
+    info "Cloning repo..."
+    git clone "$REPO_URL" "$PROJECT_DIR"
+    # Restore any backed-up database files
+    if [ -d "${PROJECT_DIR}.bak/database" ]; then
+        info "Restoring database backups from previous directory..."
+        mkdir -p "$PROJECT_DIR/database"
+        cp -r "${PROJECT_DIR}.bak/database" "$PROJECT_DIR/"
+    fi
+    # Restore the Milvus DB if it was already there
+    if [ -f "${PROJECT_DIR}.bak/ai-service/VN_law_lora.db" ]; then
+        info "Restoring VN_law_lora.db..."
+        cp "${PROJECT_DIR}.bak/ai-service/VN_law_lora.db" "$PROJECT_DIR/ai-service/"
+    fi
 else
     info "Cloning repo..."
     git clone "$REPO_URL" "$PROJECT_DIR"
@@ -80,6 +97,26 @@ DB_PASS="${POSTGRES_PASSWORD:-postgres}"
 su -c "cd /tmp && psql -c \"ALTER USER $DB_USER WITH PASSWORD '$DB_PASS';\"" postgres 2>/dev/null || true
 su -c "cd /tmp && createdb $DB_NAME" postgres 2>/dev/null || warn "Database '$DB_NAME' already exists."
 info "Database '$DB_NAME' ready."
+
+# ── Auto-restore latest backup if available ──────────────────
+BACKUP_DIR="$PROJECT_DIR/database/backups"
+if [ -d "$BACKUP_DIR" ]; then
+    LATEST_BACKUP=$(ls -t "$BACKUP_DIR"/penallaw_backup_*.sql 2>/dev/null | head -1)
+    if [ -n "$LATEST_BACKUP" ]; then
+        info "Found backup: $LATEST_BACKUP — restoring into '$DB_NAME'..."
+        # Drop and recreate DB, then restore (no interactive prompt)
+        su -c "cd /tmp && dropdb --if-exists $DB_NAME" postgres 2>/dev/null || true
+        su -c "cd /tmp && createdb $DB_NAME" postgres 2>/dev/null || true
+        su -c "psql $DB_NAME < \"$LATEST_BACKUP\"" postgres \
+            >> "$LOG_DIR/postgres.log" 2>&1 \
+            && info "✅ Database restored from backup." \
+            || warn "⚠️  Restore had warnings — check $LOG_DIR/postgres.log"
+    else
+        info "No backup files found in $BACKUP_DIR — starting with empty database."
+    fi
+else
+    info "No backup directory found — starting with empty database."
+fi
 
 # ── 4. Check Milvus DB ────────────────────────────────────────
 DB_PATH="$PROJECT_DIR/ai-service/VN_law_lora.db"
