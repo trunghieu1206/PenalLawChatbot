@@ -11,7 +11,8 @@ Enhanced LangGraph pipeline with:
 import os
 # ⚠️ MUST be before any pymilvus/langchain_milvus imports:
 # pymilvus reads MILVUS_URI from os.environ at import time (Connections singleton).
-# If it contains a file path instead of http://..., it crashes immediately.
+# We NEVER set MILVUS_URI in the environment — instead we use MILVUS_DB_PATH
+# so pymilvus never sees a file path and crashes with "Illegal uri".
 os.environ.pop("MILVUS_URI", None)
 
 import re
@@ -45,7 +46,10 @@ from langchain_openai import ChatOpenAI
 load_dotenv()
 
 # --- CONFIGURATION ---
-MILVUS_URI = os.getenv("MILVUS_URI", "./VN_law_lora.db")
+# Use MILVUS_DB_PATH (not MILVUS_URI) to avoid pymilvus reading it at import time.
+# pymilvus specifically watches the MILVUS_URI env var — using a different name
+# prevents the "Illegal uri: [/path/to/file]" ConnectionConfigException.
+MILVUS_URI = os.getenv("MILVUS_DB_PATH", "./VN_law_lora.db")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "legal_rag_lora")
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 TOP_K = int(os.getenv("TOP_K", "15"))
