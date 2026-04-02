@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth.jsx';
 import { chatApi } from '../services/api.js';
 import MessageBubble from '../components/MessageBubble.jsx';
 import RoleSelector from '../components/RoleSelector.jsx';
@@ -7,6 +8,7 @@ import styles from './ChatPage.module.css';
 
 export default function ChatPage() {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
 
   const [sessions, setSessions] = useState([]);
   const [currentSession, setCurrentSession] = useState(null);
@@ -268,13 +270,53 @@ export default function ChatPage() {
             </button>
 
             <div className={styles.userSection}>
-              <div className={styles.userInfo}>
-                <span className={styles.userAvatar}>⚖️</span>
-                <div>
-                  <div className={styles.userName}>Khách</div>
-                  <div className={styles.userEmail}>Không cần đăng nhập</div>
-                </div>
-              </div>
+              {user ? (
+                <>
+                  <div className={styles.userInfo}>
+                    <span className={styles.userAvatar}>👤</span>
+                    <div>
+                      <div className={styles.userName}>{user.fullName || user.email}</div>
+                      <div className={styles.userEmail}>{user.email}</div>
+                    </div>
+                  </div>
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => {
+                      logout();
+                      navigate('/login');
+                    }}
+                    style={{ width: '100%', marginTop: '8px' }}
+                  >
+                    🚪 Đăng xuất
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className={styles.userInfo}>
+                    <span className={styles.userAvatar}>⚖️</span>
+                    <div>
+                      <div className={styles.userName}>Khách</div>
+                      <div className={styles.userEmail}>Không cần đăng nhập</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                    <button
+                      className="btn btn-ghost"
+                      onClick={() => navigate('/login')}
+                      style={{ flex: 1 }}
+                    >
+                      🔐 Đăng nhập
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => navigate('/register')}
+                      style={{ flex: 1 }}
+                    >
+                      ➕ Đăng ký
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </>
         )}

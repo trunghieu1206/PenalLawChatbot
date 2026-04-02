@@ -9,6 +9,15 @@ const apiClient = axios.create({
   timeout: 130000, // 130s — Backend waits for AI service
 });
 
+// Add Authorization header if token exists
+apiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 // ---- AUTH API METHODS ----
 // BUG-01 FIX: authApi was imported by LoginPage/RegisterPage but was never defined.
 export const authApi = {
@@ -30,17 +39,37 @@ export const getGuestId = () => {
 };
 
 // ---- CHAT API METHODS ----
+// Support both authenticated and guest users
 export const chatApi = {
-  // Get all sessions for the current guest
-  getSessions: () => 
-    apiClient.get(`/chat/guest/${getGuestId()}/sessions`).then(r => r.data),
+  // Get all sessions (authenticated if logged in, otherwise guest)
+  getSessions: () => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      // Authenticated user sessions
+      return apiClient.get(`/chat/sessions`).then(r => r.data);
+    } else {
+      // Guest sessions
+      return apiClient.get(`/chat/guest/${getGuestId()}/sessions`).then(r => r.data);
+    }
+  },
 
-  // Create a new session
-  // Backend CreateSessionRequest expects: { mode, guestId }
-  createSession: (requestBody = {}) => 
-    apiClient.post(`/chat/guest/${getGuestId()}/sessions`, {
-      mode: requestBody.role || requestBody.mode || 'neutral',
-    }).then(r => r.data),
+  // Create a new session (authenticated if logged in, otherwise guest)
+  createSession: (requestBody = {}) => {
+    const token = localStorage.getItem('token');
+    const mode = requestBody.role || requestBody.mode || 'neutral';
+    
+    if (token) {
+      // Authenticated user session
+      return apiClient.post(`/chat/sessions`, {
+        mode,
+      }).then(r => r.data);
+    } else {
+      // Guest session
+      return apiClient.post(`/chat/guest/${getGuestId()}/sessions`, {
+        mode,
+      }).then(r => r.data);
+    }
+  },
 
   // Send a message within an existing session
   // Backend SendMessageRequest expects: { content, role, rebuttal_against }

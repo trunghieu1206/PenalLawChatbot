@@ -20,7 +20,11 @@ export default function LoginPage() {
       login(data);
       navigate('/chat');
     } catch (err) {
-      setError(err.response?.data?.message || 'Đăng nhập thất bại');
+      const errorMsg = err.response?.data?.message 
+        || err.response?.data?.error 
+        || err.message 
+        || 'Đăng nhập thất bại';
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -72,6 +76,13 @@ export default function LoginPage() {
         <p className={styles.footer}>
           Chưa có tài khoản? <Link to="/register" className={styles.link}>Đăng ký ngay</Link>
         </p>
+
+        {/* Demo credentials hint */}
+        <div style={{ marginTop: '16px', padding: '8px', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: '4px', fontSize: '12px', color: 'var(--text-muted)' }}>
+          <strong>Demo tài khoản:</strong><br/>
+          Email: hieu@gmail.com<br/>
+          Mật khẩu: hieu
+        </div>
       </div>
     </div>
   );

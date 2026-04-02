@@ -2,6 +2,15 @@
 
 Hệ thống tư vấn pháp lý hình sự thông minh dựa trên AI, RAG, và LangGraph.
 
+## Features
+
+- 🤖 **AI-Powered Legal Analysis** — Analyzes criminal cases using RAG + LLM
+- 👥 **Optional Authentication** — Use as guest or create account
+- 💾 **Persistent Sessions** — Chat history saved to PostgreSQL for authenticated users
+- 🛡️ **Role-Based Analysis** — Analyze from neutral, defense, or victim perspective
+- 📊 **Law Extraction** — Automatically identifies relevant legal articles
+- 🎓 **Training Mode** — Practice legal analysis with evaluation
+
 ## Architecture
 
 ```
@@ -150,6 +159,31 @@ npm install
 npm run dev   # runs on http://localhost:3000
 # Vite proxies: /api → :8080, /ai-api → :8000
 ```
+
+## Authentication & Session Persistence
+
+The system supports **optional authentication** — users can chat as guests or create accounts to persist sessions.
+
+### Guest Mode (No Login)
+- Chat immediately without signup
+- Sessions stored locally in browser
+- Data lost if browser cache is cleared
+
+### Authenticated Mode (With Login)
+- Create account with email & password (8+ characters)
+- All chat sessions automatically saved to PostgreSQL
+- Access chat history from any device after logging in
+- Sessions persist permanently
+
+### Test Account (Auto-Created on First Startup)
+```
+Email: hieu@gmail.com
+Password: hieu
+```
+
+> This account is automatically created when the backend starts. You can use it to test the authenticated flow.
+
+For detailed authentication setup, see [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md).
 
 ## API Overview
 

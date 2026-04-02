@@ -24,7 +24,12 @@ export default function RegisterPage() {
       login(data);
       navigate('/chat');
     } catch (err) {
-      setError(err.response?.data?.message || err.response?.data?.email || 'Đăng ký thất bại');
+      const errorMsg = err.response?.data?.message 
+        || err.response?.data?.email 
+        || err.response?.data?.error 
+        || err.message 
+        || 'Đăng ký thất bại';
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
