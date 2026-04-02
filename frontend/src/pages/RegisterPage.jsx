@@ -11,6 +11,8 @@ export default function RegisterPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
+  const handleBack = () => navigate('/chat');
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -38,6 +40,13 @@ export default function RegisterPage() {
   return (
     <div className={styles.page}>
       <div className={styles.bg} />
+      <button
+        className={styles.backBtn}
+        onClick={handleBack}
+        title="Quay lại trang chủ"
+      >
+        ← Quay lại
+      </button>
       <div className={`${styles.container} card animate-fade-in`}>
         <div className={styles.logo}>
           <span className={styles.logoIcon}>⚖️</span>
