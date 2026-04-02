@@ -24,6 +24,85 @@
   color: var(--text-primary);
 }
 
+/* --- MODE SELECTOR BAR --- */
+.modeBar {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.modeBarLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding-top: 10px;
+  white-space: nowrap;
+}
+
+.modeOptions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.modeOption {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  cursor: pointer;
+  transition: var(--transition);
+  min-width: 180px;
+  flex: 1;
+}
+
+.modeOption:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-accent);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.modeOptionActive {
+  background: var(--bg-card);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+.modeOption:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modeIcon {
+  font-size: 20px;
+}
+
+.modeLabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.modeDesc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* --- BODY LAYOUT --- */
 .body {
   display: flex;
   gap: 16px;
@@ -39,6 +118,10 @@
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .textarea {
@@ -57,6 +140,7 @@
 }
 .textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
 .textarea::placeholder { color: var(--text-muted); }
+.textarea:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .error {
   padding: 10px 14px;
@@ -68,6 +152,7 @@
   font-size: 13px;
 }
 
+/* --- RESULT PLACEHOLDER --- */
 .placeholder {
   flex: 1;
   display: flex;
@@ -85,7 +170,8 @@
 
 .placeholderIcon { font-size: 48px; }
 
-.result { padding: 28px; display: flex; flex-direction: column; gap: 20px; }
+/* --- RESULT CARD --- */
+.result { padding: 28px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; }
 
 .scoreSection {
   display: flex;
@@ -100,13 +186,15 @@
   font-weight: 800;
   font-family: var(--font-display);
   line-height: 1;
+  flex-shrink: 0;
 }
 .scoreHigh { color: var(--success); }
-.scoreMid { color: var(--accent); }
-.scoreLow { color: var(--error); }
+.scoreMid  { color: var(--accent); }
+.scoreLow  { color: var(--error); }
 
 .scoreLabel { font-size: 13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
-.scoreDesc { font-size: 16px; font-weight: 700; color: var(--text-primary); margin-top: 4px; }
+.scoreDesc  { font-size: 16px; font-weight: 700; color: var(--text-primary); margin-top: 4px; }
+.scoreRole  { font-size: 12px; color: var(--text-muted); margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
 .section { display: flex; flex-direction: column; gap: 8px; }
 
@@ -118,13 +206,22 @@
   flex-direction: column;
   gap: 6px;
 }
+
 .list li {
   padding: 8px 12px;
   background: var(--bg-surface);
   border-radius: var(--radius-sm);
   font-size: 13px;
   color: var(--text-secondary);
-  border-left: 2px solid var(--border);
+  line-height: 1.5;
+}
+
+.listItemGood {
+  border-left: 2px solid var(--success);
+}
+
+.listItemBad {
+  border-left: 2px solid var(--error);
 }
 
 .pills { display: flex; flex-wrap: wrap; gap: 6px; }

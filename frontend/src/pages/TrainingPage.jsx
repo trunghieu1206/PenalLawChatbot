@@ -1,8 +1,34 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { practiceApi } from '../services/api.js';
 import styles from './TrainingPage.module.css';
 
+const MODES = [
+  {
+    id: 'neutral',
+    icon: '⚖️',
+    label: 'Thẩm phán',
+    desc: 'Trung lập – ra phán quyết dựa trên chứng cứ',
+    badgeClass: 'badge-neutral',
+  },
+  {
+    id: 'defense',
+    icon: '🛡️',
+    label: 'Luật sư Bào chữa',
+    desc: 'Bảo vệ quyền lợi bị cáo, giảm nhẹ hình phạt',
+    badgeClass: 'badge-defense',
+  },
+  {
+    id: 'victim',
+    icon: '🔴',
+    label: 'Luật sư Bị hại',
+    desc: 'Bảo vệ bị hại, yêu cầu xử nghiêm và bồi thường',
+    badgeClass: 'badge-victim',
+  },
+];
+
 export default function TrainingPage() {
+  const [mode, setMode] = useState('neutral');
   const [caseDesc, setCaseDesc] = useState('');
   const [userAnalysis, setUserAnalysis] = useState('');
   const [result, setResult] = useState(null);
@@ -10,30 +36,33 @@ export default function TrainingPage() {
   const [error, setError] = useState('');
 
   const handleSubmit = async () => {
-    if (!caseDesc.trim() || !userAnalysis.trim()) {
-      setError('Vui lòng điền đầy đủ thông tin vụ án và phân tích của bạn.');
+    if (!caseDesc.trim()) {
+      setError('Vui lòng điền nội dung vụ án.');
+      return;
+    }
+    if (!userAnalysis.trim()) {
+      setError('Vui lòng nhập phân tích của bạn trước khi gửi.');
       return;
     }
     setLoading(true);
     setError('');
     setResult(null);
     try {
-      // TODO: wire to POST /api/training/evaluate
-      await new Promise(r => setTimeout(r, 2000));
-      setResult({
-        score: 72,
-        feedback: {
-          strengths: ['Xác định đúng tội danh chính', 'Phân tích tình tiết giảm nhẹ hợp lý'],
-          improvements: ['Bỏ sót tình tiết tăng nặng "có tổ chức"', 'Chưa kiểm tra độ tuổi nạn nhân', 'Thiếu trích dẫn Điều 55 khi tổng hợp hình phạt'],
-          missedArticles: ['Điều 52 BLHS (Tình tiết tăng nặng)', 'Điều 55 BLHS (Tổng hợp hình phạt)'],
-          suggestion: 'Cần đọc kỹ lại các bước lượng hình trước khi đưa ra phán quyết cuối cùng.',
-        }
-      });
+      const data = await practiceApi.evaluate(caseDesc, mode, userAnalysis);
+      setResult(data);
     } catch (err) {
-      setError('Đánh giá thất bại. Vui lòng thử lại.');
+      const msg = err.response?.data?.detail || err.message || 'Đánh giá thất bại. Vui lòng thử lại.';
+      setError(msg);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleReset = () => {
+    setResult(null);
+    setError('');
+    setUserAnalysis('');
+    setCaseDesc('');
   };
 
   const getScoreClass = (score) => {
@@ -41,6 +70,14 @@ export default function TrainingPage() {
     if (score >= 60) return styles.scoreMid;
     return styles.scoreLow;
   };
+
+  const getScoreEmoji = (score) => {
+    if (score >= 80) return '🏆 Xuất sắc!';
+    if (score >= 60) return '📈 Khá tốt!';
+    return '📚 Cần cải thiện';
+  };
+
+  const selectedMode = MODES.find(m => m.id === mode);
 
   return (
     <div className={styles.page}>
@@ -51,6 +88,26 @@ export default function TrainingPage() {
         </div>
         <div />
       </header>
+
+      {/* MODE SELECTOR */}
+      <div className={styles.modeBar}>
+        <span className={styles.modeBarLabel}>Chọn vai trò luyện tập:</span>
+        <div className={styles.modeOptions}>
+          {MODES.map(m => (
+            <button
+              key={m.id}
+              className={`${styles.modeOption} ${mode === m.id ? styles.modeOptionActive : ''}`}
+              onClick={() => { setMode(m.id); setResult(null); setError(''); }}
+              disabled={loading}
+              title={m.desc}
+            >
+              <span className={styles.modeIcon}>{m.icon}</span>
+              <span className={styles.modeLabel}>{m.label}</span>
+              <span className={styles.modeDesc}>{m.desc}</span>
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className={styles.body}>
         {/* Left: Input */}
@@ -63,27 +120,42 @@ export default function TrainingPage() {
               value={caseDesc}
               onChange={e => setCaseDesc(e.target.value)}
               rows={10}
+              disabled={loading}
             />
           </div>
           <div className="card" style={{ padding: 24, marginTop: 16 }}>
-            <h3 className={styles.panelTitle}>✍️ Phân tích của bạn</h3>
+            <h3 className={styles.panelTitle}>
+              {selectedMode.icon} Phân tích của bạn theo vai trò <span className={`badge ${selectedMode.badgeClass}`}>{selectedMode.label}</span>
+            </h3>
             <textarea
               className={styles.textarea}
-              placeholder="Viết phân tích pháp lý của bạn về vụ án trên..."
+              placeholder={`Viết phân tích pháp lý theo góc nhìn ${selectedMode.label}...`}
               value={userAnalysis}
               onChange={e => setUserAnalysis(e.target.value)}
               rows={10}
+              disabled={loading}
             />
           </div>
           {error && <div className={styles.error}>{error}</div>}
-          <button
-            className="btn btn-primary"
-            onClick={handleSubmit}
-            disabled={loading}
-            style={{ width: '100%', justifyContent: 'center', marginTop: 12, padding: 13, fontSize: 15 }}
-          >
-            {loading ? <><span className="loader" /> Đang đánh giá...</> : '⚡ Đánh giá phân tích'}
-          </button>
+          <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+            <button
+              className="btn btn-primary"
+              onClick={handleSubmit}
+              disabled={loading}
+              style={{ flex: 1, justifyContent: 'center', padding: 13, fontSize: 15 }}
+            >
+              {loading ? <><span className="loader" /> Đang đánh giá...</> : '⚡ Đánh giá phân tích'}
+            </button>
+            {result && (
+              <button
+                className="btn btn-ghost"
+                onClick={handleReset}
+                style={{ padding: 13, fontSize: 14 }}
+              >
+                🔄 Làm lại
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Right: Result */}
@@ -92,6 +164,9 @@ export default function TrainingPage() {
             <div className={styles.placeholder}>
               <span className={styles.placeholderIcon}>📊</span>
               <p>Kết quả đánh giá sẽ hiển thị ở đây sau khi bạn gửi phân tích.</p>
+              <p style={{ fontSize: 13, opacity: 0.7, marginTop: 8 }}>
+                AI sẽ đánh giá từng điểm pháp lý và đưa ra nhận xét chi tiết theo vai trò <strong>{selectedMode.label}</strong>.
+              </p>
             </div>
           ) : (
             <div className={`card ${styles.result} animate-fade-in`}>
@@ -101,41 +176,52 @@ export default function TrainingPage() {
                 </div>
                 <div>
                   <div className={styles.scoreLabel}>Điểm số của bạn</div>
-                  <div className={styles.scoreDesc}>
-                    {result.score >= 80 ? '🏆 Xuất sắc!' : result.score >= 60 ? '📈 Khá tốt!' : '📚 Cần cải thiện'}
+                  <div className={styles.scoreDesc}>{getScoreEmoji(result.score)}</div>
+                  <div className={styles.scoreRole}>
+                    Đánh giá theo vai trò: <span className={`badge ${selectedMode.badgeClass}`}>{selectedMode.label}</span>
                   </div>
                 </div>
               </div>
 
-              <section className={styles.section}>
-                <h4 className={styles.sectionTitle} style={{ color: 'var(--success)' }}>✅ Điểm mạnh</h4>
-                <ul className={styles.list}>
-                  {result.feedback.strengths.map((s, i) => <li key={i}>{s}</li>)}
-                </ul>
-              </section>
+              {result.feedback.strengths?.length > 0 && (
+                <section className={styles.section}>
+                  <h4 className={styles.sectionTitle} style={{ color: 'var(--success)' }}>✅ Điểm mạnh</h4>
+                  <ul className={styles.list}>
+                    {result.feedback.strengths.map((s, i) => (
+                      <li key={i} className={styles.listItemGood}>{s}</li>
+                    ))}
+                  </ul>
+                </section>
+              )}
 
-              <section className={styles.section}>
-                <h4 className={styles.sectionTitle} style={{ color: 'var(--error)' }}>⚠️ Cần cải thiện</h4>
-                <ul className={styles.list}>
-                  {result.feedback.improvements.map((s, i) => <li key={i}>{s}</li>)}
-                </ul>
-              </section>
+              {result.feedback.improvements?.length > 0 && (
+                <section className={styles.section}>
+                  <h4 className={styles.sectionTitle} style={{ color: 'var(--error)' }}>⚠️ Cần cải thiện</h4>
+                  <ul className={styles.list}>
+                    {result.feedback.improvements.map((s, i) => (
+                      <li key={i} className={styles.listItemBad}>{s}</li>
+                    ))}
+                  </ul>
+                </section>
+              )}
 
-              {result.feedback.missedArticles?.length > 0 && (
+              {result.feedback.missed_articles?.length > 0 && (
                 <section className={styles.section}>
                   <h4 className={styles.sectionTitle} style={{ color: 'var(--accent)' }}>📖 Điều luật bỏ sót</h4>
                   <div className={styles.pills}>
-                    {result.feedback.missedArticles.map((a, i) => (
+                    {result.feedback.missed_articles.map((a, i) => (
                       <span key={i} className="law-citation">{a}</span>
                     ))}
                   </div>
                 </section>
               )}
 
-              <section className={styles.section}>
-                <h4 className={styles.sectionTitle}>💡 Gợi ý</h4>
-                <p className={styles.suggestion}>{result.feedback.suggestion}</p>
-              </section>
+              {result.feedback.suggestion && (
+                <section className={styles.section}>
+                  <h4 className={styles.sectionTitle}>💡 Gợi ý</h4>
+                  <p className={styles.suggestion}>{result.feedback.suggestion}</p>
+                </section>
+              )}
             </div>
           )}
         </div>

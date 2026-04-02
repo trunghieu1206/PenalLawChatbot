@@ -7,8 +7,16 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem('user');
-    if (stored) setUser(JSON.parse(stored));
+    // BUG-09 FIX: Wrap in try-catch to guard against corrupted/tampered localStorage
+    // that would make JSON.parse throw, crashing the whole app with a white screen.
+    try {
+      const stored = localStorage.getItem('user');
+      if (stored) setUser(JSON.parse(stored));
+    } catch (e) {
+      console.warn('useAuth: localStorage user data was corrupt, clearing it.', e);
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+    }
     setLoading(false);
   }, []);
 

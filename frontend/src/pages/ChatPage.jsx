@@ -71,16 +71,19 @@ export default function ChatPage() {
     }
 
     // If user had typed a message before session existed, send it now
+    // BUG-07 FIX: pass [] as priorMessages since this is a brand-new session.
     if (pendingContent.trim()) {
       const content = pendingContent.trim();
       setPendingContent('');
       setInput('');
-      await doSend(newSession, content, selectedRole);
+      await doSend(newSession, content, selectedRole, []);
     }
   };
 
   // Core send logic — separated so it can be called from two entry points
-  const doSend = async (activeSession, content, sendRole) => {
+  // BUG-02 FIX: Use functional update in error catch to avoid stale-closure rollback.
+  // BUG-08 FIX: Use .message (backend GlobalExceptionHandler) not .detail.
+  const doSend = async (activeSession, content, sendRole, priorMessages = messages) => {
     const userMsg = {
       id: Date.now(),
       role: 'user',
@@ -88,7 +91,7 @@ export default function ChatPage() {
       createdAt: new Date().toISOString(),
     };
 
-    const nextMessages = [...messages, userMsg];
+    const nextMessages = [...priorMessages, userMsg];
     setMessages(nextMessages);
     setLoading(true);
     setError('');
@@ -110,15 +113,19 @@ export default function ChatPage() {
       setSessionMessages(prev => ({ ...prev, [activeSession.id]: finalMessages }));
 
       // Auto-title on first message
-      if (nextMessages.length === 1 && (activeSession.title === 'Phiên mới' || !activeSession.title)) {
+      // BUG-07 FIX: Use priorMessages.length === 0 so the check is based on what
+      // was actually there before this send, not a stale captured `messages`.
+      if (priorMessages.length === 0 && (activeSession.title === 'Phiên mới' || !activeSession.title)) {
         const newTitle = content.length > 50 ? content.substring(0, 50) + '...' : content;
         setSessions(prev => prev.map(s => s.id === activeSession.id ? { ...s, title: newTitle } : s));
         setCurrentSession(prev => ({ ...prev, title: newTitle }));
       }
     } catch (err) {
-      const msg = err.response?.data?.detail || err.message || 'Đã xảy ra lỗi. Vui lòng thử lại.';
+      // BUG-08 FIX: Backend returns { status, error, message, timestamp } — not .detail
+      const msg = err.response?.data?.message || err.message || 'Đã xảy ra lỗi. Vui lòng thử lại.';
       setError(msg);
-      setMessages(nextMessages.slice(0, -1));
+      // BUG-02 FIX: Functional update to avoid stale closure — remove the specific userMsg
+      setMessages(prev => prev.filter(m => m.id !== userMsg.id));
     } finally {
       setLoading(false);
     }
@@ -192,7 +199,7 @@ export default function ChatPage() {
   };
 
   const roleLabel = activeRole === 'defense' ? 'Bào chữa' : activeRole === 'victim' ? 'Bị hại' : 'Trung lập';
-  const roleIcon  = activeRole === 'defense' ? '🛡️' : activeRole === 'victim' ? '🔴' : '⚖️';
+  const roleIcon = activeRole === 'defense' ? '🛡️' : activeRole === 'victim' ? '🔴' : '⚖️';
   const charCount = input.length;
 
   const handleRoleBtnClick = () => {
@@ -214,9 +221,6 @@ export default function ChatPage() {
             <span>⚖️</span>
             {sidebarOpen && <span className={styles.logoText}>LegalAI</span>}
           </div>
-          <button className={`btn btn-ghost ${styles.toggleBtn}`} onClick={() => setSidebarOpen(o => !o)}>
-            {sidebarOpen ? '◀' : '▶'}
-          </button>
         </div>
 
         {sidebarOpen && (
@@ -275,6 +279,16 @@ export default function ChatPage() {
           </>
         )}
       </aside>
+
+      {/* FLOATING SIDEBAR TOGGLE BUTTON — always on top, never covered */}
+      <button
+        className={`btn btn-ghost ${styles.floatingToggleBtn}`}
+        style={{ left: sidebarOpen ? '236px' : '32px' }}
+        onClick={() => setSidebarOpen(o => !o)}
+        title={sidebarOpen ? 'Thu gọn thanh bên' : 'Mở rộng thanh bên'}
+      >
+        {sidebarOpen ? '◀' : '▶'}
+      </button>
 
       {/* MAIN CHAT AREA */}
       <main className={styles.main}>
@@ -370,7 +384,7 @@ export default function ChatPage() {
       {showRoleModal && (
         <div
           className={styles.modalOverlay}
-          onClick={() => { if (!pendingContent) setShowRoleModal(false); }}
+          onClick={() => { setShowRoleModal(false); }}
         >
           <div className={`${styles.modal} card`} onClick={e => e.stopPropagation()}>
             <h3 className={styles.modalTitle}>Chọn vai trò phân tích</h3>
@@ -380,15 +394,14 @@ export default function ChatPage() {
                 : 'Vai trò sẽ được khóa cho toàn bộ phiên hội thoại này.'}
             </p>
             <RoleSelector selected={role} onChange={handleRoleConfirmed} />
-            {!pendingContent && (
-              <button
-                className="btn btn-ghost"
-                style={{ marginTop: '12px', width: '100%' }}
-                onClick={() => setShowRoleModal(false)}
-              >
-                Hủy
-              </button>
-            )}
+            {/* BUG-13 FIX: Always show Cancel; clear pendingContent so it's not re-sent. */}
+            <button
+              className="btn btn-ghost"
+              style={{ marginTop: '12px', width: '100%' }}
+              onClick={() => { setShowRoleModal(false); setPendingContent(''); }}
+            >
+              Hủy
+            </button>
           </div>
         </div>
       )}

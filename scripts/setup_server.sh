@@ -14,23 +14,66 @@ set -euo pipefail
 LOG="/root/penallaw_setup.log"
 exec > >(tee -a "$LOG") 2>&1
 
-GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 info()  { echo -e "${GREEN}[INFO]${NC}  $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
+err()   { echo -e "${RED}[ERR]${NC}   $*"; }
 
 # ── 0. Detect OS ────────────────────────────────────────────
 . /etc/os-release
 info "Detected OS: $NAME $VERSION_ID (running as $(whoami))"
 
+# ── 0a. Wait for dpkg lock ──────────────────────────────────
+# Fresh VPS boot: unattended-upgrades or cloud-init holds the lock.
+# Wait up to 5 minutes before giving up.
+info "Checking for dpkg lock..."
+LOCK_WAIT=0
+while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || \
+      fuser /var/lib/dpkg/lock          >/dev/null 2>&1; do
+    if [ $LOCK_WAIT -ge 300 ]; then
+        err "dpkg lock held for >5 min. Kill the process manually then re-run."
+        exit 1
+    fi
+    warn "dpkg lock held by $(fuser /var/lib/dpkg/lock-frontend 2>&1 || true) — waiting 10s... (${LOCK_WAIT}s elapsed)"
+    sleep 10
+    LOCK_WAIT=$((LOCK_WAIT + 10))
+done
+info "dpkg lock is free."
+
+# ── 0b. Ensure DNS works ────────────────────────────────────
+info "Checking DNS resolution..."
+if ! getent hosts google.com >/dev/null 2>&1 && \
+   ! nslookup google.com >/dev/null 2>&1; then
+    warn "DNS resolution failed. Writing fallback nameservers to /etc/resolv.conf..."
+    # Preserve existing content as backup
+    cp /etc/resolv.conf /etc/resolv.conf.bak 2>/dev/null || true
+    { echo "nameserver 8.8.8.8"; echo "nameserver 1.1.1.1"; } > /etc/resolv.conf
+    # Give the network stack a moment
+    sleep 2
+    if ! getent hosts google.com >/dev/null 2>&1; then
+        err "Still no DNS after setting 8.8.8.8/1.1.1.1. Check your network config."
+        err "Run: ip route | grep default  (verify gateway exists)"
+        exit 1
+    fi
+    info "DNS now working via 8.8.8.8."
+else
+    info "DNS resolution OK."
+fi
+
 # ── 1. System packages ──────────────────────────────────────
 info "Updating apt and installing system packages..."
 apt-get update -qq
+# NOTE: nginx pulls in fontconfig-config whose postinst runs fc-cache.
+# In headless/minimal containers this can exit non-zero and kill the script
+# (due to set -e). DEBIAN_FRONTEND=noninteractive + the dpkg --configure -a
+# fallback ensures the install completes even when the postinst trips.
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     git curl wget unzip zip nano \
     build-essential ca-certificates gnupg lsb-release \
     software-properties-common apt-transport-https \
     net-tools htop \
-    nginx
+    nginx || { dpkg --configure -a; apt-get install -y --fix-broken; }
+info "Base system packages installed."
 
 # ── 1b. PostgreSQL 16 (official PGDG repo) ──────────────────
 info "Adding PostgreSQL 16 repository..."

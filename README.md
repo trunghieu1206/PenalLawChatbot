@@ -6,47 +6,61 @@ Hệ thống tư vấn pháp lý hình sự thông minh dựa trên AI, RAG, và
 
 ```
 React Frontend (Vite)
-       ↓ REST API (HTTPS)
+       ↓ REST API / nginx proxy
 Spring Boot Backend (Auth, Chat Sessions, History)
-       ↓ Internal HTTP
+       ↓ Internal HTTP (WebClient)
 Python FastAPI AI Service (RAG + LangGraph + LLM)
        ↓
-Milvus (semantic search) + PostgreSQL (storage)
+Milvus Lite (semantic search, local .db file) + PostgreSQL (storage)
        ↓
-OpenRouter API (Gemini 2.5 Flash)
+OpenRouter API (google/gemini-2.5-flash)
 ```
 
 ## Project Structure
 
 ```
 PenalLawChatbot/
-├── ai-service/               # Python FastAPI AI service
+├── ai-service/                  # Python FastAPI AI service
 │   ├── app/
-│   │   └── main.py          # LangGraph pipeline (RAG, fact extraction, sentencing)
+│   │   └── main.py             # LangGraph pipeline (RAG, fact extraction, sentencing, practice eval)
 │   ├── scripts/
-│   │   ├── ingest_laws.py   # Data ingestion from JSON/CSV to PostgreSQL
-│   │   └── embed_laws.py    # Batch embedding to Milvus
+│   │   ├── ingest_laws.py      # Data ingestion from JSON/DOCX to PostgreSQL
+│   │   ├── embed_laws.py       # Batch embedding to Milvus (local)
+│   │   ├── embed_laws_colab.py # Colab-compatible embedding script
+│   │   └── parse_docx.py      # DOCX parser utility
+│   ├── VN_law_lora.db          # Milvus Lite local vector DB (pre-built)
 │   ├── requirements.txt
 │   ├── Dockerfile
 │   └── .env.example
-├── backend/                  # Spring Boot API Gateway
+├── backend/                     # Spring Boot API Gateway
 │   └── src/main/java/com/penallaw/backend/
-│       ├── controller/      # AuthController, ChatController
-│       ├── service/         # AuthService, ChatService
-│       ├── entity/          # User, ChatSession, ChatMessage
-│       ├── repository/      # JPA repositories
-│       ├── security/        # JwtService, JwtAuthenticationFilter
-│       ├── config/          # SecurityConfig
-│       ├── client/          # AiServiceClient (WebClient)
-│       ├── dto/             # AuthDTOs, ChatDTOs
-│       └── exception/       # GlobalExceptionHandler
-├── frontend/                 # React + Vite
-│   └── src/
-│       ├── pages/           # LoginPage, RegisterPage, ChatPage, TrainingPage
-│       ├── components/      # RoleSelector, MessageBubble
-│       ├── services/        # api.js (Axios client)
-│       └── hooks/           # useAuth.jsx
-├── server.py                 # Original AI server (kept for reference)
+│       ├── controller/          # AuthController, ChatController
+│       ├── service/             # AuthService, ChatService
+│       ├── entity/              # User, ChatSession, ChatMessage
+│       ├── repository/          # JPA repositories
+│       ├── security/            # JwtService, JwtAuthenticationFilter
+│       ├── config/              # SecurityConfig
+│       ├── client/              # AiServiceClient (WebFlux WebClient)
+│       ├── converter/           # JsonListConverter (JPA attribute converter)
+│       ├── dto/                 # AuthDTOs, ChatDTOs
+│       └── exception/           # GlobalExceptionHandler
+├── frontend/                    # React + Vite
+│   ├── src/
+│   │   ├── pages/              # ChatPage, TrainingPage, LoginPage, RegisterPage
+│   │   ├── components/         # RoleSelector, MessageBubble
+│   │   ├── services/           # api.js (Axios client + chatApi + practiceApi)
+│   │   └── hooks/              # useAuth.jsx
+│   ├── nginx.conf              # Production nginx config (proxies /api and /ai-api)
+│   └── vite.config.js          # Dev proxy: /api → :8080, /ai-api → :8000
+├── database/                    # Persistent volumes (postgres_data, ai_data)
+├── scripts/                     # Deployment & maintenance shell scripts
+│   ├── deploy.sh
+│   ├── deploy_nodocker.sh
+│   ├── setup_server.sh
+│   ├── backup_database.sh
+│   ├── restore_database.sh
+│   └── check_db_status.sh
+├── docs/                        # Project notes
 ├── docker-compose.yml
 └── .env.example
 ```
@@ -57,7 +71,7 @@ PenalLawChatbot/
 - Docker + Docker Compose
 - NVIDIA GPU (for embedding model) — or use CPU (slower)
 - OpenRouter API key
-- HuggingFace token (for `trunghieu1206/lawchatbot-40k` adapter)
+- HuggingFace token (for `trunghieu1206/lawchatbot-40k` LoRA adapter)
 
 ### 2. Environment Setup
 ```bash
@@ -68,15 +82,34 @@ cp .env.example .env
 # - JWT_SECRET (use a long random string)
 ```
 
-### 3. Ingest Legal Data (one-time)
+Key environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENROUTER_API_KEY` | — | **Required.** OpenRouter API key |
+| `HF_TOKEN` | — | **Required.** HuggingFace token for LoRA adapter |
+| `JWT_SECRET` | — | **Required.** Secret for signing JWTs |
+| `POSTGRES_USER` | `postgres` | PostgreSQL username |
+| `POSTGRES_PASSWORD` | `postgres` | PostgreSQL password |
+| `COLLECTION_NAME` | `legal_rag_lora` | Milvus collection name |
+| `EMBEDDING_ADAPTER` | `trunghieu1206/lawchatbot-40k` | HuggingFace LoRA adapter |
+| `LLM_MODEL` | `google/gemini-2.5-flash` | LLM via OpenRouter |
+| `TOP_K` | `15` | Number of retrieved chunks |
+
+### 3. Ingest Legal Data (one-time, if not using the pre-built DB)
+
+The repo includes a pre-built `ai-service/VN_law_lora.db` (Milvus Lite). If you need to rebuild from source data:
+
 ```bash
-# Install Python deps locally
 cd ai-service && pip install -r requirements.txt
 
-# 1. Ingest laws into PostgreSQL
+# 1. Parse DOCX source files (optional)
+python scripts/parse_docx.py
+
+# 2. Ingest laws into PostgreSQL
 python scripts/ingest_laws.py --file data/blhs_2015.json --source "BLHS 2015 (sửa đổi 2017)" --date 2018-01-01
 
-# 2. Embed laws into Milvus
+# 3. Embed laws into Milvus Lite
 python scripts/embed_laws.py
 ```
 
@@ -86,10 +119,12 @@ docker-compose up --build
 ```
 
 Services:
-- **Frontend**: http://localhost
+- **Frontend**: http://localhost (port 80)
 - **Backend API**: http://localhost:8080
 - **AI Service**: http://localhost:8000
 - **PostgreSQL**: localhost:5432
+
+> **Note:** The AI service mounts `./database/ai_data` as `/data` inside the container. Place your `VN_law_lora.db` there, or let the ingestion scripts populate it.
 
 ### 5. Development Mode (without Docker)
 
@@ -113,6 +148,7 @@ mvn spring-boot:run
 cd frontend
 npm install
 npm run dev   # runs on http://localhost:3000
+# Vite proxies: /api → :8080, /ai-api → :8000
 ```
 
 ## API Overview
@@ -123,41 +159,121 @@ npm run dev   # runs on http://localhost:3000
 | POST | `/api/auth/register` | Register new user |
 | POST | `/api/auth/login` | Login, get JWT token |
 
-### Chat
+### Chat — Guest (no login required)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/chat/sessions` | Create new chat session |
-| GET | `/api/chat/sessions` | List user's sessions |
-| POST | `/api/chat/sessions/{id}/messages` | Send message (calls AI) |
-| GET | `/api/chat/sessions/{id}/messages` | Get chat history |
+| POST | `/api/chat/guest/{guestId}/sessions` | Create a guest session |
+| GET | `/api/chat/guest/{guestId}/sessions` | List guest's sessions |
 
-### AI Service (internal)
+### Chat — Authenticated
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/predict` | Legal analysis (role, rebuttal support) |
-| GET | `/health` | Health check + GPU status |
+| POST | `/api/chat/sessions` | Create a new session (JWT required) |
+| GET | `/api/chat/sessions` | List user's sessions (JWT required) |
+
+### Chat — Messages (guest & authenticated, by sessionId)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/chat/sessions/{sessionId}/messages` | Send message (calls AI service) |
+| GET | `/api/chat/sessions/{sessionId}/messages` | Get conversation history |
+| DELETE | `/api/chat/sessions/{sessionId}` | Delete a session |
+
+### AI Service (internal + proxied via `/ai-api/`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/predict` | Legal analysis (RAG + LangGraph pipeline) |
+| POST | `/practice/evaluate` | Score & feedback for user's legal analysis (Practice Mode) |
+| GET | `/health` | Health check + device status (CPU/GPU) |
+
+## LangGraph Pipeline (`/predict`)
+
+The pipeline uses intent classification to route each request:
+
+```
+START
+  └─ classify_intent ──► casual     → casual_respond → END
+                    ──► followup    → followup_generate → END
+                    ──► new_case    → rewrite → retrieve → grade_documents
+                                         ↓ (relevant?)
+                                    extract_facts → map_laws → generate → END
+                                         ↓ (rebuttal mode?)
+                                    rebuttal → END
+```
+
+Nodes:
+- **classify_intent** — Routes to `casual`, `followup`, or `new_case`
+- **rewrite** — Rewrites query with role-specific legal keywords for better retrieval
+- **retrieve** — Semantic search in Milvus Lite with LoRA-finetuned BGE-M3
+- **grade_documents** — LLM-based relevance filtering of retrieved chunks
+- **extract_facts** — Structured JSON extraction of case facts (dates, offenses, aggravating/mitigating factors)
+- **map_laws** — Maps extracted facts to specific BLHS articles
+- **generate** — Role-specific legal argument generation (defense / victim / neutral judge)
+- **rebuttal** — Counter-argument generation against an opposing argument
+- **followup_generate** — Contextual follow-up answers using session history
+- **casual_respond** — Handles greetings and off-topic messages
 
 ## Roles (Bias Modes)
 | Role | Vietnamese | Description |
 |------|-----------|-------------|
-| `defense` | Luật sư Bào chữa | Minimize sentence for defendant |
-| `victim` | Luật sư Bị hại | Maximize sentence and compensation |
+| `defense` | Luật sư Bào chữa | Minimize sentence, find mitigating factors |
+| `victim` | Luật sư Bị hại | Maximize sentence, maximize civil compensation |
 | `neutral` | Thẩm phán | Objective, balanced judgment |
 
+## Practice Mode (`/practice/evaluate`)
+
+Users write their own legal analysis for a given case, then submit it to the AI for grading.
+
+**Request:**
+```json
+{
+  "case_description": "...",
+  "user_mode": "defense | victim | neutral",
+  "user_analysis": "..."
+}
+```
+
+**Response:**
+```json
+{
+  "score": 75,
+  "feedback": {
+    "strengths": ["..."],
+    "improvements": ["..."],
+    "missed_articles": ["Điều 51 BLHS (tình tiết giảm nhẹ)"],
+    "suggestion": "..."
+  }
+}
+```
+
 ## Features
-- ✅ RAG with Milvus (semantic) + PostgreSQL (full-text)
+- ✅ Guest mode — no login required (sessions identified by `guestId`)
+- ✅ JWT authentication for registered users
+- ✅ RAG with Milvus Lite (local `.db` file, no separate Milvus server)
 - ✅ LoRA-finetuned BGE-M3 embedding (`trunghieu1206/lawchatbot-40k`)
-- ✅ LangGraph pipeline: Rewrite → Retrieve → Grade → Extract Facts → Map Laws → Generate
-- ✅ Deterministic sentencing calculations (detention time, victim age)
-- ✅ Law citation highlighting in UI (Điều X highlighted)
-- ✅ Counter-argument (rebuttal) mode
-- ✅ Training/practice mode with scoring
-- ✅ JWT authentication
+- ✅ LangGraph pipeline with intent classification: Casual / Follow-up / New Case
+- ✅ LangGraph nodes: Rewrite → Retrieve → Grade → Extract Facts → Map Laws → Generate
+- ✅ Deterministic sentencing calculations (detention months, victim/defendant age at crime)
+- ✅ Rebuttal (counter-argument) mode
+- ✅ Practice Mode with AI scoring and structured feedback
+- ✅ Role-specific legal argument generation (defense, victim, neutral)
 - ✅ Chat history persistence (PostgreSQL)
-- ✅ Docker Compose deployment with GPU support
+- ✅ Docker Compose deployment with optional GPU support
 
 ## Technology Stack
-- **AI Service**: Python 3.11, FastAPI, LangGraph, LangChain, Milvus, BGE-M3 + LoRA, OpenRouter
-- **Backend**: Java 21, Spring Boot 3.3, Spring Security (JWT), PostgreSQL, WebFlux
-- **Frontend**: React 18, Vite, React Router v6, React Markdown, Axios, CSS Modules
+- **AI Service**: Python 3.x, FastAPI 0.111, LangGraph, LangChain, Milvus Lite (pymilvus), BGE-M3 + PEFT/LoRA, OpenRouter (gemini-2.5-flash)
+- **Backend**: Java 21, Spring Boot 3.4, Spring Security (JWT via jjwt 0.12.6), Spring Data JPA, WebFlux (WebClient), PostgreSQL, Bucket4j (rate limiting), Lombok
+- **Frontend**: React 19, Vite 6, React Router v7, React Markdown, Axios, date-fns, CSS Modules
 - **Infrastructure**: Docker Compose, nginx, PostgreSQL 16
+
+## Deployment Scripts
+
+Located in `scripts/`:
+
+| Script | Description |
+|--------|-------------|
+| `deploy.sh` | Docker-based deployment |
+| `deploy_nodocker.sh` | Bare-metal deployment without Docker |
+| `setup_server.sh` | Initial server setup |
+| `backup_database.sh` | PostgreSQL backup |
+| `restore_database.sh` | PostgreSQL restore from backup |
+| `check_db_status.sh` | Database health check |

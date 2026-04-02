@@ -9,6 +9,16 @@ const apiClient = axios.create({
   timeout: 130000, // 130s — Backend waits for AI service
 });
 
+// ---- AUTH API METHODS ----
+// BUG-01 FIX: authApi was imported by LoginPage/RegisterPage but was never defined.
+export const authApi = {
+  login: (credentials) =>
+    apiClient.post('/auth/login', credentials).then(r => r.data),
+
+  register: (userData) =>
+    apiClient.post('/auth/register', userData).then(r => r.data),
+};
+
 // ---- GUEST ID MANAGEMENT ----
 export const getGuestId = () => {
   let guestId = localStorage.getItem('guestId');
@@ -53,3 +63,25 @@ export const chatApi = {
 
 export default apiClient;
 
+// ---- AI SERVICE DIRECT CLIENT (proxied via /ai-api/) ----
+const aiServiceClient = axios.create({
+  baseURL: '/ai-api',
+  headers: { 'Content-Type': 'application/json' },
+  timeout: 120000, // 2 minutes for LLM calls
+});
+
+// ---- PRACTICE MODE API ----
+export const practiceApi = {
+  /**
+   * Evaluate user's legal analysis.
+   * @param {string} caseDescription - The case content
+   * @param {'neutral'|'defense'|'victim'} mode - User's chosen role
+   * @param {string} userAnalysis - The user's written analysis
+   */
+  evaluate: (caseDescription, mode, userAnalysis) =>
+    aiServiceClient.post('/practice/evaluate', {
+      case_description: caseDescription,
+      user_mode: mode,
+      user_analysis: userAnalysis,
+    }).then(r => r.data),
+};

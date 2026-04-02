@@ -165,11 +165,30 @@ class GradeDocuments(BaseModel):
     binary_score: str = Field(description="Relevance score 'yes' or 'no'")
 
 
+class PracticeEvalRequest(BaseModel):
+    case_description: str
+    user_mode: Literal["defense", "victim", "neutral"] = "neutral"
+    user_analysis: str
+
+
+class PracticeEvalFeedback(BaseModel):
+    strengths: List[str]
+    improvements: List[str]
+    missed_articles: List[str]
+    suggestion: str
+
+
+class PracticeEvalResponse(BaseModel):
+    score: int
+    feedback: PracticeEvalFeedback
+
+
 # ===========================================================
 # UTILITY: DETERMINISTIC SENTENCING CALCULATIONS
 # ===========================================================
-def parse_date(text: str, patterns: List[str]) -> Optional[datetime]:
+def parse_date(text: str) -> Optional[datetime]:
     """Try multiple date formats to parse a date string."""
+    # BUG-05 FIX: Removed the unused `patterns` parameter — it was always ignored.
     for pattern in ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d"]:
         try:
             return datetime.strptime(text.strip(), pattern)
@@ -180,8 +199,8 @@ def parse_date(text: str, patterns: List[str]) -> Optional[datetime]:
 
 def compute_detention_months(arrest_date_str: str, trial_date_str: str) -> Optional[float]:
     """Calculate months from arrest to trial."""
-    d1 = parse_date(arrest_date_str, [])
-    d2 = parse_date(trial_date_str, [])
+    d1 = parse_date(arrest_date_str)
+    d2 = parse_date(trial_date_str)
     if d1 and d2 and d2 > d1:
         delta = d2 - d1
         return round(delta.days / 30.44, 1)
@@ -190,8 +209,8 @@ def compute_detention_months(arrest_date_str: str, trial_date_str: str) -> Optio
 
 def compute_age_at_crime(dob_str: str, crime_date_str: str) -> Optional[float]:
     """Calculate victim/defendant age at time of crime."""
-    dob = parse_date(dob_str, [])
-    crime_date = parse_date(crime_date_str, [])
+    dob = parse_date(dob_str)
+    crime_date = parse_date(crime_date_str)
     if dob and crime_date:
         age = (crime_date - dob).days / 365.25
         return round(age, 2)
@@ -958,6 +977,9 @@ Cấu trúc:
     workflow.add_edge("casual", END)   # ← casual path ends here
 
     app_compiled = workflow.compile()
+    # BUG-14 FIX: Store llm in app_state so /practice/evaluate can reuse it
+    # instead of creating a new ChatOpenAI client on every request.
+    app_state["llm"] = llm
     app_state["graph"] = app_compiled
     app_state["model_loaded"] = True
 
@@ -1039,3 +1061,104 @@ async def predict_judgment(req: RequestBody):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
+
+
+# ===========================================================
+# PRACTICE / EVALUATE ENDPOINT
+# ===========================================================
+@app.post("/practice/evaluate", response_model=PracticeEvalResponse)
+async def practice_evaluate(req: PracticeEvalRequest):
+    """
+    Evaluate a user's legal analysis from the perspective of the chosen role.
+    Returns a score (0–100) plus structured feedback.
+    """
+    # BUG-03 FIX: Reuse the llm from app_state instead of creating a new
+    # ChatOpenAI instance on every request. A new client per-request is:
+    #   (1) wasteful — re-initializes the HTTP client each time, and
+    #   (2) silently broken — if OPENROUTER_API_KEY is not set, the client is
+    #       constructed without error but fails only when .invoke() is called.
+    llm_instance = app_state.get("llm")
+    if not llm_instance:
+        raise HTTPException(status_code=503, detail="Model not loaded — service is still starting up")
+
+    role_label = {
+        "neutral": "Thẩm phán (trung lập)",
+        "defense": "Luật sư bào chữa (bảo vệ bị cáo)",
+        "victim": "Luật sư bảo vệ bị hại",
+    }.get(req.user_mode, "Chuyên gia pháp lý")
+
+    role_criteria = {
+        "neutral": """
+- Đánh giá khả năng xác định tội danh đúng điều luật.
+- Kiểm tra việc phân tích tình tiết tăng nặng/giảm nhẹ theo Điều 51, 52 BLHS.
+- Kiểm tra việc lượng hình (mức phạt hợp lý, tổng hợp theo Điều 55 nếu nhiều tội).
+- Kiểm tra xem đã trừ thời gian tạm giam chưa.
+- Đánh giá tính trung lập, khách quan của phân tích.
+""",
+        "defense": """
+- Đánh giá khả năng tìm và chưξng dẫn tình tiết giảm nhẹ (có theo Điều 51 không).
+- Kiểm tra đề xuất án treo hoặc cải tạo không giam giữ (có căn cứ pháp lý không).
+- Đánh giá luận điểm bào chữa: có bác bỏ tình tiết tăng nặng hiệu quả không.
+- Kiểm tra đề nghị khấu trừ thời gian tạm giam.
+- Đánh giá có xuất hiện yêu cầu giảm nhẹ tội danh không.
+""",
+        "victim": """
+- Đánh giá khả năng xác định tình tiết tăng nặng (có theo Điều 52 không).
+- Kiểm tra yêu cầu bồi thường dân sự: có căn cứ thiệt hại không.
+- Đánh giá luận điểm phản bác tình tiết giảm nhẹ của bị cáo.
+- Kiểm tra đề nghị mức án cao nhất có căn cứ không.
+- Đánh giá có yêu cầu tịch thu công cụ, vật chứng không.
+""",
+    }.get(req.user_mode, "")
+
+    eval_prompt = f"""Bạn là giáo sư luật hình sự Việt Nam đang chấm bài làm của sinh viên luật.
+
+VU ÁN:
+{req.case_description}
+
+VAI TRÒ NGƯỜI DÙNG: {role_label}
+
+PHÂN TÍCH CỦA NGƯỜI DÙNG:
+{req.user_analysis}
+
+TIÊU CHÍ ĐÁNH GIÁ (theo vai trò {role_label}):
+{role_criteria}
+
+NHIỆM VỤ: Đánh giá chất lượng phân tích pháp lý trên. Chấm điểm từ 0 đến 100.
+
+Trả về JSON hợp lệ (không markdown, không giải thích bên ngoài JSON) theo cấu trúc sau:
+{{
+  "score": <số nguyên từ 0 đến 100>,
+  "feedback": {{
+    "strengths": ["<điểm mạnh 1>", "<điểm mạnh 2>", ...],
+    "improvements": ["<cần cải thiện 1>", "<cần cải thiện 2>", ...],
+    "missed_articles": ["<Điều X BLHS (ý nghĩa)>", ...],
+    "suggestion": "<Gợi ý tổng hợp cho người dùng>"
+  }}
+}}
+
+Quy tắc:
+- strengths: 2–4 điểm tích cực cụ thể (trích dẫn rõ luận điểm người dùng).
+- improvements: 2–5 điểm cần cải thiện, cụ thể, có đều khoản tham chiếu.
+- missed_articles: liệt kê các điều luật quan trọng mà người dùng bỏ sót (có thể rỗng nếu đầy đủ).
+- suggestion: 1–2 câu gợi ý cụ thể nhất cho người học.
+OUTPUT: CHỈ JSON."""
+
+    try:
+        response = llm_instance.invoke([HumanMessage(content=eval_prompt)])
+        raw = response.content.strip()
+        raw = re.sub(r"```json?\s*", "", raw).strip("`").strip()
+        data = json.loads(raw)
+
+        feedback = data.get("feedback", {})
+        return PracticeEvalResponse(
+            score=int(data.get("score", 50)),
+            feedback=PracticeEvalFeedback(
+                strengths=feedback.get("strengths", []),
+                improvements=feedback.get("improvements", []),
+                missed_articles=feedback.get("missed_articles", []),
+                suggestion=feedback.get("suggestion", ""),
+            ),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Practice evaluation failed: {e}")

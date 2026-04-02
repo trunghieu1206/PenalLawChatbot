@@ -2,14 +2,17 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import styles from './MessageBubble.module.css';
 
-// Regex to match Vietnamese law article citations like "Điều 51", "Điều 255"
-const LAW_REGEX = /Điều\s+\d+[A-Z]?(?:\s+(?:BLHS|BLTTHS|BL[A-Z]+))?/g;
+// Regex (non-global) to match Vietnamese law article citations like "Điều 51", "Điều 255"
+// BUG-06 FIX: The original code used a module-level regex with the /g flag inside .test(),
+// which advances lastIndex and causes every-other citation to silently fail.
+// Solution: use a non-global regex inline so there is no stale lastIndex state.
+const LAW_SPLIT_REGEX = /(Điều\s+\d+[A-Z]?(?:\s+(?:BLHS|BLTTHS|BL[A-Z]+))?)/g;
 
 function highlightLawCitations(text) {
   if (!text) return text;
-  const parts = text.split(/(Điều\s+\d+[A-Z]?(?:\s+(?:BLHS|BLTTHS|BL[A-Z]+))?)/g);
+  const parts = text.split(LAW_SPLIT_REGEX);
   return parts.map((part, i) =>
-    LAW_REGEX.test(part) || /^Điều\s+\d+/.test(part)
+    /^Điều\s+\d+/.test(part)
       ? <span key={i} className="law-citation" title={`Tra cứu ${part}`}>{part}</span>
       : part
   );
