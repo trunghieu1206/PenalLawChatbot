@@ -181,6 +181,8 @@
   flex-direction: column;
   gap: 8px;
   flex-shrink: 0;
+  min-width: 0;  /* allow flex children to shrink */
+  overflow: hidden;  /* prevent button overflow */
 }
 
 /* Training Mode Button — prominent, stands out in sidebar */
