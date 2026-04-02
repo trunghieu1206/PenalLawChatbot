@@ -299,18 +299,18 @@ export default function ChatPage() {
                       <div className={styles.userEmail}>Không cần đăng nhập</div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px', minWidth: 0, width: '100%' }}>
                     <button
                       className="btn btn-ghost"
                       onClick={() => navigate('/login')}
-                      style={{ flex: 1 }}
+                      style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                     >
                       🔐 Đăng nhập
                     </button>
                     <button
                       className="btn btn-primary"
                       onClick={() => navigate('/register')}
-                      style={{ flex: 1 }}
+                      style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                     >
                       ➕ Đăng ký
                     </button>
