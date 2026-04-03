@@ -2,16 +2,19 @@
 22,80,8000,8080,7681
 
 # upload the setup scripts to server
-scp -P 2818 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@n1.ckey.vn:/root/
+scp -P 2422 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@n1.ckey.vn:/root/
 
 # Upload the DB backup
-ssh -p 2818 root@n1.ckey.vn "mkdir -p ~/PenalLawChatbot/database/backups"
-scp -P 2818 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260327_051640.sql \
+ssh -p 2422 root@n1.ckey.vn "mkdir -p ~/PenalLawChatbot/database/backups"
+scp -P 2422 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260402_140359.sql \
     root@n1.ckey.vn:~/PenalLawChatbot/database/backups/
 
 # run the installer 
 chmod +x setup_server.sh deploy.sh
 bash setup_server.sh
+
+# restore database
+bash restore_database.sh
 
 # note: if the server itself is a Docker container run this script instead of setup_server.sh 
 bash deploy_nodocker.sh
@@ -28,7 +31,7 @@ chmod 777 ./PenalLawChatbot/database/backups
 ./backup_database.sh
 
 ## download backup to local
-scp -P 2087 'root@n2.ckey.vn:~/PenalLawChatbot/database/backups/penallaw_backup_*.sql' ~/Desktop/Projects/PenalLawChatbot/database/backups/
+scp -P 2422 'root@n1.ckey.vn:~/PenalLawChatbot/database/backups/penallaw_backup_*.sql' ~/Desktop/Projects/PenalLawChatbot/database/backups/
 
 ## verify 
 ls -lh ~/PenalLawChatbot/database/backups/

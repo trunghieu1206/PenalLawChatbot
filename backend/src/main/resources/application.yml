@@ -16,8 +16,13 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+        # Store all timestamps in UTC, normalize timezone
+        jdbc:
+          time_zone: UTC
+        use_jdbc_metadata_defaults: false
 
   jackson:
+    default-time-zone: UTC
     time-zone: Asia/Ho_Chi_Minh
     serialization:
       write-dates-as-timestamps: false

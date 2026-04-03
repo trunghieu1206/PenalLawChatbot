@@ -1,90 +1,159 @@
 #!/bin/bash
 
-# Database Restore Script (Non-Docker PostgreSQL)
-# Restores a PostgreSQL database from a backup file
+# Database Restore Script (Auto-Latest Backup)
+# Restores PostgreSQL database from the latest .sql backup file.
+# Can be run BEFORE deploy_nodocker.sh for clean fresh deployments,
+# or AFTER for manual database resets.
+# Works without Docker on containerized/bare-metal deployments.
 
-set -e
+set -euo pipefail
+
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
+info()  { echo -e "${GREEN}[INFO]${NC}  $*"; }
+warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
+skip()  { echo -e "${YELLOW}[SKIP]${NC}  $*"; }
+error() { echo -e "${RED}[ERR]${NC}   $*"; exit 1; }
 
 # Configuration
+PROJECT_DIR="${PENALLAW_DIR:-/root/PenalLawChatbot}"
+BACKUP_DIR="$PROJECT_DIR/database/backups"
 DB_NAME="${POSTGRES_DB:-penallaw}"
 DB_USER="${POSTGRES_USER:-postgres}"
+DB_PASS="${POSTGRES_PASSWORD:-postgres}"
+LOG_DIR="/var/log/penallaw"
+mkdir -p "$LOG_DIR"
+chmod 777 "$LOG_DIR" 2>/dev/null || true
 
-# Check if backup file is provided
-if [ -z "$1" ]; then
-    echo "❌ Error: Backup file not provided"
-    echo ""
-    echo "Usage: ./restore_database.sh <backup_file>"
-    echo ""
-    echo "Example:"
-    echo "   ./restore_database.sh ./database/backups/penallaw_backup_20240101_120000.sql"
-    echo ""
-    echo "💡 List available backups:"
-    echo "   ls -lh ./database/backups/"
-    exit 1
-fi
-
-BACKUP_FILE="$1"
-
-# Check if backup file exists
-if [ ! -f "$BACKUP_FILE" ]; then
-    echo "❌ Error: Backup file not found: $BACKUP_FILE"
-    exit 1
-fi
-
-echo "🔄 Starting database restore..."
-echo "   Backup file: $BACKUP_FILE"
-echo "   Database: $DB_NAME"
-echo "   User: $DB_USER"
 echo ""
-echo "⚠️  WARNING: This will DROP the existing database and restore from backup!"
-echo "   All current data will be lost. Continue? (yes/no)"
-read -r confirm
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🔄  Database Restore (Latest Backup)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
 
-if [ "$confirm" != "yes" ]; then
-    echo "❌ Restore cancelled"
-    exit 0
+# Find the latest backup file
+if [ ! -d "$BACKUP_DIR" ]; then
+    error "Backup directory not found: $BACKUP_DIR"
 fi
 
-# Check if PostgreSQL is running
+info "Looking for backups in: $BACKUP_DIR"
+BACKUP_FILE=$(ls -t "$BACKUP_DIR"/penallaw_backup_*.sql 2>/dev/null | head -n 1 || echo "")
+
+if [ -z "$BACKUP_FILE" ]; then
+    error "No backup files found in $BACKUP_DIR"
+fi
+
+BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
+BACKUP_TIME=$(stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' "$BACKUP_FILE" 2>/dev/null || stat -c '%y' "$BACKUP_FILE" 2>/dev/null | cut -d. -f1 || echo "")
+
+info "Latest backup: $(basename "$BACKUP_FILE")"
+echo "   Size: $BACKUP_SIZE | Modified: $BACKUP_TIME"
+echo ""
+
+# ── Ensure PostgreSQL is installed and started ────────────────
+info "Ensuring PostgreSQL is installed..."
+if ! command -v psql &>/dev/null || ! command -v pg_isready &>/dev/null; then
+    error "PostgreSQL is not installed. Run deploy_nodocker.sh first or:"
+    echo "   apt-get install -y postgresql postgresql-contrib libpq-dev"
+    exit 1
+fi
+skip "PostgreSQL tools available"
+
+info "Starting PostgreSQL (if needed)..."
+PG_VERSION=$(ls /etc/postgresql/ 2>/dev/null | sort -V | tail -1 || echo "")
+if [ -z "$PG_VERSION" ]; then
+    error "PostgreSQL version directory not found in /etc/postgresql/"
+fi
+
 if ! pg_isready -q 2>/dev/null; then
-    echo "❌ Error: PostgreSQL is not running"
-    echo "   Start PostgreSQL with: sudo systemctl start postgresql"
-    echo "   Or: sudo pg_ctlcluster <version> main start"
-    exit 1
+    warn "PostgreSQL not running — starting..."
+    pg_dropcluster --stop "$PG_VERSION" main 2>/dev/null || true
+    pg_createcluster "$PG_VERSION" main 2>/dev/null || true
+    
+    PG_LOG="$LOG_DIR/postgres_restore.log"
+    touch "$PG_LOG" 2>/dev/null || PG_LOG="/tmp/postgres_restore.log"
+    
+    pg_ctlcluster "$PG_VERSION" main start -- -l "$PG_LOG" 2>&1 || true
+    sleep 3
+    
+    if ! pg_isready -q 2>/dev/null; then
+        warn "PostgreSQL startup returned, but pg_isready not responding yet. Waiting a bit more..."
+        sleep 3
+    fi
 fi
 
-echo "🗑️  Dropping existing database..."
-if su - postgres -c "dropdb --if-exists \"$DB_NAME\"" 2>/dev/null; then
-    echo "   ✓ Database dropped (or didn't exist)"
+if pg_isready -q 2>/dev/null; then
+    info "PostgreSQL is running"
 else
-    echo "   ⚠️  Attempting alternative drop method..."
-    su - postgres -c "psql -c 'DROP DATABASE IF EXISTS $DB_NAME;'" 2>/dev/null || true
+    error "PostgreSQL still not responding after startup. Manual check needed."
 fi
+echo ""
 
-echo "📥 Creating new database..."
-if su - postgres -c "createdb \"$DB_NAME\"" 2>/dev/null; then
-    echo "   ✓ Database created"
-else
-    echo "   ❌ Failed to create database"
-    echo "   Running diagnostics..."
-    su - postgres -c "psql -l"
-    exit 1
-fi
+# ── Check database status ────────────────────────────────────
+info "Checking if database '$DB_NAME' exists..."
+DB_EXISTS=$(su -c "cd /tmp && psql -tAc \"SELECT 1 FROM pg_database WHERE datname='$DB_NAME';\"" postgres 2>/dev/null || echo "")
 
-echo "📝 Restoring from backup..."
-if su - postgres -c "psql \"$DB_NAME\" < \"$BACKUP_FILE\"" 2>/dev/null; then
-    echo "   ✓ Restore completed"
+if [ -n "$DB_EXISTS" ]; then
+    # Database exists — check if it has tables
+    TABLE_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM information_schema.tables WHERE table_schema='public';\"" postgres 2>/dev/null || echo "0")
+    
+    if [ "${TABLE_COUNT:-0}" -gt 0 ]; then
+        warn "Database '$DB_NAME' already exists with $TABLE_COUNT tables"
+        echo ""
+        echo "⚠️   WARNING: Restoring will DROP and recreate the database!"
+        echo "     All current data in '$DB_NAME' will be LOST."
+        echo ""
+        echo "     Press Ctrl+C to cancel, or enter 'yes' to continue:"
+        read -r -t 30 confirm || confirm="no"
+        
+        if [ "$confirm" != "yes" ]; then
+            warn "Restore cancelled by user"
+            exit 0
+        fi
+        
+        info "Dropping existing database..."
+        su -c "cd /tmp && dropdb --if-exists $DB_NAME" postgres 2>/dev/null || true
+    else
+        warn "Database exists but is empty"
+    fi
 else
-    echo "   ❌ Restore failed - trying with verbose output..."
-    su - postgres -c "psql \"$DB_NAME\" < \"$BACKUP_FILE\""
-    exit 1
+    info "Database does not exist yet"
 fi
 
 echo ""
-echo "✅ Restore successful!"
-echo "   Database: $DB_NAME"
-echo "   Source: $BACKUP_FILE"
+
+# Create fresh database
+info "Creating database '$DB_NAME'..."
+su -c "cd /tmp && createdb $DB_NAME" postgres 2>/dev/null || true
+
+# Set password
+info "Setting password for user '$DB_USER'..."
+su -c "cd /tmp && psql -c \"ALTER USER $DB_USER WITH PASSWORD '$DB_PASS';\"" postgres 2>/dev/null || true
+
 echo ""
-echo "💡 You may need to restart services:"
-echo "   pkill -f 'java -jar' && pkill -f uvicorn"
-echo "   Then redeploy with: bash deploy_nodocker.sh"
+info "Importing backup file (this may take a few moments)..."
+START_TIME=$(date +%s)
+
+# Perform the restore
+if su -c "cd /tmp && psql $DB_NAME < \"$BACKUP_FILE\"" postgres \
+    >> "$LOG_DIR/restore.log" 2>&1; then
+    END_TIME=$(date +%s)
+    DURATION=$((END_TIME - START_TIME))
+    info "✅ Restore completed successfully"
+    echo ""
+    echo "  Database:  $DB_NAME"
+    echo "  Source:    $(basename "$BACKUP_FILE")"
+    echo "  Size:      $BACKUP_SIZE"
+    echo "  Time:      ${DURATION}s"
+else
+    warn "Restore had warnings — check log: $LOG_DIR/restore.log"
+    # Don't fail completely — database might still be usable
+fi
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "✅  Database Ready!"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "Next steps:"
+echo "  1. Run: bash deploy_nodocker.sh"
+echo ""

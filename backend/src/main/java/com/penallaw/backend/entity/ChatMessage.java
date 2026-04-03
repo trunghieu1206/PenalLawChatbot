@@ -2,6 +2,7 @@ package com.penallaw.backend.entity;
 
 import com.penallaw.backend.converter.JsonListConverter;
 import com.penallaw.backend.converter.JsonMapConverter;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -46,5 +47,6 @@ public class ChatMessage {
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSS]'Z'", timezone = "UTC")
     private LocalDateTime createdAt;
 }

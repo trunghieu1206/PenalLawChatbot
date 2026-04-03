@@ -118,7 +118,7 @@ fi
 
 if [ "$PY_MAJOR" -ge 3 ] && [ "$PY_MINOR" -ge 10 ]; then
     skip "Python $PY_VERSION already installed — skipping deadsnakes PPA (saves ~15 min)"
-    "$PYTHON_BIN" -m pip install --upgrade pip --quiet
+    "$PYTHON_BIN" -m pip install --upgrade pip
 else
     info "Python < 3.10 detected ($PY_VERSION) — installing Python 3.11 from deadsnakes PPA..."
     add-apt-repository -y ppa:deadsnakes/ppa 2>/dev/null || true
@@ -129,7 +129,7 @@ else
     update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 2>/dev/null || true
     update-alternatives --install /usr/bin/python  python  /usr/bin/python3.11 1 2>/dev/null || true
     PYTHON_BIN=/usr/bin/python3.11
-    "$PYTHON_BIN" -m pip install --upgrade pip --quiet
+    "$PYTHON_BIN" -m pip install --upgrade pip
 fi
 info "Python: $("$PYTHON_BIN" --version)"
 
@@ -235,14 +235,14 @@ if command -v uv &>/dev/null; then
     skip "uv already installed"
 else
     info "Installing uv (fast pip replacement)..."
-    "$PYTHON_BIN" -m pip install uv --quiet
+    "$PYTHON_BIN" -m pip install uv
 fi
 
 info "Installing Python packages via uv..."
 info "(torch is pre-installed in PyTorch Docker image — only langchain/fastapi/etc. will download)"
 # --python ensures uv uses conda's Python, not the stub /usr/bin/python3
 # --no-build-isolation speeds up packages that don't need isolated builds
-uv pip install --system --python "$PYTHON_BIN" --quiet \
+uv pip install --system --python "$PYTHON_BIN" \
     fastapi "uvicorn[standard]" \
     pydantic python-dotenv \
     "langchain==0.3.21" "langchain-core==0.3.51" \
