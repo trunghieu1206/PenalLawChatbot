@@ -49,14 +49,23 @@ info "Latest backup: $(basename "$BACKUP_FILE")"
 echo "   Size: $BACKUP_SIZE | Modified: $BACKUP_TIME"
 echo ""
 
+# ── Ensure backup file is readable ─────────────────────────────
+info "Setting permissions on backup file..."
+chmod 644 "$BACKUP_FILE" 2>/dev/null || true
+ls -lh "$BACKUP_FILE" | awk '{print "   Permissions: " $1 " | Owner: " $3 ":" $4 " | Size: " $5}'
+
 # ── Ensure PostgreSQL is installed and started ────────────────
 info "Ensuring PostgreSQL is installed..."
-if ! command -v psql &>/dev/null || ! command -v pg_isready &>/dev/null; then
-    error "PostgreSQL is not installed. Run deploy_nodocker.sh first or:"
-    echo "   apt-get install -y postgresql postgresql-contrib libpq-dev"
-    exit 1
+if ! command -v psql &>/dev/null; then
+    info "PostgreSQL not found — installing..."
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 || true
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        postgresql postgresql-contrib libpq-dev >/dev/null 2>&1 || \
+        { error "Failed to install PostgreSQL"; }
+    info "PostgreSQL installed: $(psql --version)"
+else
+    skip "PostgreSQL: $(psql --version)"
 fi
-skip "PostgreSQL tools available"
 
 info "Starting PostgreSQL (if needed)..."
 PG_VERSION=$(ls /etc/postgresql/ 2>/dev/null | sort -V | tail -1 || echo "")
@@ -69,10 +78,13 @@ if ! pg_isready -q 2>/dev/null; then
     pg_dropcluster --stop "$PG_VERSION" main 2>/dev/null || true
     pg_createcluster "$PG_VERSION" main 2>/dev/null || true
     
-    PG_LOG="$LOG_DIR/postgres_restore.log"
-    touch "$PG_LOG" 2>/dev/null || PG_LOG="/tmp/postgres_restore.log"
+    # Use /tmp for log to avoid permission issues with /var/log/penallaw
+    PG_LOG="/tmp/postgresql_restore_$$.log"
     
-    pg_ctlcluster "$PG_VERSION" main start -- -l "$PG_LOG" 2>&1 || true
+    pg_ctlcluster "$PG_VERSION" main start -- -l "$PG_LOG" 2>&1 || {
+        warn "pg_ctlcluster reported an error, but PostgreSQL may still be starting..."
+        sleep 5
+    }
     sleep 3
     
     if ! pg_isready -q 2>/dev/null; then
@@ -84,7 +96,7 @@ fi
 if pg_isready -q 2>/dev/null; then
     info "PostgreSQL is running"
 else
-    error "PostgreSQL still not responding after startup. Manual check needed."
+    error "PostgreSQL still not responding after startup. Check logs or try: systemctl status postgresql"
 fi
 echo ""
 
@@ -123,19 +135,25 @@ echo ""
 
 # Create fresh database
 info "Creating database '$DB_NAME'..."
-su -c "cd /tmp && createdb $DB_NAME" postgres 2>/dev/null || true
+su - postgres -c "psql -c \"DROP DATABASE IF EXISTS $DB_NAME;\"" 2>/dev/null || true
+su - postgres -c "psql -c \"CREATE DATABASE $DB_NAME;\"" 2>/dev/null || true
 
 # Set password
 info "Setting password for user '$DB_USER'..."
-su -c "cd /tmp && psql -c \"ALTER USER $DB_USER WITH PASSWORD '$DB_PASS';\"" postgres 2>/dev/null || true
+su - postgres -c "psql -c \"ALTER USER $DB_USER WITH PASSWORD '$DB_PASS';\"" 2>/dev/null || true
 
 echo ""
 info "Importing backup file (this may take a few moments)..."
 START_TIME=$(date +%s)
 
-# Perform the restore
-if su -c "cd /tmp && psql $DB_NAME < \"$BACKUP_FILE\"" postgres \
-    >> "$LOG_DIR/restore.log" 2>&1; then
+# Copy backup to postgres temp location and restore from there
+TEMP_BACKUP="/tmp/penallaw_backup_temp_$$.sql"
+cp "$BACKUP_FILE" "$TEMP_BACKUP" 2>/dev/null || true
+chmod 644 "$TEMP_BACKUP" 2>/dev/null || true
+
+# Perform the restore with proper postgres user context
+if su - postgres -c "psql $DB_NAME < \"$TEMP_BACKUP\" 2>&1" \
+    > "/tmp/restore_$$.log" 2>&1; then
     END_TIME=$(date +%s)
     DURATION=$((END_TIME - START_TIME))
     info "✅ Restore completed successfully"
@@ -145,9 +163,17 @@ if su -c "cd /tmp && psql $DB_NAME < \"$BACKUP_FILE\"" postgres \
     echo "  Size:      $BACKUP_SIZE"
     echo "  Time:      ${DURATION}s"
 else
-    warn "Restore had warnings — check log: $LOG_DIR/restore.log"
-    # Don't fail completely — database might still be usable
+    # Check what went wrong
+    RESTORE_LOG=$(cat "/tmp/restore_$$.log" 2>/dev/null || echo "No log found")
+    if echo "$RESTORE_LOG" | grep -q "error"; then
+        error "Restore failed: $(echo "$RESTORE_LOG" | grep error | head -1)"
+    else
+        warn "Restore completed with warnings or output"
+    fi
 fi
+
+# Cleanup temp backup
+rm -f "$TEMP_BACKUP"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

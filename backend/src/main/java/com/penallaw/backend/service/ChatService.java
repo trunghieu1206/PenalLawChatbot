@@ -14,6 +14,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -54,10 +55,13 @@ public class ChatService {
     @Transactional
     public ChatDTOs.SessionResponse createGuestSession(String guestId, ChatDTOs.CreateSessionRequest request) {
         String mode = (request != null && request.mode() != null) ? request.mode() : "neutral";
+        LocalDateTime now = LocalDateTime.now();
         ChatSession session = ChatSession.builder()
                 .guestId(guestId)
                 .mode(mode)
                 .title("Phiên mới")
+                .createdAt(now)
+                .updatedAt(now)
                 .build();
         session = sessionRepository.save(session);
         return toSessionResponse(session);
@@ -76,8 +80,12 @@ public class ChatService {
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + userEmail));
         String mode = (request != null && request.mode() != null) ? request.mode() : "neutral";
+        LocalDateTime now = LocalDateTime.now();
         ChatSession session = ChatSession.builder()
-                .user(user).mode(mode).title("Phiên mới").build();
+                .user(user).mode(mode).title("Phiên mới")
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
         session = sessionRepository.save(session);
         return toSessionResponse(session);
     }
@@ -108,7 +116,9 @@ public class ChatService {
 
         // Save user message
         ChatMessage userMessage = ChatMessage.builder()
-                .session(session).role("user").content(request.content()).build();
+                .session(session).role("user").content(request.content())
+                .createdAt(LocalDateTime.now())
+                .build();
         messageRepository.save(userMessage);
 
         // Build conversation history list for AI context
@@ -136,6 +146,7 @@ public class ChatService {
                     .content(aiResponse.result())
                     .extractedFacts(aiResponse.extractedFacts())
                     .mappedLaws(aiResponse.mappedLaws())
+                    .createdAt(LocalDateTime.now())
                     .build();
             aiMessage = messageRepository.save(aiMessage);
         } catch (Exception e) {
