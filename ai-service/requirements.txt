@@ -14,7 +14,9 @@ langchain-milvus>=0.1.0
 langgraph>=0.1.0
 huggingface_hub>=0.23.0
 pymilvus>=2.4.0
-milvus-lite>=2.4.0
+# milvus-lite <2.4.9 uses `from pkg_resources import ...` which fails when
+# setuptools is in a non-standard location. >=2.4.9 switched to importlib.metadata.
+milvus-lite>=2.4.9
 psycopg2-binary>=2.9.9
 sqlalchemy>=2.0.0
 transformers>=4.44.0

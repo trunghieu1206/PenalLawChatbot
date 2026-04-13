@@ -224,6 +224,10 @@ info "Installing AI service requirements (excluding torch)..."
 grep -v "^torch" "$PROJECT_DIR/ai-service/requirements.txt" > /tmp/requirements_notorch.txt
 "$AI_PYTHON" -m pip install --quiet -r /tmp/requirements_notorch.txt 2>&1 | tail -5 || \
     { echo "[ERR] Failed to install AI dependencies"; exit 1; }
+# Force-upgrade milvus-lite + pymilvus to ensure we get a version that uses
+# importlib.metadata instead of pkg_resources (fixed in milvus-lite>=2.4.9).
+# This targeted upgrade is safe — neither package declares torch as a dependency.
+"$AI_PYTHON" -m pip install "milvus-lite>=2.4.9" "pymilvus>=2.4.0" --upgrade --quiet 2>&1 | tail -2 || true
 info "AI service dependencies ready."
 
 # ── Verify critical imports BEFORE launching (fail fast) ──────────────────────
