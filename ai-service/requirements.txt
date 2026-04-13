@@ -14,11 +14,14 @@ pymilvus>=2.4.0
 milvus-lite>=2.4.0
 psycopg2-binary>=2.9.9
 sqlalchemy>=2.0.0
-transformers>=4.42.4
+transformers>=4.44.0
 accelerate>=0.30.0
-# peft>=0.15.0 required: corda_config was introduced in 0.15.0 (CorDA LoRA init).
-# Older versions (0.14.x) raise TypeError on adapters that store corda_config.
-peft>=0.15.0
+# peft>=0.18.0 required:
+#   - 0.15.x introduced corda_config support needed to load the adapter
+#   - 0.18.x fixed the broken `EncoderDecoderCache` import from transformers
+#     (that class was removed in transformers >=4.47)
+# Always pin peft and transformers together — they must be compatible.
+peft>=0.18.0
 # setuptools provides pkg_resources, which milvus-lite imports at module load.
 # Without it, MilvusClient raises "No module named 'pkg_resources'".
 setuptools>=70.0

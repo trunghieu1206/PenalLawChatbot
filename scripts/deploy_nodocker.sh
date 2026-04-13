@@ -215,7 +215,9 @@ fi
 info "Installing AI service requirements (excluding torch)..."
 # Filter out torch from requirements to avoid reinstall
 grep -v "^torch" "$PROJECT_DIR/ai-service/requirements.txt" > /tmp/requirements_notorch.txt
-"$AI_PYTHON" -m pip install --quiet -r /tmp/requirements_notorch.txt 2>&1 | tail -3 || \
+# --upgrade ensures peft/transformers are bumped to the new floor versions
+# (without it, pip silently keeps cached older versions that may be incompatible)
+"$AI_PYTHON" -m pip install --quiet --upgrade -r /tmp/requirements_notorch.txt 2>&1 | tail -5 || \
     { echo "[ERR] Failed to install AI dependencies"; exit 1; }
 info "AI service dependencies ready."
 
@@ -226,8 +228,8 @@ import torch
 assert torch.version.cuda, 'torch has no CUDA build'
 from peft import PeftModel
 from transformers import AutoModel, AutoTokenizer
-import uvicorn, fastapi
-print(f'✅ All imports OK | torch={torch.__version__}')
+import peft, transformers, uvicorn, fastapi
+print(f'✅ All imports OK | torch={torch.__version__} | peft={peft.__version__} | transformers={transformers.__version__}')
 " || { echo "[ERR] Import verification FAILED"; exit 1; }
 
 # Write .env for ai-service
