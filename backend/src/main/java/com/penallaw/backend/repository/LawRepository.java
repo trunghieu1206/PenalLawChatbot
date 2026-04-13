@@ -6,45 +6,32 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDate;
 import java.util.List;
 
 @Repository
 public interface LawRepository extends JpaRepository<Law, Integer> {
 
     /**
-     * Version-aware lookup: find all versions of an article effective at the given crime date.
-     * A law version is applicable when:
-     *   effective_date <= crimeDate  AND  (effective_end_date IS NULL OR effective_end_date >= crimeDate)
-     * Results ordered newest source first.
+     * Return ALL versions of an article ordered by effectiveDate DESC (most recent first).
+     * The controller partitions and re-orders this list based on crimeDate if provided.
      */
     @Query("""
             SELECT l FROM Law l
             WHERE l.articleNumber = :articleNumber
-              AND (l.effectiveDate IS NULL OR l.effectiveDate <= :crimeDate)
-              AND (l.effectiveEndDate IS NULL OR l.effectiveEndDate >= :crimeDate)
             ORDER BY l.effectiveDate DESC NULLS LAST
             """)
-    List<Law> findByArticleNumberAndCrimeDate(
-            @Param("articleNumber") String articleNumber,
-            @Param("crimeDate") LocalDate crimeDate
-    );
+    List<Law> findAllVersionsByArticleNumber(@Param("articleNumber") String articleNumber);
 
     /**
-     * Fallback: return all active versions of an article (no date filter).
-     * Used when crimeDate is not available.
+     * Find a specific article by article number and source (for disambiguation).
+     * When article numbers can vary across different BLHS versions (e.g., Art 249 in 2009 vs 2025),
+     * this query allows specifying the exact source to get the correct article.
      */
     @Query("""
             SELECT l FROM Law l
-            WHERE l.articleNumber = :articleNumber
-              AND l.isActive = true
+            WHERE l.articleNumber = :articleNumber AND l.source = :source
             ORDER BY l.effectiveDate DESC NULLS LAST
+            LIMIT 1
             """)
-    List<Law> findActiveByArticleNumber(@Param("articleNumber") String articleNumber);
-
-    /**
-     * Return ALL versions of an article regardless of active flag.
-     * Useful for showing historical context.
-     */
-    List<Law> findByArticleNumberOrderByEffectiveDateDesc(String articleNumber);
+    Law findByArticleNumberAndSource(@Param("articleNumber") String articleNumber, @Param("source") String source);
 }

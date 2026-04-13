@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { practiceApi } from '../services/api.js';
+import { practiceApi, lawsApi } from '../services/api.js';
 import styles from './TrainingPage.module.css';
 
 const MODES = [
@@ -24,6 +24,10 @@ const MODES = [
   },
 ];
 
+// Regex to extract article number and source from law citation text
+// Properly matches: "Điều 249", "Điều 51 Bộ luật Hình sự 2025", "Điều 51 Bộ luật Hình sự 2015 (sửa đổi 2017)"
+const LAW_CITATION_REGEX = /Điều\s+(\d+[A-Z]?)(?:\s+(Bộ\s+luật\s+Hình\s+sự(?:\s+\d{4})?(?:\s+\(sửa\s+đổi(?:\s+\d{4})?\))?|BLHS(?:\s+\d{4})?|BLTTHS))?/g;
+
 export default function TrainingPage() {
   const [mode, setMode] = useState('neutral');
   const [caseDesc, setCaseDesc] = useState('');
@@ -31,6 +35,16 @@ export default function TrainingPage() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  // Law modal state
+  const [lawModal, setLawModal] = useState({
+    open: false,
+    loading: false,
+    article: null,
+    source: null,
+    data: null,
+    error: null,
+  });
 
   const handleSubmit = async () => {
     if (!caseDesc.trim()) {
@@ -60,6 +74,82 @@ export default function TrainingPage() {
     setError('');
     setUserAnalysis('');
     setCaseDesc('');
+  };
+
+  const handleLawClick = async (article, source) => {
+    setLawModal({
+      open: true,
+      loading: true,
+      article,
+      source,
+      data: null,
+      error: null,
+    });
+
+    try {
+      const response = await lawsApi.getLaw(article, null, source);
+      setLawModal(prev => ({
+        ...prev,
+        loading: false,
+        data: response,
+      }));
+    } catch (err) {
+      setLawModal(prev => ({
+        ...prev,
+        loading: false,
+        error: err.message || 'Không thể tải luật này',
+      }));
+    }
+  };
+
+  const closeLawModal = () => {
+    setLawModal({
+      open: false,
+      loading: false,
+      article: null,
+      source: null,
+      data: null,
+      error: null,
+    });
+  };
+
+  // Parse law citations and make them clickable
+  const renderLawCitations = (text) => {
+    if (!text) return text;
+    
+    const parts = [];
+    let lastIndex = 0;
+    const matches = [...text.matchAll(LAW_CITATION_REGEX)];
+    
+    matches.forEach((match) => {
+      const fullMatch = match[0];
+      const articleNum = match[1];
+      const sourceStr = match[2]?.trim() || '';
+      
+      // Add text before this match
+      parts.push(text.substring(lastIndex, match.index));
+      
+      // Add clickable law citation
+      parts.push(
+        <button
+          key={`law-${match.index}`}
+          className="law-citation"
+          style={{ cursor: 'pointer', textDecoration: 'underline', background: 'none', border: 'none', padding: 0 }}
+          onClick={() => handleLawClick(articleNum, sourceStr)}
+          title={`Xem Điều ${articleNum}`}
+        >
+          {fullMatch}
+        </button>
+      );
+      
+      lastIndex = match.index + fullMatch.length;
+    });
+    
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex));
+    }
+    
+    return parts.length > 0 ? parts : text;
   };
 
   const getScoreClass = (score) => {
@@ -205,7 +295,7 @@ export default function TrainingPage() {
                   <h4 className={styles.sectionTitle} style={{ color: 'var(--accent)' }}>Điều luật bỏ sót</h4>
                   <div className={styles.pills}>
                     {result.feedback.missed_articles.map((a, i) => (
-                      <span key={i} className="law-citation">{a}</span>
+                      <div key={i}>{renderLawCitations(a)}</div>
                     ))}
                   </div>
                 </section>
@@ -221,6 +311,92 @@ export default function TrainingPage() {
           )}
         </div>
       </div>
+
+      {/* LAW REFERENCE MODAL */}
+      {lawModal.open && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            maxWidth: '600px',
+            maxHeight: '80vh',
+            overflowY: 'auto',
+            padding: '20px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0 }}>
+                Điều {lawModal.article} {lawModal.source && `(${lawModal.source})`}
+              </h3>
+              <button
+                onClick={closeLawModal}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {lawModal.loading && (
+              <div style={{ textAlign: 'center', padding: '20px' }}>
+                <span className="loader" /> Đang tải...
+              </div>
+            )}
+
+            {lawModal.error && (
+              <div style={{ color: 'red', padding: '12px', backgroundColor: '#fee', borderRadius: '4px' }}>
+                {lawModal.error}
+              </div>
+            )}
+
+            {lawModal.data && lawModal.data.versions?.length > 0 && (
+              <div>
+                <div style={{ marginBottom: '12px', fontSize: '14px', color: '#666' }}>
+                  <strong>{lawModal.data.versions[0].title}</strong>
+                  {lawModal.data.versions[0].chapter && ` (Chương ${lawModal.data.versions[0].chapter})`}
+                </div>
+                <div style={{
+                  backgroundColor: '#f5f5f5',
+                  padding: '12px',
+                  borderRadius: '4px',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  fontSize: '14px',
+                  lineHeight: '1.6',
+                }}>
+                  {lawModal.data.versions[0].content}
+                </div>
+                {lawModal.data.versions[0].source && (
+                  <div style={{ marginTop: '12px', fontSize: '12px', color: '#999', textAlign: 'right' }}>
+                    Nguồn: {lawModal.data.versions[0].source}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {lawModal.data && lawModal.data.versions?.length === 0 && (
+              <div style={{ padding: '12px', color: '#999' }}>
+                Không tìm thấy nội dung của điều luật này.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

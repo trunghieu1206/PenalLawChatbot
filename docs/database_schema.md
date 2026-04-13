@@ -91,8 +91,8 @@ Stores every individual message in a session — both from the user and the AI a
 `mapped_laws` example value:
 ```json
 [
-  { "article_number": "249", "chapter": "XVIII", "title": "Tội tàng trữ trái phép chất ma túy", "source": "BLHS 2015" },
-  { "article_number": "250", "chapter": "XVIII", "title": "Tội vận chuyển trái phép chất ma túy", "source": "BLHS 2015" }
+  { "article_number": "249", "chapter": "XVIII", "title": "Tội tàng trữ trái phép chất ma túy", "source": "Bộ luật Hình sự 2015" },
+  { "article_number": "250", "chapter": "XVIII", "title": "Tội vận chuyển trái phép chất ma túy", "source": "Bộ luật Hình sự 2015" }
 ]
 ```
 

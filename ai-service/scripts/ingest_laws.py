@@ -130,7 +130,7 @@ def ingest_from_json(conn, filepath: str, source: str = None, effective_date: st
     2. Rich (from parse_docx.py):
        [{"article_number": "51", "title": "...", "chapter": "...",
          "chapter_number": "IV", "content": "...",
-         "source": "BLHS 2015", "effective_start": "2018-01-01", "effective_end": null}]
+         "source": "Bộ luật Hình sự 2015", "effective_start": "2018-01-01", "effective_end": null}]
 
     For the rich format, source/effective_date CLI args are optional — they are
     read from each record. CLI args act as fallback.

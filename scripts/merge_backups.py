@@ -162,7 +162,7 @@ SET default_table_access_method = heap;
 {schema_clean}
 
 -- ============================================================
--- SECTION 3: Law data (1524 articles — BLHS 1999/2009/2015/2025)
+-- SECTION 3: Law data (1524 articles — Bộ luật Hình sự 1999/2009/2015/2025)
 -- ============================================================
 
 {data_clean}

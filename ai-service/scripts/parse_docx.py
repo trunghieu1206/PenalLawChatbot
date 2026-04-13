@@ -24,25 +24,25 @@ BASE_DIR = Path(__file__).parent.parent / "laws_documents_raw"
 FILES = [
     {
         "path": BASE_DIR / "VB_1999.docx",
-        "source": "BLHS 1999",
+        "source": "Bộ luật Hình sự 1999",
         "effective_start": "2000-07-01",
         "effective_end": "2009-12-31",
     },
     {
         "path": BASE_DIR / "VB_2009.docx",
-        "source": "BLHS 2009 (sửa đổi)",
+        "source": "Bộ luật Hình sự 2009 (sửa đổi)",
         "effective_start": "2010-01-01",
         "effective_end": "2017-12-31",
     },
     {
         "path": BASE_DIR / "VB_2017.docx",
-        "source": "BLHS 2015 (sửa đổi 2017)",
+        "source": "Bộ luật Hình sự 2015 (sửa đổi 2017)",
         "effective_start": "2018-01-01",
         "effective_end": None,   # None = still in effect
     },
     {
         "path": BASE_DIR / "VB_2025.docx",
-        "source": "BLHS 2025",
+        "source": "Bộ luật Hình sự 2025",
         "effective_start": "2025-07-01",
         "effective_end": None,
     },
@@ -101,7 +101,7 @@ def parse_docx(cfg: dict) -> list[dict]:
         "chapter_number":   "IV",
         "chapter":          "CÁC BIỆN PHÁP TƯ PHÁP",
         "content":          "1. Các tình tiết sau đây...",
-        "source":           "BLHS 2015 (sửa đổi 2017)",
+        "source":           "Bộ luật Hình sự 2015 (sửa đổi 2017)",
         "effective_start":  "2018-01-01",
         "effective_end":    null
     }
@@ -188,7 +188,7 @@ def main():
     print(f"\n🎉 Done. Total articles across all files: {total}")
     print("\nNext step:")
     print("  python scripts/ingest_laws.py --file laws_documents_raw/VB_2017.json "
-          '--source "BLHS 2015 (sửa đổi 2017)" --date 2018-01-01')
+          '--source "Bộ luật Hình sự 2015 (sửa đổi 2017)" --date 2018-01-01')
 
 
 if __name__ == "__main__":

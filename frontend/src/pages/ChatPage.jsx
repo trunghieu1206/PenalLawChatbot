@@ -457,6 +457,18 @@ export default function ChatPage() {
         </div>
       </main>
 
+      {/* Law Reference Side Panel — inline beside chat, no overlay */}
+      <div className={`${styles.lawPanelWrapper} ${lawSidebar.open ? styles.lawPanelOpen : ''}`}>
+        {lawSidebar.open && (
+          <LawSidebar
+            lawData={lawSidebar.data}
+            loading={lawSidebar.loading}
+            error={lawSidebar.error}
+            onClose={closeLawSidebar}
+          />
+        )}
+      </div>
+
       {/* Role Selection Modal — forced before session creation */}
       {showRoleModal && (
         <div
@@ -483,15 +495,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Law Reference Sidebar */}
-      {lawSidebar.open && (
-        <LawSidebar
-          lawData={lawSidebar.data}
-          loading={lawSidebar.loading}
-          error={lawSidebar.error}
-          onClose={closeLawSidebar}
-        />
-      )}
     </div>
   );
 }

@@ -439,6 +439,17 @@ def extract_sentencing_data(facts: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
+def cleanup_response(text: str) -> str:
+    """
+    Remove or replace 'BLHS' abbreviations in AI-generated text.
+    Replaces 'BLHS' with 'Bộ luật Hình sự' for clarity.
+    This ensures AI responses are user-friendly and don't use abbreviations.
+    """
+    # Replace " BLHS " or " BLHS," with " Bộ luật Hình sự "
+    text = re.sub(r"\bBLHS\b", "Bộ luật Hình sự", text, flags=re.IGNORECASE)
+    return text
+
+
 # ===========================================================
 # LIFESPAN — LOAD MODELS ONCE
 # ===========================================================
@@ -774,7 +785,7 @@ Nhiệm vụ: Đọc kỹ hồ sơ vụ án và SOẠN LUẬN ĐIỂM BÀO CHỮ
 ----------------
 
 LƯU Ý KHI BÀO CHỮA:
-1. Ưu tiên tìm tình tiết giảm nhẹ (Điều 51 BLHS): thành khẩn, bồi thường, nhân thân tốt, phạm tội lần đầu.
+1. Ưu tiên tìm tình tiết giảm nhẹ (Điều 51 Bộ luật Hình sự): thành khẩn, bồi thường, nhân thân tốt, phạm tội lần đầu.
 2. Phân tích xem có thể đề nghị án treo không (án ≤ 3 năm + không tái phạm + có nơi cư trú ổn định).
 3. Nếu có nhiều tội, đề xuất tách riêng hoặc giảm nhẹ từng tội.
 4. Trích dẫn chính xác điều khoản luật để tăng tính thuyết phục.
@@ -791,7 +802,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 
 **I. LUẬN ĐIỂM BÀO CHỮA:**
 1. **Về định tội danh:** (phân tích theo hướng có lợi cho bị cáo)
-2. **Tình tiết giảm nhẹ đề xuất (Điều 51):**
+2. **Tình tiết giảm nhẹ đề xuất (Điều 51 Bộ luật Hình sự):**
    - (liệt kê từng tình tiết + căn cứ pháp lý)
 3. **Phân tích nhân thân bị cáo:**
 
@@ -824,7 +835,7 @@ Nhiệm vụ: Đọc kỹ hồ sơ vụ án và SOẠN LUẬN ĐIỂM BẢO VỆ
 ----------------
 
 LƯU Ý KHI BẢO VỆ BỊ HẠI:
-1. Tập trung làm rõ tình tiết tăng nặng (Điều 52 BLHS): có tổ chức, tái phạm, hậu quả nghiêm trọng.
+1. Tập trung làm rõ tình tiết tăng nặng (Điều 52 Bộ luật Hình sự): có tổ chức, tái phạm, hậu quả nghiêm trọng.
 2. Phân tích mức độ thiệt hại để yêu cầu bồi thường dân sự tối đa.
 3. Phản bác các tình tiết giảm nhẹ mà bị cáo có thể viện dẫn.
 4. Đề nghị mức án cao nhất trong khung có thể lập luận.
@@ -841,7 +852,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 
 **I. LUẬN ĐIỂM BẢO VỆ BỊ HẠI:**
 1. **Về định tội danh:** (phân tích theo hướng tội nặng nhất có thể áp dụng)
-2. **Tình tiết tăng nặng đề nghị áp dụng (Điều 52):**
+2. **Tình tiết tăng nặng đề nghị áp dụng (Điều 52 Bộ luật Hình sự):**
    - (liệt kê từng tình tiết + căn cứ pháp lý)
 3. **Mức độ thiệt hại và yêu cầu bồi thường:**
 
@@ -877,8 +888,8 @@ MỘT VÀI LƯU Ý:
 1. Đối với tội liên quan tới sử dụng ma túy:
    - Phân biệt "tàng trữ" (Điều 249) và "tổ chức sử dụng" (Điều 255).
    - Kiểm tra nhân thân nạn nhân với Khoản 2 Điều 255.
-2. Tình tiết giảm nhẹ: Điều 51 BLHS mới (hoặc Điều 46 cũ).
-3. Tình tiết tăng nặng: Điều 52 BLHS mới (hoặc Điều 48 cũ).
+2. Tình tiết giảm nhẹ: Điều 51 Bộ luật Hình sự mới (hoặc Điều 46 cũ).
+3. Tình tiết tăng nặng: Điều 52 Bộ luật Hình sự mới (hoặc Điều 48 cũ).
 4. Tội kinh tế: kiểm tra xem có thể phạt tiền thay phạt tù không.
 5. Phạm tội chưa đạt (Điều 15, 57): áp dụng quy tắc 3/4.
 
@@ -945,7 +956,9 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
         except Exception as e:
             return {"messages": [AIMessage(content=f"Lỗi xử lý: {e}")]}
 
-        return {"messages": [AIMessage(content=response)]}
+        # Clean up BLHS abbreviations in response
+        cleaned_response = cleanup_response(response)
+        return {"messages": [AIMessage(content=cleaned_response)]}
 
     # NODE: REBUTTAL
     def rebuttal_node(state: AgentState) -> dict:
@@ -991,7 +1004,8 @@ Cấu trúc:
 """
         try:
             response = llm.invoke([HumanMessage(content=prompt)])
-            return {"messages": [AIMessage(content=response.content)]}
+            cleaned_response = cleanup_response(response.content)
+            return {"messages": [AIMessage(content=cleaned_response)]}
         except Exception as e:
             return {"messages": [AIMessage(content=f"Lỗi: {e}")]}
 
@@ -1139,7 +1153,9 @@ Cấu trúc:
         except Exception as e:
             response = f"Lỗi xử lý câu hỏi: {e}"
 
-        return {"messages": [AIMessage(content=response)]}
+        # Clean up BLHS abbreviations in response
+        cleaned_response = cleanup_response(response)
+        return {"messages": [AIMessage(content=cleaned_response)]}
 
     # -------------------------------------------------------
     # BUILD LANGGRAPH
@@ -1298,13 +1314,13 @@ async def practice_evaluate(req: PracticeEvalRequest):
     role_criteria = {
         "neutral": """
 - Đánh giá khả năng xác định tội danh đúng điều luật.
-- Kiểm tra việc phân tích tình tiết tăng nặng/giảm nhẹ theo Điều 51, 52 BLHS.
+- Kiểm tra việc phân tích tình tiết tăng nặng/giảm nhẹ theo Điều 51, 52 Bộ luật Hình sự.
 - Kiểm tra việc lượng hình (mức phạt hợp lý, tổng hợp theo Điều 55 nếu nhiều tội).
 - Kiểm tra xem đã trừ thời gian tạm giam chưa.
 - Đánh giá tính trung lập, khách quan của phân tích.
 """,
         "defense": """
-- Đánh giá khả năng tìm và chưξng dẫn tình tiết giảm nhẹ (có theo Điều 51 không).
+- Đánh giá khả năng tìm và chứng dẫn tình tiết giảm nhẹ (có theo Điều 51 không).
 - Kiểm tra đề xuất án treo hoặc cải tạo không giam giữ (có căn cứ pháp lý không).
 - Đánh giá luận điểm bào chữa: có bác bỏ tình tiết tăng nặng hiệu quả không.
 - Kiểm tra đề nghị khấu trừ thời gian tạm giam.
@@ -1319,7 +1335,7 @@ async def practice_evaluate(req: PracticeEvalRequest):
 """,
     }.get(req.user_mode, "")
 
-    eval_prompt = f"""Bạn là giáo sư luật hình sự Việt Nam đang chấm bài làm của sinh viên luật.
+    eval_prompt = f"""Bạn là giáo sư luật hình sự Việt Nam đang đánh giá phân tích pháp lý của người dùng.
 
 VU ÁN:
 {req.case_description}
@@ -1340,7 +1356,7 @@ Trả về JSON hợp lệ (không markdown, không giải thích bên ngoài JS
   "feedback": {{
     "strengths": ["<điểm mạnh 1>", "<điểm mạnh 2>", ...],
     "improvements": ["<cần cải thiện 1>", "<cần cải thiện 2>", ...],
-    "missed_articles": ["<Điều X BLHS (ý nghĩa)>", ...],
+    "missed_articles": ["<Điều X Bộ luật Hình sự (ý nghĩa hoặc ghi chú)>", ...],
     "suggestion": "<Gợi ý tổng hợp cho người dùng>"
   }}
 }}
@@ -1348,8 +1364,8 @@ Trả về JSON hợp lệ (không markdown, không giải thích bên ngoài JS
 Quy tắc:
 - strengths: 2–4 điểm tích cực cụ thể (trích dẫn rõ luận điểm người dùng).
 - improvements: 2–5 điểm cần cải thiện, cụ thể, có đều khoản tham chiếu.
-- missed_articles: liệt kê các điều luật quan trọng mà người dùng bỏ sót (có thể rỗng nếu đầy đủ).
-- suggestion: 1–2 câu gợi ý cụ thể nhất cho người học.
+- missed_articles: liệt kê các điều luật quan trọng mà người dùng bỏ sót (có thể rỗng nếu đầy đủ). TRONG TRƯỜNG HỢP CÓ CẦN CHỈ RÕ PHIÊN BẢN, DÙNG CÁCH VIẾT: "Điều 51 Bộ luật Hình sự 2015", không dùng từ viết tắt BLHS.
+- suggestion: 1–2 câu gợi ý cụ thể nhất cho người dùng.
 OUTPUT: CHỈ JSON."""
 
     try:
@@ -1358,13 +1374,21 @@ OUTPUT: CHỈ JSON."""
         raw = re.sub(r"```json?\s*", "", raw).strip("`").strip()
         data = json.loads(raw)
 
+        # Clean up BLHS references in missed_articles
+        missed_articles = data.get("feedback", {}).get("missed_articles", [])
+        cleaned_missed_articles = []
+        for article in missed_articles:
+            # Replace "BLHS" with full name or remove if just cleanup needed
+            cleaned = re.sub(r"\bBLHS\b", "Bộ luật Hình sự", article, flags=re.IGNORECASE)
+            cleaned_missed_articles.append(cleaned)
+
         feedback = data.get("feedback", {})
         return PracticeEvalResponse(
             score=int(data.get("score", 50)),
             feedback=PracticeEvalFeedback(
                 strengths=feedback.get("strengths", []),
                 improvements=feedback.get("improvements", []),
-                missed_articles=feedback.get("missed_articles", []),
+                missed_articles=cleaned_missed_articles,
                 suggestion=feedback.get("suggestion", ""),
             ),
         )

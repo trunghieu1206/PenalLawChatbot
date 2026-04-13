@@ -116,7 +116,7 @@ cd ai-service && pip install -r requirements.txt
 python scripts/parse_docx.py
 
 # 2. Ingest laws into PostgreSQL
-python scripts/ingest_laws.py --file data/blhs_2015.json --source "BLHS 2015 (sửa đổi 2017)" --date 2018-01-01
+python scripts/ingest_laws.py --file ai-service/laws_documents_raw/VB_2017.json --source "Bộ luật Hình sự 2015 (sửa đổi 2017)" --date 2018-01-01
 
 # 3. Embed laws into Milvus Lite
 python scripts/embed_laws.py
@@ -240,7 +240,7 @@ Nodes:
 - **retrieve** — Semantic search in Milvus Lite with LoRA-finetuned BGE-M3
 - **grade_documents** — LLM-based relevance filtering of retrieved chunks
 - **extract_facts** — Structured JSON extraction of case facts (dates, offenses, aggravating/mitigating factors)
-- **map_laws** — Maps extracted facts to specific BLHS articles
+- **map_laws** — Maps extracted facts to specific Bộ luật Hình sự articles
 - **generate** — Role-specific legal argument generation (defense / victim / neutral judge)
 - **rebuttal** — Counter-argument generation against an opposing argument
 - **followup_generate** — Contextual follow-up answers using session history
@@ -273,7 +273,7 @@ Users write their own legal analysis for a given case, then submit it to the AI 
   "feedback": {
     "strengths": ["..."],
     "improvements": ["..."],
-    "missed_articles": ["Điều 51 BLHS (tình tiết giảm nhẹ)"],
+    "missed_articles": ["Điều 51 Bộ luật Hình sự (tình tiết giảm nhẹ)"],
     "suggestion": "..."
   }
 }
