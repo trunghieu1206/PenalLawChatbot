@@ -56,29 +56,31 @@
 .modeOption {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 10px 16px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 16px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--border);
+  border: 2px solid var(--border);
   background: var(--bg-surface);
   cursor: pointer;
   transition: var(--transition);
-  min-width: 180px;
+  min-width: 140px;
   flex: 1;
+  text-align: center;
 }
 
 .modeOption:hover:not(:disabled) {
   background: var(--bg-hover);
   border-color: var(--border-accent);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
   box-shadow: var(--shadow-sm);
 }
 
 .modeOptionActive {
   background: var(--bg-card);
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-glow);
+  box-shadow: 0 0 0 1px var(--primary);
 }
 
 .modeOption:disabled {
@@ -86,20 +88,25 @@
   cursor: not-allowed;
 }
 
-.modeIcon {
-  font-size: 20px;
-}
-
-.modeLabel {
-  font-size: 13px;
+.modeAbbr {
+  font-size: 18px;
   font-weight: 700;
+  letter-spacing: 1px;
   color: var(--text-primary);
 }
 
+.modeLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
 .modeDesc {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
-  line-height: 1.4;
+  line-height: 1.3;
 }
 
 /* --- BODY LAYOUT --- */
@@ -138,17 +145,20 @@
   outline: none;
   transition: var(--transition);
 }
-.textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
+.textarea:focus { 
+  border-color: var(--accent); 
+  box-shadow: 0 0 0 3px rgba(45, 95, 122, 0.1);
+}
 .textarea::placeholder { color: var(--text-muted); }
 .textarea:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .error {
   padding: 10px 14px;
   margin-top: 10px;
-  background: rgba(239,68,68,0.1);
-  border: 1px solid rgba(239,68,68,0.2);
+  background: rgba(125, 23, 23, 0.08);
+  border: 1px solid rgba(125, 23, 23, 0.2);
   border-radius: var(--radius-md);
-  color: #f87171;
+  color: var(--error);
   font-size: 13px;
 }
 

@@ -1,55 +1,54 @@
 /* ========================================
-   PENAL LAW AI — Global Design System
+   PENAL LAW CHATBOT — Editorial Design System
    ======================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600;700;800&family=Roboto:wght@300;400;500;700&display=swap');
 
 /* --- CSS VARIABLES --- */
 :root {
-  /* Colors - Light Luxurious Theme */
-  --primary: #8C7355; /* Luxurious Gold/Bronze */
-  --primary-dark: #6B563D;
-  --primary-glow: rgba(140, 115, 85, 0.15);
+  /* Colors - Minimal Editorial Palette */
+  --primary: #1a1a1a; /* Deep black */
+  --primary-light: #333333;
+  --primary-lighter: #4a4a4a;
   
-  --accent: #B89768; 
-  --accent-dark: #9A7B50;
+  --accent: #2d5f7a; /* Muted legal blue */
+  --accent-light: #4a7fa8;
 
-  --bg-base: #FDFCF0; /* Warm creamy white */
-  --bg-card: #FFFFFF;
-  --bg-surface: #F7F5EA;
-  --bg-hover: #F2EFE4;
+  --bg-base: #fafaf9; /* Off-white, almost cream */
+  --bg-card: #ffffff;
+  --bg-surface: #f5f5f3;
+  --bg-hover: #efefeb;
 
-  --border: rgba(140, 115, 85, 0.15); /* Subtle gold tint border */
-  --border-accent: rgba(140, 115, 85, 0.4);
+  --border: #d4d0cc; /* Warm gray border */
+  --border-accent: #a8a29e;
 
-  --text-primary: #2C2A29; /* Dark warm gray, almost black */
-  --text-secondary: #5C5855;
-  --text-muted: #8C8681;
+  --text-primary: #1a1a1a;
+  --text-secondary: #4a4a4a;
+  --text-muted: #8a8784;
 
-  --success: #2E7D32;
-  --error: #C62828;
-  --warning: #F57F17;
+  --success: #1f5233;
+  --error: #7d1717;
+  --warning: #704214;
 
-  /* Role colors */
-  --defense: #3A6EA5; /* Refined Blue */
-  --victim: #A03C3C; /* Refined Red */
-  --neutral: #4A6C58; /* Refined Green */
+  /* Role colors - muted and serious */
+  --defense: #2d5f7a; /* Blue */
+  --victim: #8b3a3a; /* Burgundy */
+  --neutral: #3d5a42; /* Slate Green */
 
   /* Typography */
-  --font-sans: 'Inter', system-ui, sans-serif;
-  --font-display: 'Playfair Display', Georgia, serif;
+  --font-sans: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'EB Garamond', 'Georgia', serif;
 
   /* Sizes */
-  --radius-sm: 6px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
-  --radius-xl: 24px;
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
 
   /* Shadows */
-  --shadow-sm: 0 2px 8px rgba(140, 115, 85, 0.08);
-  --shadow-md: 0 4px 20px rgba(140, 115, 85, 0.12);
-  --shadow-lg: 0 8px 40px rgba(140, 115, 85, 0.16);
-  --shadow-glow: 0 0 30px var(--primary-glow);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.12);
 
   /* Transitions */
   --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -120,13 +119,15 @@ body {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  background: var(--primary);
   color: white;
-  box-shadow: 0 4px 15px rgba(140, 115, 85, 0.25);
+  border: 1px solid var(--primary);
 }
 .btn-primary:hover:not(:disabled) {
+  background: var(--primary-light);
+  border-color: var(--primary-light);
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(140, 115, 85, 0.35);
+  box-shadow: var(--shadow-md);
 }
 
 .btn-ghost {
@@ -160,8 +161,8 @@ body {
 }
 .input::placeholder { color: var(--text-muted); }
 .input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-glow);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(45, 95, 122, 0.1);
 }
 
 .label {
@@ -220,10 +221,13 @@ body {
   color: var(--accent);
   cursor: pointer;
   position: relative;
-  border-bottom: 1px dashed var(--accent);
+  border-bottom: 1px solid var(--accent);
   transition: var(--transition);
 }
-.law-citation:hover { color: var(--accent-dark); }
+.law-citation:hover { 
+  color: var(--accent-light);
+  border-color: var(--accent-light);
+}
 
 /* --- SCROLLABLE CONTENT --- */
 .scroll-area {
@@ -238,17 +242,40 @@ body {
   line-height: 1.8;
   font-size: 15px;
 }
-.prose h1, .prose h2, .prose h3 { font-weight: 700; margin-top: 1.4em; margin-bottom: 0.6em; }
-.prose h2 { font-size: 1.1rem; color: var(--primary); border-bottom: 1px solid var(--border); padding-bottom: 4px; }
-.prose strong { color: var(--text-primary); font-weight: 700; }
-.prose em { color: var(--accent); }
-.prose ul, .prose ol { padding-left: 1.5em; }
-.prose li { margin-bottom: 4px; }
-.prose p { margin-bottom: 0.8em; }
-.prose code { background: var(--bg-surface); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+.prose h1, .prose h2, .prose h3 { 
+  font-family: var(--font-display);
+  font-weight: 700; 
+  margin-top: 1.2em; 
+  margin-bottom: 0.8em;
+  color: var(--primary);
+}
+.prose h2 { 
+  font-size: 1.3rem; 
+  border-bottom: 2px solid var(--border); 
+  padding-bottom: 8px; 
+}
+.prose h3 { font-size: 1.1rem; }
+.prose strong { 
+  color: var(--primary-light); 
+  font-weight: 700; 
+}
+.prose em { 
+  color: var(--accent); 
+  font-style: italic;
+}
+.prose ul, .prose ol { padding-left: 1.8em; }
+.prose li { margin-bottom: 6px; }
+.prose p { margin-bottom: 1em; }
+.prose code { 
+  background: var(--bg-surface); 
+  padding: 2px 6px; 
+  border-radius: 3px; 
+  font-size: 13px;
+  font-family: 'Roboto Mono', monospace;
+}
 .prose blockquote {
-  border-left: 3px solid var(--primary);
-  padding-left: 12px;
+  border-left: 4px solid var(--primary);
+  padding-left: 16px;
   color: var(--text-secondary);
   margin: 1em 0;
 }

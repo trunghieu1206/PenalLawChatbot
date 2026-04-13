@@ -42,18 +42,29 @@ function processChildren(children) {
 }
 
 const ROLE_LABELS = {
-  defense: { label: '🛡️ Luật sư Bào chữa', cls: 'defense' },
-  victim: { label: '🔴 Luật sư Bị hại', cls: 'victim' },
-  neutral: { label: '⚖️ Thẩm phán', cls: 'neutral' },
+  defense: { label: 'Luật sư Bào chữa', cls: 'defense' },
+  victim: { label: 'Luật sư Bị hại', cls: 'victim' },
+  neutral: { label: 'Thẩm phán', cls: 'neutral' },
 };
 
-export default function MessageBubble({ message, role }) {
+function MessageBubble({ message, role }) {
   const isUser = message.role === 'user';
+
+  // Format time in GMT+7 (Hanoi time)
+  const formatTimeGMT7 = (date) => {
+    const d = new Date(date);
+    const offset = 7; // GMT+7
+    const utc = d.getTime() + d.getTimezoneOffset() * 60000;
+    const gmt7 = new Date(utc + 3600000 * offset);
+    return gmt7.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const avatarLabel = isUser ? 'Bạn' : 'Trợ lý';
 
   return (
     <div className={`${styles.wrapper} ${isUser ? styles.user : styles.assistant}`}>
-      <div className={styles.avatar}>
-        {isUser ? '👤' : '🤖'}
+      <div className={styles.avatar} title={avatarLabel}>
+        {isUser ? 'U' : 'A'}
       </div>
 
       <div className={styles.bubble}>
@@ -83,7 +94,7 @@ export default function MessageBubble({ message, role }) {
 
         <time className={styles.time}>
           {message.createdAt
-            ? new Date(message.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+            ? formatTimeGMT7(message.createdAt)
             : 'Vừa xong'}
         </time>
       </div>

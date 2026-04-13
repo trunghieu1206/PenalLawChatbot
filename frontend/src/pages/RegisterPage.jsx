@@ -49,9 +49,8 @@ export default function RegisterPage() {
       </button>
       <div className={`${styles.container} card animate-fade-in`}>
         <div className={styles.logo}>
-          <span className={styles.logoIcon}>⚖️</span>
-          <h1 className={styles.logoText}>LegalAI</h1>
-          <p className={styles.logoSub}>Tạo tài khoản mới</p>
+          <h1 className={styles.logoText}>VNPLaw</h1>
+          <p className={styles.logoSub}>Tạo Tài Khoản Mới</p>
         </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>

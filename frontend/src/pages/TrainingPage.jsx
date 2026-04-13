@@ -6,23 +6,20 @@ import styles from './TrainingPage.module.css';
 const MODES = [
   {
     id: 'neutral',
-    icon: '⚖️',
     label: 'Thẩm phán',
-    desc: 'Trung lập – ra phán quyết dựa trên chứng cứ',
+    desc: 'Phân tích khách quan dựa trên chứng cứ',
     badgeClass: 'badge-neutral',
   },
   {
     id: 'defense',
-    icon: '🛡️',
     label: 'Luật sư Bào chữa',
     desc: 'Bảo vệ quyền lợi bị cáo, giảm nhẹ hình phạt',
     badgeClass: 'badge-defense',
   },
   {
     id: 'victim',
-    icon: '🔴',
     label: 'Luật sư Bị hại',
-    desc: 'Bảo vệ bị hại, yêu cầu xử nghiêm và bồi thường',
+    desc: 'Bảo vệ bị hại, yêu cầu xử nghiêm',
     badgeClass: 'badge-victim',
   },
 ];
@@ -72,9 +69,9 @@ export default function TrainingPage() {
   };
 
   const getScoreEmoji = (score) => {
-    if (score >= 80) return '🏆 Xuất sắc!';
-    if (score >= 60) return '📈 Khá tốt!';
-    return '📚 Cần cải thiện';
+    if (score >= 80) return 'Xuất sắc';
+    if (score >= 60) return 'Tốt';
+    return 'Cần cải thiện';
   };
 
   const selectedMode = MODES.find(m => m.id === mode);
@@ -84,7 +81,7 @@ export default function TrainingPage() {
       <header className={styles.header}>
         <Link to="/chat" className="btn btn-ghost">← Quay lại Chat</Link>
         <div className={styles.headerTitle}>
-          <span>🎓</span> Chế độ Luyện tập
+          Chế độ Luyện tập
         </div>
         <div />
       </header>
@@ -101,7 +98,6 @@ export default function TrainingPage() {
               disabled={loading}
               title={m.desc}
             >
-              <span className={styles.modeIcon}>{m.icon}</span>
               <span className={styles.modeLabel}>{m.label}</span>
               <span className={styles.modeDesc}>{m.desc}</span>
             </button>
@@ -113,7 +109,7 @@ export default function TrainingPage() {
         {/* Left: Input */}
         <div className={styles.panel}>
           <div className="card" style={{ padding: 24 }}>
-            <h3 className={styles.panelTitle}>📋 Nội dung Vụ án</h3>
+            <h3 className={styles.panelTitle}>Nội dung Vụ án</h3>
             <textarea
               className={styles.textarea}
               placeholder="Dán nội dung hồ sơ vụ án vào đây..."
@@ -125,7 +121,7 @@ export default function TrainingPage() {
           </div>
           <div className="card" style={{ padding: 24, marginTop: 16 }}>
             <h3 className={styles.panelTitle}>
-              {selectedMode.icon} Phân tích của bạn theo vai trò <span className={`badge ${selectedMode.badgeClass}`}>{selectedMode.label}</span>
+              Phân tích của bạn theo vai trò <span className={`badge ${selectedMode.badgeClass}`}>{selectedMode.label}</span>
             </h3>
             <textarea
               className={styles.textarea}
@@ -144,7 +140,7 @@ export default function TrainingPage() {
               disabled={loading}
               style={{ flex: 1, justifyContent: 'center', padding: 13, fontSize: 15 }}
             >
-              {loading ? <><span className="loader" /> Đang đánh giá...</> : '⚡ Đánh giá phân tích'}
+              {loading ? <><span className="loader" /> Đang đánh giá...</> : 'Đánh giá phân tích'}
             </button>
             {result && (
               <button
@@ -152,7 +148,7 @@ export default function TrainingPage() {
                 onClick={handleReset}
                 style={{ padding: 13, fontSize: 14 }}
               >
-                🔄 Làm lại
+                Làm lại
               </button>
             )}
           </div>
@@ -162,7 +158,6 @@ export default function TrainingPage() {
         <div className={styles.panel}>
           {!result ? (
             <div className={styles.placeholder}>
-              <span className={styles.placeholderIcon}>📊</span>
               <p>Kết quả đánh giá sẽ hiển thị ở đây sau khi bạn gửi phân tích.</p>
               <p style={{ fontSize: 13, opacity: 0.7, marginTop: 8 }}>
                 AI sẽ đánh giá từng điểm pháp lý và đưa ra nhận xét chi tiết theo vai trò <strong>{selectedMode.label}</strong>.
@@ -185,7 +180,7 @@ export default function TrainingPage() {
 
               {result.feedback.strengths?.length > 0 && (
                 <section className={styles.section}>
-                  <h4 className={styles.sectionTitle} style={{ color: 'var(--success)' }}>✅ Điểm mạnh</h4>
+                  <h4 className={styles.sectionTitle} style={{ color: 'var(--success)' }}>Điểm mạnh</h4>
                   <ul className={styles.list}>
                     {result.feedback.strengths.map((s, i) => (
                       <li key={i} className={styles.listItemGood}>{s}</li>
@@ -196,7 +191,7 @@ export default function TrainingPage() {
 
               {result.feedback.improvements?.length > 0 && (
                 <section className={styles.section}>
-                  <h4 className={styles.sectionTitle} style={{ color: 'var(--error)' }}>⚠️ Cần cải thiện</h4>
+                  <h4 className={styles.sectionTitle} style={{ color: 'var(--error)' }}>Cần cải thiện</h4>
                   <ul className={styles.list}>
                     {result.feedback.improvements.map((s, i) => (
                       <li key={i} className={styles.listItemBad}>{s}</li>
@@ -207,7 +202,7 @@ export default function TrainingPage() {
 
               {result.feedback.missed_articles?.length > 0 && (
                 <section className={styles.section}>
-                  <h4 className={styles.sectionTitle} style={{ color: 'var(--accent)' }}>📖 Điều luật bỏ sót</h4>
+                  <h4 className={styles.sectionTitle} style={{ color: 'var(--accent)' }}>Điều luật bỏ sót</h4>
                   <div className={styles.pills}>
                     {result.feedback.missed_articles.map((a, i) => (
                       <span key={i} className="law-citation">{a}</span>
@@ -218,7 +213,7 @@ export default function TrainingPage() {
 
               {result.feedback.suggestion && (
                 <section className={styles.section}>
-                  <h4 className={styles.sectionTitle}>💡 Gợi ý</h4>
+                  <h4 className={styles.sectionTitle}>Gợi ý</h4>
                   <p className={styles.suggestion}>{result.feedback.suggestion}</p>
                 </section>
               )}

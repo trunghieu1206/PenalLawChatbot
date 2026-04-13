@@ -22,8 +22,9 @@ spring:
         use_jdbc_metadata_defaults: false
 
   jackson:
+    # Store and serialize all timestamps in UTC
+    # Frontend will convert UTC → GMT+7 for display
     default-time-zone: UTC
-    time-zone: Asia/Ho_Chi_Minh
     serialization:
       write-dates-as-timestamps: false
 
