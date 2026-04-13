@@ -213,11 +213,12 @@ fi
 
 # ── Install missing AI service dependencies (except torch) ──────────────────────
 info "Installing AI service requirements (excluding torch)..."
-# Filter out torch from requirements to avoid reinstall
+# Filter out torch from requirements to avoid reinstall/downgrade of the
+# conda GPU torch (2.2.1 with CUDA). Without --upgrade, pip will only
+# install/upgrade packages that don't already satisfy the pinned constraints,
+# so torch is never touched.
 grep -v "^torch" "$PROJECT_DIR/ai-service/requirements.txt" > /tmp/requirements_notorch.txt
-# --upgrade ensures peft/transformers are bumped to the new floor versions
-# (without it, pip silently keeps cached older versions that may be incompatible)
-"$AI_PYTHON" -m pip install --quiet --upgrade -r /tmp/requirements_notorch.txt 2>&1 | tail -5 || \
+"$AI_PYTHON" -m pip install --quiet -r /tmp/requirements_notorch.txt 2>&1 | tail -5 || \
     { echo "[ERR] Failed to install AI dependencies"; exit 1; }
 info "AI service dependencies ready."
 
