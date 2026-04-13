@@ -1,38 +1,14 @@
-/* ── Backdrop ─────────────────────────────────────────────── */
-.backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.35);
-  z-index: 200;
-  animation: fadeIn 0.2s ease;
-}
-
 /* ── Sidebar panel ─────────────────────────────────────────── */
 .sidebar {
-  position: fixed;
-  top: 0;
-  right: 0;
-  height: 100vh;
-  width: 480px;
-  max-width: 92vw;
+  position: relative;
+  height: 100%;
+  width: 100%;
   background: var(--bg-card);
   border-left: 1px solid var(--border);
-  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.18);
-  z-index: 201;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.12);
   display: flex;
   flex-direction: column;
-  animation: slideIn 0.25s cubic-bezier(0.22, 1, 0.36, 1);
   overflow: hidden;
-}
-
-@keyframes slideIn {
-  from { transform: translateX(100%); opacity: 0; }
-  to   { transform: translateX(0);   opacity: 1; }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
 }
 
 /* ── Header ───────────────────────────────────────────────── */
@@ -50,13 +26,7 @@
 .headerLeft {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-}
-
-.headerIcon {
-  font-size: 22px;
-  line-height: 1;
-  margin-top: 2px;
+  gap: 0;
 }
 
 .headerTitle {

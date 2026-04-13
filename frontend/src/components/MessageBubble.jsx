@@ -8,24 +8,45 @@ import styles from './MessageBubble.module.css';
 // Solution: use a non-global regex inline so there is no stale lastIndex state.
 const LAW_SPLIT_REGEX = /(Điều\s+\d+[A-Z]?(?:\s+(?:BLHS|BLTTHS|BL[A-Z]+))?)/g;
 
-function highlightLawCitations(text) {
+/**
+ * Renders inline law citations as clickable buttons when onLawClick is provided.
+ * Each matched citation calls onLawClick({ article: "Điều X" }, crimeDate).
+ */
+function highlightLawCitations(text, onLawClick, crimeDate) {
   if (!text) return text;
   const parts = text.split(LAW_SPLIT_REGEX);
-  return parts.map((part, i) =>
-    /^Điều\s+\d+/.test(part)
-      ? <span key={i} className="law-citation" title={`Tra cứu ${part}`}>{part}</span>
-      : part
-  );
+  return parts.map((part, i) => {
+    if (!/^Điều\s+\d+/.test(part)) return part;
+
+    if (onLawClick) {
+      return (
+        <button
+          key={i}
+          className={`law-citation ${styles.inlineLawBtn}`}
+          title={`Tra cứu ${part}`}
+          type="button"
+          onClick={() => onLawClick({ article: part }, crimeDate)}
+        >
+          {part}
+        </button>
+      );
+    }
+    return (
+      <span key={i} className="law-citation" title={`Tra cứu ${part}`}>
+        {part}
+      </span>
+    );
+  });
 }
 
-function MarkdownWithCitations({ content }) {
+function MarkdownWithCitations({ content, onLawClick, crimeDate }) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
-        p: ({ children }) => <p>{processChildren(children)}</p>,
-        li: ({ children }) => <li>{processChildren(children)}</li>,
-        strong: ({ children }) => <strong>{processChildren(children)}</strong>,
+        p: ({ children }) => <p>{processChildren(children, onLawClick, crimeDate)}</p>,
+        li: ({ children }) => <li>{processChildren(children, onLawClick, crimeDate)}</li>,
+        strong: ({ children }) => <strong>{processChildren(children, onLawClick, crimeDate)}</strong>,
       }}
     >
       {content}
@@ -33,10 +54,12 @@ function MarkdownWithCitations({ content }) {
   );
 }
 
-function processChildren(children) {
-  if (typeof children === 'string') return highlightLawCitations(children);
+function processChildren(children, onLawClick, crimeDate) {
+  if (typeof children === 'string') return highlightLawCitations(children, onLawClick, crimeDate);
   if (Array.isArray(children)) return children.map((c, i) =>
-    typeof c === 'string' ? <span key={i}>{highlightLawCitations(c)}</span> : c
+    typeof c === 'string'
+      ? <span key={i}>{highlightLawCitations(c, onLawClick, crimeDate)}</span>
+      : c
   );
   return children;
 }
@@ -108,7 +131,11 @@ function MessageBubble({ message, role, onLawClick }) {
         <div className={`${styles.content} ${isUser ? '' : 'prose'}`}>
           {isUser
             ? <p>{message.content}</p>
-            : <MarkdownWithCitations content={message.content} />
+            : <MarkdownWithCitations
+                content={message.content}
+                onLawClick={onLawClick}
+                crimeDate={crimeDate}
+              />
           }
         </div>
 

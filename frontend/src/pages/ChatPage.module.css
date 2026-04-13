@@ -513,3 +513,22 @@
   margin-bottom: 20px;
   color: var(--text-primary);
 }
+
+/* ── Law Reference Side Panel ── */
+/* Wrapper that animates from 0 → 460px, compressing the chat area */
+.lawPanelWrapper {
+  width: 0;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  /* Ensure it sits at full layout height */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.lawPanelOpen {
+  width: 460px;
+  min-width: 320px;
+  max-width: 46vw;
+}

@@ -1319,7 +1319,7 @@ async def practice_evaluate(req: PracticeEvalRequest):
 """,
     }.get(req.user_mode, "")
 
-    eval_prompt = f"""Bạn là giáo sư luật hình sự Việt Nam đang chấm bài làm của sinh viên luật.
+    eval_prompt = f"""Bạn là giáo sư luật hình sự Việt Nam đang đánh giá phân tích pháp lý của người dùng.
 
 VU ÁN:
 {req.case_description}
@@ -1349,7 +1349,7 @@ Quy tắc:
 - strengths: 2–4 điểm tích cực cụ thể (trích dẫn rõ luận điểm người dùng).
 - improvements: 2–5 điểm cần cải thiện, cụ thể, có đều khoản tham chiếu.
 - missed_articles: liệt kê các điều luật quan trọng mà người dùng bỏ sót (có thể rỗng nếu đầy đủ).
-- suggestion: 1–2 câu gợi ý cụ thể nhất cho người học.
+- suggestion: 1–2 câu gợi ý cụ thể nhất cho người dùng.
 OUTPUT: CHỈ JSON."""
 
     try:
