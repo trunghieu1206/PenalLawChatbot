@@ -186,162 +186,49 @@ fi
 # ── 4. Check Milvus DB ───────�info "Starting AI service on port 8000..."
 cd "$PROJECT_DIR/ai-service"
 
-# ── Dedicated Python venv for AI service ────────────────────────────────────────────────
-# We avoid using conda/system Python directly because pip-installing torch
-# on top of conda's managed packages leaves inconsistent .dist-info files
-# that cause ABI errors (peft → transformers → ModuleNotFoundError: PreTrainedModel).
-# A fresh isolated venv is the ONLY reliable solution.
-AI_VENV="/root/ai_venv"
-AI_PYTHON="$AI_VENV/bin/python3"
+# ── Find system Python (torch already pre-installed on this server) ──────────────
+# Skip venv and torch install since both are already available
+info "Detecting system Python with torch pre-installed..."
 
-# Find system Python 3.10 for venv creation (conda Python is OK for this step)
-SYS_PY=""
-for py in /usr/bin/python3.10 /usr/local/bin/python3.10 /opt/conda/bin/python3.10 \
-           /usr/bin/python3 /usr/local/bin/python3 /opt/conda/bin/python3; do
-    [ -x "$py" ] && SYS_PY="$py" && break
+AI_PYTHON=""
+# Try conda first (has torch pre-configured), then system Python
+for py in /opt/conda/bin/python3 /usr/bin/python3.11 /usr/bin/python3.10 /usr/bin/python3; do
+    if [ -x "$py" ]; then
+        if "$py" -c "import torch; import torch.cuda" 2>/dev/null; then
+            AI_PYTHON="$py"
+            TORCH_VER=$("$py" -c "import torch; print(torch.__version__)" 2>/dev/null)
+            CUDA_AVAIL=$("$py" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null)
+            info "✅ Python: $("$py" --version)  |  torch: $TORCH_VER  |  CUDA: $CUDA_AVAIL"
+            break
+        fi
+    fi
 done
-[ -z "$SYS_PY" ] && { echo "[ERR] No system python3 found"; exit 1; }
-info "System Python for venv: $SYS_PY"
 
-if [ ! -x "$AI_PYTHON" ]; then
-    info "Creating dedicated AI service venv at $AI_VENV ..."
-    "$SYS_PY" -m venv "$AI_VENV" 2>/dev/null \
-        || {
-            # venv creation failed — likely missing python3-venv package
-            PY_VER=$(echo "$SYS_PY" | grep -oP 'python\K[0-9.]+' || echo "3.10")
-            warn "venv creation failed — installing python${PY_VER}-venv..."
-            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-                "python${PY_VER}-venv" "python${PY_VER}-dev" \
-                || { echo "[ERR] Failed to install python-venv"; exit 1; }
-            info "Retrying venv creation..."
-            "$SYS_PY" -m venv "$AI_VENV" \
-                || { echo "[ERR] venv creation still failed after installing python-venv"; exit 1; }
-        }
-    info "Venv created."
-    
-    # Ensure pip is available in the new venv
-    info "Initializing pip in venv..."
-    "$AI_PYTHON" -m ensurepip --upgrade 2>/dev/null \
-        || {
-            # ensurepip not available — use get-pip.py
-            warn "ensurepip not available — using get-pip.py..."
-            curl -sS https://bootstrap.pypa.io/get-pip.py | "$AI_PYTHON" \
-                || { echo "[ERR] pip initialization failed"; exit 1; }
-        }
-    "$AI_PYTHON" -m pip --version || { echo "[ERR] pip verification failed"; exit 1; }
-    info "✅ pip ready in venv"
-else
-    info "Venv already exists at $AI_VENV."
+[ -z "$AI_PYTHON" ] && { echo "[ERR] No Python with torch found. Verify torch is installed on this server."; exit 1; }
+
+# ── Verify GPU is available ─────────────────────────────────────────────────────
+if ! "$AI_PYTHON" -c "import torch; assert torch.cuda.is_available(), 'CUDA not available'; print(f'GPU OK: {torch.cuda.get_device_name(0)}')" 2>/dev/null; then
+    error "ERROR: GPU/CUDA not available. Check: nvidia-smi and torch installation."
 fi
 
-# ── Detect GPU sm capability for torch wheel selection ───────────────────────
-# IMPORTANT: Detect CUDA driver version from nvidia-smi BEFORE importing torch
-# (torch import will fail if CUDA version doesn't match the installed wheel)
-GPU_SM=0
-CUDA_VER=0
-if command -v nvidia-smi &>/dev/null; then
-    # Extract CUDA version from nvidia-smi output (e.g. "CUDA Version: 12.0.40")
-    # nvidia-smi output looks like: "CUDA Version: 12.0.40" or "CUDA Version: 11.8"
-    CUDA_VER_STR=$(nvidia-smi 2>/dev/null | grep -oP 'CUDA Version:\s*\K[0-9]+\.[0-9]+' || echo "")
-    
-    if [ -z "$CUDA_VER_STR" ]; then
-        # nvidia-smi exists but CUDA version not found — GPU broken
-        error "ERROR: nvidia-smi found but CUDA version not detected!\n  Run: nvidia-smi\n  If no CUDA version shown, GPU driver is broken or too old."
-    fi
-    
-    CUDA_MAJOR=$(echo "$CUDA_VER_STR" | cut -d. -f1)
-    CUDA_MINOR=$(echo "$CUDA_VER_STR" | cut -d. -f2)
-    CUDA_VER=$((CUDA_MAJOR * 10 + CUDA_MINOR))
-    
-    # Map CUDA driver version to PyTorch wheel index
-    # IMPORTANT: Be conservative! cu118 is more compatible than cu121
-    # cu118: Works on CUDA 11.8+ (most compatible)
-    # cu121: Requires CUDA 12.1+ MINIMUM
-    # cu124: Requires CUDA 12.4+ MINIMUM
-    if [ "$CUDA_VER" -ge 124 ]; then
-        TORCH_IDX="https://download.pytorch.org/whl/cu124"
-        info "  CUDA 12.4+ detected → cu124 wheel"
-    elif [ "$CUDA_VER" -ge 121 ]; then
-        TORCH_IDX="https://download.pytorch.org/whl/cu121"
-        info "  CUDA 12.1+ detected → cu121 wheel"
-    else
-        # Conservative: Use cu118 for CUDA 11.x, 12.0, 12.0.x
-        # cu118 has best compatibility across versions
-        TORCH_IDX="https://download.pytorch.org/whl/cu118"
-        info "  CUDA $CUDA_VER_STR detected → cu118 wheel (conservative, best compatibility)"
-    fi
-    
-    info "✅ NVIDIA GPU detected — CUDA driver version: ${CUDA_VER_STR}"
-    info "→ Installing torch from: $TORCH_IDX"
-else
-    # No GPU — this service REQUIRES GPU
-    error "ERROR: No NVIDIA GPU detected (nvidia-smi not found).\n  This AI service REQUIRES GPU acceleration.\n  GPU Options:\n    1. Ensure NVIDIA driver is installed: apt install nvidia-driver-XXX\n    2. Verify driver: nvidia-smi\n    3. Re-run: bash deploy_nodocker.sh"
-fi
-
-# ── Install torch>=2.4 into venv (only if needed) ──────────────────────────────
-if ! "$AI_PYTHON" -m pip --version &>/dev/null; then
-    warn "pip not available in venv — retrying initialization..."
-    "$AI_PYTHON" -m ensurepip --upgrade 2>/dev/null \
-        || curl -sS https://bootstrap.pypa.io/get-pip.py | "$AI_PYTHON" \
-        || { echo "[ERR] pip still not available"; exit 1; }
-fi
-
-# First check if torch already exists and works with GPU (don't touch it if it does)
-TORCH_VER=$("$AI_PYTHON" -c "import torch; print(torch.__version__.split('+')[0])" 2>/dev/null || echo "0.0")
-TORCH_INT=$(( $(echo "$TORCH_VER" | cut -d. -f1) * 10 + $(echo "$TORCH_VER" | cut -d. -f2) ))
-
-if [ "$TORCH_INT" -ge 24 ]; then
-    # torch >= 2.4 is already installed — check if GPU works
-    info "Found torch $TORCH_VER — testing GPU compatibility..."
-    if "$AI_PYTHON" -c "import torch; assert torch.cuda.is_available(); probe=torch.zeros(1,device='cuda'); _=probe+1; del probe" 2>/dev/null; then
-        # ✅ torch is installed and GPU works — SKIP entirely
-        info "✅ torch $TORCH_VER already works with GPU — no changes needed"
-        TORCH_READY=1
-    else
-        # ❌ torch exists but GPU broken — need to reinstall correct version
-        TORCH_READY=0
-        warn "torch $TORCH_VER installed but GPU test failed — will reinstall from $TORCH_IDX..."
-    fi
-else
-    # torch not installed or too old — need to install
-    TORCH_READY=0
-    info "torch $TORCH_VER (need >=2.4) — will install from $TORCH_IDX..."
-fi
-
-# Only install/reinstall if torch isn't ready
-if [ "$TORCH_READY" = "0" ]; then
-    info "Installing torch>=2.4 from $TORCH_IDX..."
-    "$AI_PYTHON" -m pip install --quiet --force-reinstall \
-        --index-url "$TORCH_IDX" \
-        --extra-index-url https://pypi.org/simple \
-        "torch>=2.4" torchvision torchaudio \
-        && INSTALLED_VER=$("$AI_PYTHON" -c 'import torch; print(torch.__version__)') \
-        && info "✅ torch $INSTALLED_VER installed successfully" \
-        || { echo "[ERR] torch install FAILED"; exit 1; }
-else
-    info "torch already verified working with GPU — proceeding..."
-fi
-
-# ── Install all AI service dependencies into venv ──────────────────────────────
-if ! "$AI_PYTHON" -c "import uvicorn" 2>/dev/null; then
-    info "Installing AI service packages from requirements.txt..."
-    "$AI_PYTHON" -m pip install --quiet -r "$PROJECT_DIR/ai-service/requirements.txt" \
-        || { echo "[ERR] Failed to install AI deps into venv"; exit 1; }
-    info "AI service packages installed."
-else
-    info "uvicorn already in venv — skipping package install."
-fi
+# ── Install missing AI service dependencies (except torch) ──────────────────────
+info "Installing AI service requirements (excluding torch)..."
+# Filter out torch from requirements to avoid reinstall
+grep -v "^torch" "$PROJECT_DIR/ai-service/requirements.txt" > /tmp/requirements_notorch.txt
+"$AI_PYTHON" -m pip install --quiet -r /tmp/requirements_notorch.txt 2>&1 | tail -3 || \
+    { echo "[ERR] Failed to install AI dependencies"; exit 1; }
+info "AI service dependencies ready."
 
 # ── Verify critical imports BEFORE launching (fail fast) ──────────────────────
-info "Verifying critical imports in venv..."
+info "Verifying critical imports..."
 "$AI_PYTHON" -c "
 import torch
 assert torch.version.cuda, 'torch has no CUDA build'
 from peft import PeftModel
 from transformers import AutoModel, AutoTokenizer
 import uvicorn, fastapi
-print(f'\u2705 All imports OK | torch={torch.__version__}')
-" || { echo "[ERR] Import verification FAILED — venv may be corrupted. Delete $AI_VENV and redeploy."; exit 1; }
+print(f'✅ All imports OK | torch={torch.__version__}')
+" || { echo "[ERR] Import verification FAILED"; exit 1; }
 
 # Write .env for ai-service
 cat > .env <<EOF
@@ -387,11 +274,13 @@ if [ -n "$LATEST_JAR" ]; then
 fi
 
 if [ -z "$LATEST_JAR" ] || [ "$POM_CHANGED" = true ]; then
-    info "Building Spring Boot backend (Maven — first run downloads deps, ~2-5 min)..."
-    # --offline flag skips remote repo checks after first download (much faster)
-    mvn package -DskipTests -q 2>&1 | tail -5
+    info "Building Spring Boot backend (Maven)..."
+    # Use --offline on re-deploys (after first setup_server.sh warm-up)
+    # First build might need repos, but -q suppresses verbose output
+    mvn package -DskipTests -o -q 2>&1 | tail -3 || \
+        mvn package -DskipTests -q 2>&1 | tail -3
     LATEST_JAR=$(ls -t target/*.jar | head -1)
-    info "Build complete: $(basename "$LATEST_JAR")"
+    info "✅ Build complete: $(basename "$LATEST_JAR")"
 else
     skip "JAR is up-to-date ($(basename "$LATEST_JAR")) — skipping Maven build"
 fi
