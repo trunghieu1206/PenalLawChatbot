@@ -140,6 +140,7 @@ class AgentState(TypedDict):
     rebuttal_against: Optional[str]
     sentencing_data: Optional[Dict[str, Any]]
     chat_history: Optional[List[Dict[str, str]]]
+    is_relevant: Optional[bool]   # set by grade_documents; must be declared or LangGraph drops it
 
 
 # ===========================================================
@@ -399,32 +400,46 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
 
         bias_keywords = ""
         if role == "defense":
-            bias_keywords = "khung hình phạt thấp nhất, tình tiết giảm nhẹ, án treo"
+            bias_keywords = "tình tiết giảm nhẹ, án treo, khung hình phạt thấp nhất"
         elif role == "victim":
-            bias_keywords = "khung hình phạt cao nhất, tình tiết tăng nặng, bồi thường dân sự"
+            bias_keywords = "tình tiết tăng nặng, khung hình phạt cao nhất, bồi thường dân sự"
 
         system_msg = (
-            "Bạn là một chuyên gia Tìm kiếm Pháp lý.\n"
-            "Nhiệm vụ: Viết lại câu hỏi thành truy vấn tìm kiếm tối ưu cho CSDL luật.\n\n"
-            "QUY TẮC:\n"
-            "1. GIỮ NGUYÊN MỐC THỜI GIAN (năm, ngày tháng) trong truy vấn.\n"
-            "2. LOẠI BỎ tên riêng, địa danh không cần thiết.\n"
-            "3. CHUẨN HÓA sang thuật ngữ pháp lý.\n"
-            f"4. THÊM từ khóa: {bias_keywords}\n\n"
-            "OUTPUT: CHỈ xuất ra câu truy vấn (String). Không giải thích."
+            "Bạn là chuyên gia Tìm kiếm Pháp lý Hình sự.\n"
+            "Nhiệm vụ: Từ nội dung vụ án, tạo ra truy vấn ngắn gọn (tối đa 3–4 mệnh đề) "
+            "để tìm kiếm ĐIỀU LUẬT ÁP DỤNG trong cơ sở dữ liệu Bộ luật Hình sự.\n\n"
+            "QUY TẮC BẮT BUỘC:\n"
+            "1. TẬP TRUNG vào: hành vi phạm tội cụ thể, đối tượng phạm tội, "
+            "hậu quả/ tang vật, và loại tội danh.\n"
+            "2. LOẠI BỎ hoàn toàn: ngày xét xử, số vụ án, tên tòa án, địa danh, "
+            "tên bị cáo, nơi ở, thủ tục tố tụng.\n"
+            "3. CHUẨN HÓA sang thuật ngữ pháp lý hình sự (ví dụ: 'tàng trữ trái phép "
+            "chất ma túy', 'Ketamine', 'chất ma túy loại III').\n"
+            f"4. THÊM từ khóa vai trò: {bias_keywords}\n\n"
+            "VÍ DỤ OUTPUT TỐT: "
+            "'tàng trữ trái phép chất ma túy Ketamine 1.623 gam tình tiết giảm nhẹ tái phạm'\n"
+            "VÍ DỤ OUTPUT XẤU (cần tránh): "
+            "'ngày 12 tháng 7 năm 2022 tòa án nhân dân quận Cầu Giấy xét xử sơ thẩm'\n\n"
+            "OUTPUT: CHỈ xuất ra chuỗi truy vấn. Không giải thích. Không dấu chấm câu thừa."
         )
         response = llm.invoke([
             SystemMessage(content=system_msg),
-            HumanMessage(content=f"NỘI DUNG:\n{question}")
+            HumanMessage(content=f"NỘI DUNG VỤ ÁN:\n{question}")
         ])
         cleaned = response.content.strip().replace('"', '').replace("'", "")
-        print(f"  Rewritten: {cleaned[:100]}")
+        print(f"  Rewritten: {cleaned[:120]}")
         return {"question": cleaned, "retry_count": state.get("retry_count", 0) + 1}
 
     # NODE: RETRIEVE
     def retrieve_node(state: AgentState) -> dict:
         print("[NODE: retrieve]")
-        docs = retriever.invoke(state["question"])
+        try:
+            docs = retriever.invoke(state["question"])
+        except Exception as e:
+            # Surface Milvus/embedding errors clearly instead of a silent 500.
+            # Returning empty list lets grading fall back gracefully.
+            print(f"[RETRIEVE ERROR] {type(e).__name__}: {e}")
+            docs = []
         return {"documents": docs}
 
     # NODE: GRADE DOCUMENTS
@@ -1036,6 +1051,7 @@ async def predict_judgment(req: RequestBody):
         "extracted_facts": None,
         "mapped_laws": None,
         "sentencing_data": None,
+        "is_relevant": None,
         "rebuttal_against": req.rebuttal_against,
         "chat_history": req.conversation_history,
     }
@@ -1059,7 +1075,10 @@ async def predict_judgment(req: RequestBody):
             sentencing_data=output.get("sentencing_data"),
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        tb = traceback.format_exc()
+        print(f"[PREDICT ERROR] {type(e).__name__}: {e}\n{tb}")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
 
 
 if __name__ == "__main__":
