@@ -200,8 +200,8 @@ export default function ChatPage() {
     }
   };
 
-  const roleLabel = activeRole === 'defense' ? 'Bào chữa' : activeRole === 'victim' ? 'Bị hại' : 'Trung lập';
-  const roleIcon = activeRole === 'defense' ? '🛡️' : activeRole === 'victim' ? '🔴' : '⚖️';
+  const roleLabel = activeRole === 'defense' ? 'Defense' : activeRole === 'victim' ? 'Victim\'s Counsel' : 'Judge';
+  const roleAbbr = activeRole === 'defense' ? 'DEF' : activeRole === 'victim' ? 'VIC' : 'JDG';
   const charCount = input.length;
 
   const handleRoleBtnClick = () => {
@@ -220,7 +220,6 @@ export default function ChatPage() {
       <aside className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : styles.sidebarClosed}`}>
         <div className={styles.sidebarHeader}>
           <div className={styles.logo}>
-            <span>⚖️</span>
             {sidebarOpen && <span className={styles.logoText}>LegalAI</span>}
           </div>
         </div>
@@ -266,14 +265,14 @@ export default function ChatPage() {
               className={styles.trainingBtn}
               onClick={() => navigate('/training')}
             >
-              🎓 Chế độ Luyện tập
+              Practice Mode
             </button>
 
             <div className={styles.userSection}>
               {user ? (
                 <>
                   <div className={styles.userInfo}>
-                    <span className={styles.userAvatar}>👤</span>
+                    <span className={styles.userAvatar}>U</span>
                     <div>
                       <div className={styles.userName}>{user.fullName || user.email}</div>
                       <div className={styles.userEmail}>{user.email}</div>
@@ -293,10 +292,10 @@ export default function ChatPage() {
               ) : (
                 <>
                   <div className={styles.userInfo}>
-                    <span className={styles.userAvatar}>⚖️</span>
+                    <span className={styles.userAvatar}>G</span>
                     <div>
-                      <div className={styles.userName}>Khách</div>
-                      <div className={styles.userEmail}>Không cần đăng nhập</div>
+                      <div className={styles.userName}>Guest</div>
+                      <div className={styles.userEmail}>No login required</div>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '8px', marginTop: '8px', minWidth: 0, width: '100%' }}>
@@ -364,15 +363,14 @@ export default function ChatPage() {
         <div className={`${styles.messages} scroll-area`}>
           {messages.length === 0 && (
             <div className={styles.welcome}>
-              <div className={styles.welcomeIcon}>⚖️</div>
-              <h3 className={styles.welcomeTitle}>Trợ lý Pháp luật Hình sự</h3>
+              <h3 className={styles.welcomeTitle}>Penal Law Assistant</h3>
               <p className={styles.welcomeDesc}>
-                Dán nội dung vụ án vào ô bên dưới để nhận phân tích pháp lý chi tiết.
+                Paste the case content below to receive detailed legal analysis.
               </p>
               <div className={styles.welcomeHints}>
-                <span>📋 Phân tích tội danh &amp; điều luật</span>
-                <span>⚡ Lượng hình &amp; tình tiết</span>
-                <span>📜 Trích dẫn bộ luật hình sự</span>
+                <span>Crime Analysis &amp; Legal Provisions</span>
+                <span>Sentencing &amp; Mitigating Factors</span>
+                <span>Penal Code Citations</span>
               </div>
             </div>
           )}
