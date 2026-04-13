@@ -51,8 +51,61 @@ load_dotenv()
 # prevents the "Illegal uri: [/path/to/file]" ConnectionConfigException.
 MILVUS_URI = os.getenv("MILVUS_DB_PATH", "./VN_law_lora.db")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "legal_rag_lora")
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 TOP_K = int(os.getenv("TOP_K", "15"))
+
+
+def _detect_device() -> str:
+    """Detect and validate that CUDA is usable.
+
+    Runs a real tensor op to verify GPU kernels are compatible with this
+    hardware (e.g. P104-100 / sm_61) — torch.cuda.is_available() is NOT
+    sufficient; it only checks driver presence, not kernel compatibility.
+
+    FORCE_CPU=1 in .env is the only intentional CPU escape hatch.
+    Any other failure RAISES RuntimeError so the process crashes loudly
+    instead of silently degrading to CPU.
+    """
+    if os.getenv("FORCE_CPU", "0") == "1":
+        print("⚙️  FORCE_CPU=1 — using CPU (intentional override)")
+        return "cpu"
+
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "[GPU ERROR] CUDA is not available on this machine.\n"
+            "  - Check that the NVIDIA driver is installed: nvidia-smi\n"
+            "  - Check that PyTorch was installed with the correct CUDA wheel\n"
+            "    (run setup_server.sh to auto-select the right wheel)\n"
+            "  - If you intentionally want CPU, set FORCE_CPU=1 in .env\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        )
+
+    try:
+        probe = torch.zeros(1, device="cuda")
+        _ = probe + 1  # triggers actual kernel dispatch
+        del probe
+        gpu_name = torch.cuda.get_device_name(0)
+        cap = torch.cuda.get_device_capability(0)
+        print(f"⚙️  CUDA probe passed — GPU: {gpu_name} (sm_{cap[0]}{cap[1]})")
+        return "cuda"
+    except Exception as e:
+        raise RuntimeError(
+            f"\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"[GPU ERROR] CUDA probe FAILED: {type(e).__name__}: {e}\n"
+            f"  GPU   : {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'unknown'}\n"
+            f"  Cause : GPU architecture not supported by installed PyTorch kernels.\n"
+            f"          (common cause: P104-100 / sm_61 with a Turing/Ampere-only build)\n"
+            f"  Fix   : Re-run setup_server.sh — it will detect your CUDA driver version\n"
+            f"          and install the matching PyTorch wheel (cu118 / cu121 / cu124).\n"
+            f"  Manual: pip install torch --index-url https://download.pytorch.org/whl/cu118\n"
+            f"  Bypass: Set FORCE_CPU=1 in .env only if you accept CPU-only performance.\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        ) from e
+
+
+DEVICE = _detect_device()
 
 # --- GLOBAL STATE ---
 app_state: Dict[str, Any] = {}

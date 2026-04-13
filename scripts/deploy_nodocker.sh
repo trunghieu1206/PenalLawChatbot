@@ -210,6 +210,9 @@ COLLECTION_NAME=legal_rag_lora
 LLM_MODEL=${LLM_MODEL:-google/gemini-2.5-flash}
 TOP_K=15
 EMBEDDING_ADAPTER=trunghieu1206/lawchatbot-40k
+# FORCE_CPU: set to 1 if GPU gives "no kernel image" CUDA errors (Pascal sm_61 arch mismatch).
+# Embedding runs on CPU instead — slower (~2-5s/query) but fully correct.
+FORCE_CPU=${FORCE_CPU:-0}
 EOF
 
 pkill -f "uvicorn app.main:app" 2>/dev/null || true

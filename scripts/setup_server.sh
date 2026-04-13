@@ -230,7 +230,78 @@ else
     warn "nvidia-smi not found — skipping GPU toolkit."
 fi
 
-# ── 8. Python AI service packages ───────────────────────────
+# ── 8. Detect GPU + select correct PyTorch wheel ─────────────
+info "Detecting GPU and CUDA driver version..."
+
+CUDA_DRIVER_VER=""
+GPU_NAME=""
+TORCH_INDEX_URL=""
+TORCH_EXTRA_ARGS=""
+
+if command -v nvidia-smi &>/dev/null; then
+    # nvidia-smi --query-gpu=name prints the GPU model
+    GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || echo "")
+    # CUDA version from driver (e.g. "CUDA Version: 12.4")
+    CUDA_DRIVER_VER=$(nvidia-smi 2>/dev/null \
+        | grep -oP "CUDA Version:\s*\K[0-9]+\.[0-9]+" | head -1 || echo "")
+    info "GPU detected  : ${GPU_NAME:-unknown}"
+    info "CUDA driver   : ${CUDA_DRIVER_VER:-unknown}"
+else
+    warn "nvidia-smi not found — no GPU detected on this machine."
+fi
+
+# Map CUDA driver version → PyTorch wheel.
+# Rule: choose the highest cu-version that is ≤ CUDA driver version.
+# PyTorch official wheels: cu118, cu121, cu124, cu126
+if [ -n "$CUDA_DRIVER_VER" ]; then
+    CUDA_MAJOR=$(echo "$CUDA_DRIVER_VER" | cut -d. -f1)
+    CUDA_MINOR=$(echo "$CUDA_DRIVER_VER" | cut -d. -f2)
+    CUDA_INT=$(( CUDA_MAJOR * 100 + CUDA_MINOR ))   # e.g. 12.4 → 1204
+
+    if   [ "$CUDA_INT" -ge 1206 ]; then
+        TORCH_CU="cu126"
+    elif [ "$CUDA_INT" -ge 1204 ]; then
+        TORCH_CU="cu124"
+    elif [ "$CUDA_INT" -ge 1200 ]; then
+        TORCH_CU="cu121"
+    elif [ "$CUDA_INT" -ge 1108 ]; then
+        TORCH_CU="cu118"
+    elif [ "$CUDA_INT" -ge 1100 ]; then
+        # Driver 11.0–11.7: use cu118 (backward compatible at runtime)
+        TORCH_CU="cu118"
+        warn "CUDA driver ${CUDA_DRIVER_VER} is old — using PyTorch cu118 (may have reduced sm support)"
+    else
+        TORCH_CU=""
+        warn "CUDA driver version ${CUDA_DRIVER_VER} is too old for any supported PyTorch GPU wheel."
+        warn "Minimum supported: CUDA 11.0. GPU will NOT be used."
+    fi
+
+    if [ -n "$TORCH_CU" ]; then
+        TORCH_INDEX_URL="https://download.pytorch.org/whl/${TORCH_CU}"
+        info "Selected PyTorch wheel : ${TORCH_CU}  (index: ${TORCH_INDEX_URL})"
+    fi
+else
+    # nvidia-smi not found → no GPU
+    if [ "${FORCE_CPU_SETUP:-0}" = "1" ]; then
+        warn "FORCE_CPU_SETUP=1 — no GPU, continuing with CPU-only install."
+        warn "The AI service embedding will be SLOW. This is NOT recommended for production."
+    else
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        err  "[GPU ERROR] nvidia-smi not found — no GPU detected."
+        err  "  This server requires a CUDA-capable GPU to run the embedding model."
+        err  "  Verify the GPU driver is installed and visible:"
+        err  "    nvidia-smi"
+        err  "    lspci | grep -i nvidia"
+        err  ""
+        err  "  If you intentionally want CPU-only (NOT recommended):"
+        err  "    FORCE_CPU_SETUP=1 bash setup_server.sh"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        exit 1
+    fi
+fi
+
+# ── 9. Install / fix PyTorch ──────────────────────────────────
 if command -v uv &>/dev/null; then
     skip "uv already installed"
 else
@@ -238,10 +309,27 @@ else
     "$PYTHON_BIN" -m pip install uv
 fi
 
-info "Installing Python packages via uv..."
-info "(torch is pre-installed in PyTorch Docker image — only langchain/fastapi/etc. will download)"
+info "Installing Python AI service packages..."
 # --python ensures uv uses conda's Python, not the stub /usr/bin/python3
-# --no-build-isolation speeds up packages that don't need isolated builds
+
+if [ -n "$TORCH_INDEX_URL" ]; then
+    # GPU server: install torch from the GPU-specific wheel index first,
+    # then install the rest (which don't need the GPU index).
+    info "Installing GPU-compatible torch from ${TORCH_INDEX_URL}..."
+    uv pip install --system --python "$PYTHON_BIN" \
+        --index-url "$TORCH_INDEX_URL" \
+        --extra-index-url https://pypi.org/simple \
+        torch torchvision torchaudio
+else
+    # Only reachable when FORCE_CPU_SETUP=1 was explicitly set above.
+    info "Installing CPU-only torch (FORCE_CPU_SETUP=1 mode)..."
+    uv pip install --system --python "$PYTHON_BIN" \
+        --index-url https://download.pytorch.org/whl/cpu \
+        --extra-index-url https://pypi.org/simple \
+        torch torchvision torchaudio
+fi
+
+# Install the rest of the AI service dependencies
 uv pip install --system --python "$PYTHON_BIN" \
     fastapi "uvicorn[standard]" \
     pydantic python-dotenv \
@@ -258,15 +346,67 @@ uv pip install --system --python "$PYTHON_BIN" \
     pandas
 info "Python packages installed."
 
+# ── 10. CUDA probe — verify GPU is actually usable ────────────
+if [ -n "$TORCH_INDEX_URL" ]; then
+    info "Running CUDA probe to verify GPU kernels work for ${GPU_NAME}..."
+    PROBE_RESULT=$("$PYTHON_BIN" - <<'PYEOF' 2>&1
+import sys
+try:
+    import torch
+    if not torch.cuda.is_available():
+        print("FAIL: torch.cuda.is_available() returned False")
+        sys.exit(1)
+    name = torch.cuda.get_device_name(0)
+    cap  = torch.cuda.get_device_capability(0)
+    # Run a real kernel dispatch — this is what cudaErrorNoKernelImageForDevice triggers
+    t = torch.zeros(256, device="cuda")
+    t = t * 2 + 1
+    result = t.sum().item()
+    print(f"OK: GPU={name} sm={cap[0]}{cap[1]} probe_sum={result}")
+    sys.exit(0)
+except Exception as e:
+    print(f"FAIL: {type(e).__name__}: {e}")
+    sys.exit(1)
+PYEOF
+    )
+    PROBE_EXIT=$?
+
+    if [ $PROBE_EXIT -eq 0 ]; then
+        info "✅ CUDA probe PASSED: $PROBE_RESULT"
+        info "   GPU is fully usable. No action needed."
+    else
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        err  "⚠️  CUDA PROBE FAILED — GPU WILL NOT BE USED!"
+        err  "   Probe output : $PROBE_RESULT"
+        err  "   GPU          : ${GPU_NAME}"
+        err  "   CUDA driver  : ${CUDA_DRIVER_VER}"
+        err  "   PyTorch wheel: ${TORCH_CU}"
+        echo ""
+        err  "   Possible causes:"
+        err  "   1. Driver version mismatch — run 'nvidia-smi' and verify CUDA version"
+        err  "   2. GPU compute capability not supported by this wheel"
+        err  "      P104-100 (sm_61) needs cu118+ with Pascal kernels"
+        err  "   3. Try: pip install torch --index-url https://download.pytorch.org/whl/cu118"
+        err  "      then re-run this script to re-probe"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        err  "SETUP INCOMPLETE. Fix the GPU issue above before deploying."
+        exit 1
+    fi
+fi
+# If we reach here, GPU is confirmed working (or FORCE_CPU_SETUP was set).
+
 # ── Done ─────────────────────────────────────────────────────
 info "=============================================="
 info "✅  Setup complete!"
 info "=============================================="
-info "  Python  : $(python3 --version)"
+info "  Python  : $($PYTHON_BIN --version)"
 info "  Node    : $(node --version)"
 info "  Java    : $(java --version 2>&1 | head -1)"
-info "  Docker  : $(docker --version)"
-info "  Git     : $(git --version)"
+info "  GPU     : ${GPU_NAME:-None (CPU only)}"
+info "  CUDA    : ${CUDA_DRIVER_VER:-N/A}"
+info "  PyTorch : $($PYTHON_BIN -c 'import torch; print(torch.__version__)' 2>/dev/null)"
 info ""
 info "Log saved to: $LOG"
 info "Next step: bash deploy_nodocker.sh"
