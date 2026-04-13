@@ -141,8 +141,19 @@ class LoRABGEM3Embeddings(Embeddings):
             # Merge weights into base model for faster inference
             self.model = peft_model.merge_and_unload()
             print("✅ LoRA adapter merged successfully — no key mismatches!")
+        except TypeError as e:
+            if "corda_config" in str(e):
+                print(f"⚠️  LoRA adapter incompatible (PEFT version mismatch): {e}")
+                print(f"   Adapter may have been trained with different PEFT version.")
+                print(f"   Current: peft=={PeftModel.__module__.split('.')[0]} | transformers=={AutoModel.__module__.split('.')[0]}")
+                print(f"   Using base model only.")
+                self.model = base_model
+            else:
+                raise
         except Exception as e:
-            print(f"⚠️  Could not load LoRA adapter: {e}. Falling back to base model.")
+            print(f"⚠️  Could not load LoRA adapter: {type(e).__name__}: {e}")
+            print(f"   (Service will work with base model, but may be less accurate)")
+            self.model = base_model
             self.model = base_model
 
         self.model = self.model.to(device)

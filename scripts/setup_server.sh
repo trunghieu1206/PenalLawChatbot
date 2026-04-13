@@ -361,8 +361,8 @@ uv pip install --system --python "$PYTHON_BIN" \
     "langgraph==0.3.21" \
     sentence-transformers \
     "pymilvus==2.4.4" "milvus-lite==2.4.8" "marshmallow<4.0.0" \
-    "transformers==4.41.2" \
-    "peft==0.11.1" \
+    "transformers==4.42.4" \
+    "peft==0.13.0" \
     psycopg2-binary \
     openai \
     huggingface_hub \

@@ -2,11 +2,11 @@
 22,80,8000,8080,7681
 
 # upload the setup scripts and DB backup to server
-scp -P 2249 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@n2.ckey.vn:/root/
+scp -P 1512 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@n3.ckey.vn:/root/
 
-ssh -p 2249 root@n2.ckey.vn "mkdir -p ~/PenalLawChatbot/database/backups"
-scp -P 2249 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_combined_backup.sql \
-    root@n2.ckey.vn:~/PenalLawChatbot/database/backups/
+ssh -p 1512 root@n3.ckey.vn "mkdir -p ~/PenalLawChatbot/database/backups"
+scp -P 1512 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_combined_backup.sql \
+    root@n3.ckey.vn:~/PenalLawChatbot/database/backups/
 
 # run the installer 
 chmod +x setup_server.sh deploy.sh

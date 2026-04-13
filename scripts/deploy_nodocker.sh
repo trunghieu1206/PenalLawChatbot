@@ -253,14 +253,22 @@ if command -v nvidia-smi &>/dev/null; then
     CUDA_MINOR=$(echo "$CUDA_VER_STR" | cut -d. -f2)
     CUDA_VER=$((CUDA_MAJOR * 10 + CUDA_MINOR))
     
-    # Map CUDA version to torch wheel index
-    # CUDA 11.8 = cu118, CUDA 12.0+ = cu121, CUDA 12.4+ = cu124
+    # Map CUDA driver version to PyTorch wheel index
+    # IMPORTANT: Be conservative! cu118 is more compatible than cu121
+    # cu118: Works on CUDA 11.8+ (most compatible)
+    # cu121: Requires CUDA 12.1+ MINIMUM
+    # cu124: Requires CUDA 12.4+ MINIMUM
     if [ "$CUDA_VER" -ge 124 ]; then
         TORCH_IDX="https://download.pytorch.org/whl/cu124"
-    elif [ "$CUDA_VER" -ge 120 ]; then
+        info "  CUDA 12.4+ detected → cu124 wheel"
+    elif [ "$CUDA_VER" -ge 121 ]; then
         TORCH_IDX="https://download.pytorch.org/whl/cu121"
+        info "  CUDA 12.1+ detected → cu121 wheel"
     else
+        # Conservative: Use cu118 for CUDA 11.x, 12.0, 12.0.x
+        # cu118 has best compatibility across versions
         TORCH_IDX="https://download.pytorch.org/whl/cu118"
+        info "  CUDA $CUDA_VER_STR detected → cu118 wheel (conservative, best compatibility)"
     fi
     
     info "✅ NVIDIA GPU detected — CUDA driver version: ${CUDA_VER_STR}"
@@ -270,7 +278,7 @@ else
     error "ERROR: No NVIDIA GPU detected (nvidia-smi not found).\n  This AI service REQUIRES GPU acceleration.\n  GPU Options:\n    1. Ensure NVIDIA driver is installed: apt install nvidia-driver-XXX\n    2. Verify driver: nvidia-smi\n    3. Re-run: bash deploy_nodocker.sh"
 fi
 
-# ── Install torch>=2.4 into venv (idempotent) ──────────────────────────────────
+# ── Install torch>=2.4 into venv (only if needed) ──────────────────────────────
 if ! "$AI_PYTHON" -m pip --version &>/dev/null; then
     warn "pip not available in venv — retrying initialization..."
     "$AI_PYTHON" -m ensurepip --upgrade 2>/dev/null \
@@ -278,20 +286,40 @@ if ! "$AI_PYTHON" -m pip --version &>/dev/null; then
         || { echo "[ERR] pip still not available"; exit 1; }
 fi
 
+# First check if torch already exists and works with GPU (don't touch it if it does)
 TORCH_VER=$("$AI_PYTHON" -c "import torch; print(torch.__version__.split('+')[0])" 2>/dev/null || echo "0.0")
 TORCH_INT=$(( $(echo "$TORCH_VER" | cut -d. -f1) * 10 + $(echo "$TORCH_VER" | cut -d. -f2) ))
-info "torch in venv: $TORCH_VER (need >=2.4)"
 
-if [ "$TORCH_INT" -lt 24 ]; then
-    warn "torch $TORCH_VER missing or too old — installing from $TORCH_IDX..."
-    "$AI_PYTHON" -m pip install --quiet \
+if [ "$TORCH_INT" -ge 24 ]; then
+    # torch >= 2.4 is already installed — check if GPU works
+    info "Found torch $TORCH_VER — testing GPU compatibility..."
+    if "$AI_PYTHON" -c "import torch; assert torch.cuda.is_available(); probe=torch.zeros(1,device='cuda'); _=probe+1; del probe" 2>/dev/null; then
+        # ✅ torch is installed and GPU works — SKIP entirely
+        info "✅ torch $TORCH_VER already works with GPU — no changes needed"
+        TORCH_READY=1
+    else
+        # ❌ torch exists but GPU broken — need to reinstall correct version
+        TORCH_READY=0
+        warn "torch $TORCH_VER installed but GPU test failed — will reinstall from $TORCH_IDX..."
+    fi
+else
+    # torch not installed or too old — need to install
+    TORCH_READY=0
+    info "torch $TORCH_VER (need >=2.4) — will install from $TORCH_IDX..."
+fi
+
+# Only install/reinstall if torch isn't ready
+if [ "$TORCH_READY" = "0" ]; then
+    info "Installing torch>=2.4 from $TORCH_IDX..."
+    "$AI_PYTHON" -m pip install --quiet --force-reinstall \
         --index-url "$TORCH_IDX" \
         --extra-index-url https://pypi.org/simple \
         "torch>=2.4" torchvision torchaudio \
-        && info "✅ torch installed: $("$AI_PYTHON" -c 'import torch; print(torch.__version__)')" \
+        && INSTALLED_VER=$("$AI_PYTHON" -c 'import torch; print(torch.__version__)') \
+        && info "✅ torch $INSTALLED_VER installed successfully" \
         || { echo "[ERR] torch install FAILED"; exit 1; }
 else
-    info "✅ torch $TORCH_VER OK (>=2.4)"
+    info "torch already verified working with GPU — proceeding..."
 fi
 
 # ── Install all AI service dependencies into venv ──────────────────────────────
