@@ -14,7 +14,11 @@ pymilvus>=2.4.0
 milvus-lite>=2.4.0
 psycopg2-binary>=2.9.9
 sqlalchemy>=2.0.0
-transformers==4.42.4
+transformers>=4.42.4
 accelerate>=0.30.0
-peft>=0.14.0
+# peft>=0.15.0 required: corda_config was introduced in 0.15.0 (CorDA LoRA init).
+# Older versions (0.14.x) raise TypeError on adapters that store corda_config.
+peft>=0.15.0
+# setuptools provides pkg_resources, which milvus-lite imports at module load.
+# Without it, MilvusClient raises "No module named 'pkg_resources'".
 setuptools>=70.0

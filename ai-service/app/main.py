@@ -16,6 +16,9 @@ import os
 os.environ.pop("MILVUS_URI", None)
 
 import re
+import inspect
+import tempfile
+import shutil
 import json
 import numpy as np
 import torch
@@ -119,6 +122,92 @@ app_state: Dict[str, Any] = {}
 # ===========================================================
 # CUSTOM EMBEDDING CLASS — uses PEFT to load LoRA adapter
 # ===========================================================
+def _load_peft_with_compat(base_model, adapter_name: str):
+    """
+    Load a PEFT LoRA adapter, automatically patching the adapter_config.json
+    when the installed PEFT version doesn't recognise one or more config keys
+    (e.g. `corda_config` introduced in PEFT 0.15 / CorDA).
+
+    Strategy
+    --------
+    1. Try normal PeftModel.from_pretrained().
+    2. On a TypeError caused by unknown kwargs, download adapter_config.json
+       from HuggingFace, strip all keys that LoraConfig.__init__ doesn't
+       accept, write a patched copy to a temp directory alongside all other
+       adapter files, and retry from that temp directory.
+    3. Only fall back to the base model if the retry itself fails.
+    """
+    from peft import LoraConfig  # local import to avoid circular ref
+
+    def _known_lora_keys() -> set:
+        """Return the set of parameter names accepted by LoraConfig.__init__."""
+        sig = inspect.signature(LoraConfig.__init__)
+        return set(sig.parameters.keys()) - {"self"}
+
+    # ── Pass 1: straightforward load ───────────────────────────────────────
+    try:
+        peft_model = PeftModel.from_pretrained(base_model, adapter_name)
+        peft_model = peft_model.merge_and_unload()
+        print("✅ LoRA adapter merged successfully.")
+        return peft_model
+    except TypeError as e:
+        if "unexpected keyword argument" not in str(e):
+            raise  # unrelated TypeError — propagate
+        print(f"⚠️  PEFT config has unknown key(s): {e}")
+        print("   Attempting self-healing: patching adapter_config.json …")
+
+    # ── Pass 2: patch adapter_config.json and retry ─────────────────────────
+    import json as _json
+    from huggingface_hub import hf_hub_download, list_repo_files
+
+    tmp_dir = tempfile.mkdtemp(prefix="peft_patched_")
+    try:
+        # Download every file in the adapter repo into tmp_dir
+        try:
+            repo_files = list(list_repo_files(adapter_name))
+        except Exception:
+            repo_files = ["adapter_config.json", "adapter_model.safetensors"]
+
+        for fname in repo_files:
+            try:
+                src = hf_hub_download(repo_id=adapter_name, filename=fname)
+                dst = os.path.join(tmp_dir, fname)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copy2(src, dst)
+            except Exception:
+                pass  # skip files that can't be fetched (e.g. .gitattributes)
+
+        # Patch adapter_config.json — remove keys unknown to this PEFT version
+        cfg_path = os.path.join(tmp_dir, "adapter_config.json")
+        if not os.path.exists(cfg_path):
+            raise FileNotFoundError("adapter_config.json not found in downloaded repo")
+
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            cfg = _json.load(f)
+
+        known = _known_lora_keys()
+        removed = {k: v for k, v in cfg.items() if k not in known and k != "peft_type"}
+        if removed:
+            print(f"   Stripping unknown config keys: {list(removed.keys())}")
+            for k in removed:
+                del cfg[k]
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                _json.dump(cfg, f, indent=2, ensure_ascii=False)
+
+        # Retry load from patched local directory
+        peft_model = PeftModel.from_pretrained(base_model, tmp_dir)
+        peft_model = peft_model.merge_and_unload()
+        print("✅ LoRA adapter merged successfully (via patched config).")
+        return peft_model
+
+    except Exception as retry_err:
+        print(f"⚠️  Patched load also failed: {type(retry_err).__name__}: {retry_err}")
+        print("   Falling back to base model (embeddings will be less accurate).")
+        return base_model
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 class LoRABGEM3Embeddings(Embeddings):
     def __init__(self, base_model_name: str, adapter_name: str, device: str = "cuda"):
         print(f"🔄 Loading BGE-M3 base model on {device}...")
@@ -134,27 +223,9 @@ class LoRABGEM3Embeddings(Embeddings):
             base_model_name, trust_remote_code=True
         )
 
-        # Apply LoRA via PEFT (handles base_model.model.* keys correctly)
+        # Apply LoRA via PEFT — with automatic config-patching for version skew
         print(f"⬇️  Applying LoRA adapter via PEFT: {adapter_name}")
-        try:
-            peft_model = PeftModel.from_pretrained(base_model, adapter_name)
-            # Merge weights into base model for faster inference
-            self.model = peft_model.merge_and_unload()
-            print("✅ LoRA adapter merged successfully — no key mismatches!")
-        except TypeError as e:
-            if "corda_config" in str(e):
-                print(f"⚠️  LoRA adapter incompatible (PEFT version mismatch): {e}")
-                print(f"   Adapter may have been trained with different PEFT version.")
-                print(f"   Current: peft=={PeftModel.__module__.split('.')[0]} | transformers=={AutoModel.__module__.split('.')[0]}")
-                print(f"   Using base model only.")
-                self.model = base_model
-            else:
-                raise
-        except Exception as e:
-            print(f"⚠️  Could not load LoRA adapter: {type(e).__name__}: {e}")
-            print(f"   (Service will work with base model, but may be less accurate)")
-            self.model = base_model
-            self.model = base_model
+        self.model = _load_peft_with_compat(base_model, adapter_name)
 
         self.model = self.model.to(device)
         self.model.eval()
