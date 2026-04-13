@@ -213,6 +213,10 @@ fi
 
 # ── Install missing AI service dependencies (except torch) ──────────────────────
 info "Installing AI service requirements (excluding torch)..."
+# milvus-lite's __init__.py imports pkg_resources (from setuptools) at module load
+# time. Install setuptools first to guarantee pkg_resources exists in the pip
+# environment before milvus-lite is imported.
+"$AI_PYTHON" -m pip install "setuptools>=70.0" --quiet 2>&1 | tail -2 || true
 # Filter out torch from requirements to avoid reinstall/downgrade of the
 # conda GPU torch (2.2.1 with CUDA). Without --upgrade, pip will only
 # install/upgrade packages that don't already satisfy the pinned constraints,
