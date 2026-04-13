@@ -66,24 +66,27 @@ else
     skip "Node: $(node --version)"
 fi
 
-# ── 1. Clone / pull repo ─────────────────────────────────────
+# ── 1. Clone / pull repo (PRODUCTION: master branch only) ─
 if [ -d "$PROJECT_DIR/.git" ]; then
-    warn "Repo exists — pulling latest..."
-    git -C "$PROJECT_DIR" pull
+    warn "Repo exists — pulling latest from master..."
+    git -C "$PROJECT_DIR" checkout master
+    git -C "$PROJECT_DIR" pull origin master
 elif [ -d "$PROJECT_DIR" ]; then
     warn "Directory exists but is NOT a git repo (uploaded via scp)."
     warn "Backing up to ${PROJECT_DIR}.bak and cloning fresh..."
     mv "$PROJECT_DIR" "${PROJECT_DIR}.bak"
-    git clone "$REPO_URL" "$PROJECT_DIR"
+    git clone --branch master "$REPO_URL" "$PROJECT_DIR"
     # Restore database and Milvus DB from backup dir
     [ -d "${PROJECT_DIR}.bak/database" ] && cp -r "${PROJECT_DIR}.bak/database" "$PROJECT_DIR/"
     [ -f "${PROJECT_DIR}.bak/ai-service/VN_law_lora.db" ] && \
         cp "${PROJECT_DIR}.bak/ai-service/VN_law_lora.db" "$PROJECT_DIR/ai-service/"
 else
-    info "Cloning repo..."
-    git clone "$REPO_URL" "$PROJECT_DIR"
+    info "Cloning repo (master branch)..."
+    git clone --branch master "$REPO_URL" "$PROJECT_DIR"
 fi
 cd "$PROJECT_DIR"
+info "Currently on branch: $(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD)"
+info "Latest commit: $(git -C "$PROJECT_DIR" log -1 --oneline)"
 
 # ── 2. Setup .env ────────────────────────────────────────────
 if [ ! -f ".env" ]; then

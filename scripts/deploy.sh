@@ -33,15 +33,18 @@ else
     info "Docker is already running."
 fi
 
-# ── 1. Clone / pull repo ────────────────────────────────────
+# ── 1. Clone / pull repo (PRODUCTION: master branch only) ─
 if [ -d "$PROJECT_DIR" ]; then
-    warn "Project directory exists. Pulling latest changes..."
-    git -C "$PROJECT_DIR" pull
+    warn "Project directory exists. Pulling latest from master..."
+    git -C "$PROJECT_DIR" checkout master
+    git -C "$PROJECT_DIR" pull origin master
 else
-    info "Cloning repository..."
-    git clone "$REPO_URL" "$PROJECT_DIR"
+    info "Cloning repository (master branch)..."
+    git clone --branch master "$REPO_URL" "$PROJECT_DIR"
 fi
 cd "$PROJECT_DIR"
+info "Currently on branch: $(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD)"
+info "Latest commit: $(git -C "$PROJECT_DIR" log -1 --oneline)"
 
 # ── 2. Create .env ───────────────────────────────────────────
 if [ ! -f ".env" ]; then
