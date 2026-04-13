@@ -328,13 +328,13 @@ info "Installing Python AI service packages..."
 # --python ensures uv uses conda's Python, not the stub /usr/bin/python3
 
 if [ -n "$TORCH_INDEX_URL" ]; then
-    # GPU server: install torch from the GPU-specific wheel index first,
-    # then install the rest (which don't need the GPU index).
-    info "Installing GPU-compatible torch from ${TORCH_INDEX_URL}..."
+    # GPU server: install torch from the GPU-specific wheel index first.
+    # Pin >=2.4: older cu118 builds (e.g. 2.2.1) break transformers which needs >=2.4.
+    info "Installing GPU-compatible torch>=2.4 from ${TORCH_INDEX_URL}..."
     uv pip install --system --python "$PYTHON_BIN" \
         --index-url "$TORCH_INDEX_URL" \
         --extra-index-url https://pypi.org/simple \
-        torch torchvision torchaudio
+        "torch>=2.4" torchvision torchaudio
 else
     # Only reachable when FORCE_CPU_SETUP=1 was explicitly set above.
     info "Installing CPU-only torch (FORCE_CPU_SETUP=1 mode)..."
@@ -360,6 +360,59 @@ uv pip install --system --python "$PYTHON_BIN" \
     python-docx \
     pandas
 info "Python packages installed."
+
+# ── 9b. Reinstall torch into EVERY Python that has uvicorn ───
+# Docker images often have a system Python (/usr/local/bin/python3) that
+# owns /usr/local/bin/uvicorn with the WRONG torch pre-installed.
+# setup_server.sh installs the correct torch into PYTHON_BIN (conda),
+# but deploy_nodocker.sh might pick up the system uvicorn instead.
+# Solution: find all Python interpreters that own a uvicorn binary and
+# force-reinstall the correct torch wheel into each one.
+if [ -n "$TORCH_INDEX_URL" ]; then
+    info "Checking all Python environments for uvicorn and reinstalling torch if needed..."
+    for UVICORN_BIN in $(command -v uvicorn 2>/dev/null) /usr/local/bin/uvicorn /usr/bin/uvicorn; do
+        [ ! -f "$UVICORN_BIN" ] && continue
+        # Extract shebang Python from the uvicorn script
+        SHEBANG_PY=$(head -1 "$UVICORN_BIN" 2>/dev/null | sed 's|^#!||' | awk '{print $1}')
+        [ -z "$SHEBANG_PY" ] || [ ! -x "$SHEBANG_PY" ] && continue
+        # Skip if this is already our PYTHON_BIN
+        [ "$SHEBANG_PY" = "$PYTHON_BIN" ] && continue
+        # Check if this Python has the wrong torch (no CUDA or wrong arch)
+        NEEDS_FIX="no"
+        if ! "$SHEBANG_PY" -c "import torch; assert torch.version.cuda" 2>/dev/null; then
+            NEEDS_FIX="yes"
+        else
+            EXISTING_SM=$("$SHEBANG_PY" -c "
+import torch
+if torch.cuda.is_available():
+    cap = torch.cuda.get_device_capability(0)
+    print(cap[0]*10+cap[1])
+else:
+    print(0)
+" 2>/dev/null || echo "0")
+            # If GPU sm < 70 and torch doesn't have cu118, it needs fixing
+            if [ "${EXISTING_SM:-0}" -lt 70 ] && [ "${EXISTING_SM:-0}" -gt 0 ]; then
+                CURRENT_TORCH=$("$SHEBANG_PY" -c "import torch; print(torch.__version__)" 2>/dev/null)
+                if ! echo "$CURRENT_TORCH" | grep -q "+cu11"; then
+                    NEEDS_FIX="yes"
+                fi
+            fi
+        fi
+
+        if [ "$NEEDS_FIX" = "yes" ]; then
+            warn "Found uvicorn at $UVICORN_BIN using $SHEBANG_PY with wrong/missing torch."
+            info "Reinstalling $TORCH_CU torch into $SHEBANG_PY ..."
+            "$SHEBANG_PY" -m pip install --force-reinstall \
+                --index-url "$TORCH_INDEX_URL" \
+                --extra-index-url https://pypi.org/simple \
+                torch torchvision torchaudio \
+                && info "✅ torch reinstalled in $SHEBANG_PY" \
+                || warn "⚠️  Failed to reinstall torch in $SHEBANG_PY — check pip manually"
+        else
+            info "Python $SHEBANG_PY (uvicorn: $UVICORN_BIN) already has correct torch. Skipping."
+        fi
+    done
+fi
 
 # ── 10. CUDA probe — verify GPU is actually usable ────────────
 if [ -n "$TORCH_INDEX_URL" ]; then

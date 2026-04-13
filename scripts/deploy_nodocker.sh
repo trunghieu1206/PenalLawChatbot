@@ -194,6 +194,98 @@ fi
 info "Starting AI service on port 8000..."
 cd "$PROJECT_DIR/ai-service"
 
+# ── Detect which Python uvicorn actually runs under ──────────
+# 'uvicorn' in PATH might use system Python (/usr/local/bin) while
+# setup_server.sh installed packages into conda Python (/opt/conda).
+# We find the correct Python by checking where torch is importable
+# with CUDA support, and launch via 'python3 -m uvicorn' explicitly.
+AI_PYTHON=""
+for py in \
+    "$(command -v uvicorn 2>/dev/null && head -1 $(command -v uvicorn) | sed 's|#!||')" \
+    /opt/conda/bin/python3 \
+    /usr/local/bin/python3 \
+    /usr/bin/python3 \
+    python3; do
+    [ -z "$py" ] && continue
+    # Use this Python if it can import torch with CUDA
+    if "$py" -c "import torch; assert torch.version.cuda is not None" 2>/dev/null; then
+        # Prefer the Python where cu118 (or any Pascal-compatible) torch lives
+        TORCH_SM=$("$py" -c "
+import torch
+if torch.cuda.is_available():
+    cap = torch.cuda.get_device_capability(0)
+    print(cap[0]*10+cap[1])
+else:
+    print(0)
+" 2>/dev/null || echo "0")
+        TORCH_VER=$("$py" -c "import torch; print(torch.__version__)" 2>/dev/null)
+        info "Checking Python: $py | torch=$TORCH_VER | GPU sm=${TORCH_SM}"
+        AI_PYTHON="$py"
+        break
+    fi
+done
+
+if [ -z "$AI_PYTHON" ]; then
+    # Fall back to first Python with torch, even if no CUDA — _detect_device() will crash clearly
+    AI_PYTHON=$(command -v python3 || echo python3)
+    warn "Could not find a Python with CUDA-capable torch. Service may fail to start."
+    warn "Run setup_server.sh first to install the correct PyTorch wheel."
+fi
+
+info "Launching AI service with: $AI_PYTHON"
+
+# ── Step 1: Always verify torch>=2.4 in AI_PYTHON (runs unconditionally) ─────
+# cu118 builds as old as 2.2.1 exist and pass CUDA probe but break
+# transformers AutoModel which requires PyTorch >=2.4.
+TORCH_VER=$("$AI_PYTHON" -c "import torch; print(torch.__version__.split('+')[0])" 2>/dev/null || echo "0.0")
+TORCH_MAJOR=$(echo "$TORCH_VER" | cut -d. -f1)
+TORCH_MINOR=$(echo "$TORCH_VER" | cut -d. -f2)
+TORCH_INT=$(( TORCH_MAJOR * 10 + TORCH_MINOR ))
+info "torch in $AI_PYTHON: $TORCH_VER (need >=2.4)"
+
+if [ "$TORCH_INT" -lt 24 ]; then
+    warn "torch $TORCH_VER too old — upgrading to >=2.4 now..."
+    GPU_SM_NOW=$("$AI_PYTHON" -c "
+import torch
+if torch.cuda.is_available():
+    c = torch.cuda.get_device_capability(0); print(c[0]*10+c[1])
+else: print(0)" 2>/dev/null || echo 0)
+    if [ "${GPU_SM_NOW:-0}" -gt 0 ] && [ "${GPU_SM_NOW:-0}" -lt 70 ]; then
+        UPGRADE_IDX="https://download.pytorch.org/whl/cu118"
+    elif [ "${GPU_SM_NOW:-0}" -ge 70 ]; then
+        UPGRADE_IDX="https://download.pytorch.org/whl/cu121"
+    else
+        UPGRADE_IDX="https://download.pytorch.org/whl/cpu"
+    fi
+    "$AI_PYTHON" -m pip install \
+        --index-url "$UPGRADE_IDX" \
+        --extra-index-url https://pypi.org/simple \
+        "torch>=2.4" torchvision torchaudio \
+        && info "✅ torch upgraded: $("$AI_PYTHON" -c 'import torch; print(torch.__version__)')" \
+        || { echo "[ERR] torch upgrade FAILED. Cannot start AI service."; exit 1; }
+else
+    info "✅ torch $TORCH_VER OK (>=2.4)."
+fi
+
+# ── Step 2: Ensure uvicorn + AI packages are in AI_PYTHON ──────────────────
+if ! "$AI_PYTHON" -c "import uvicorn" 2>/dev/null; then
+    info "uvicorn not found in $AI_PYTHON — installing AI service dependencies..."
+    "$AI_PYTHON" -m pip install --quiet \
+        "fastapi" "uvicorn[standard]" \
+        "pydantic" "python-dotenv" \
+        "langchain==0.3.21" "langchain-core==0.3.51" \
+        "langchain-community" "langchain-openai" "langchain-milvus" \
+        "langgraph==0.3.21" \
+        "sentence-transformers" \
+        "pymilvus==2.4.4" "milvus-lite==2.4.8" "marshmallow<4.0.0" \
+        "peft" \
+        "psycopg2-binary" "openai" "huggingface_hub" "python-docx" "pandas" \
+        || { echo "[ERR] Failed to install AI deps into $AI_PYTHON"; exit 1; }
+    info "AI service dependencies installed into $AI_PYTHON."
+else
+    info "uvicorn already available in $AI_PYTHON."
+fi
+
 # Write .env for ai-service
 cat > .env <<EOF
 OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
@@ -210,8 +302,7 @@ COLLECTION_NAME=legal_rag_lora
 LLM_MODEL=${LLM_MODEL:-google/gemini-2.5-flash}
 TOP_K=15
 EMBEDDING_ADAPTER=trunghieu1206/lawchatbot-40k
-# FORCE_CPU: set to 1 if GPU gives "no kernel image" CUDA errors (Pascal sm_61 arch mismatch).
-# Embedding runs on CPU instead — slower (~2-5s/query) but fully correct.
+# FORCE_CPU: set to 1 only if GPU is intentionally not used.
 FORCE_CPU=${FORCE_CPU:-0}
 EOF
 
@@ -219,15 +310,14 @@ pkill -f "uvicorn app.main:app" 2>/dev/null || true
 sleep 1
 
 # MILVUS_URI must NOT be in the shell environment (pymilvus reads at import time)
-# Since we write MILVUS_DB_PATH (not MILVUS_URI) above, this is just a safety net.
 unset MILVUS_URI 2>/dev/null || true
 
-nohup uvicorn app.main:app \
+nohup "$AI_PYTHON" -m uvicorn app.main:app \
     --host 0.0.0.0 \
     --port 8000 \
     --workers 1 \
     > "$LOG_DIR/ai-service.log" 2>&1 &
-info "AI service started (PID $!). Log: $LOG_DIR/ai-service.log"
+info "AI service started (PID $!, Python: $AI_PYTHON). Log: $LOG_DIR/ai-service.log"
 
 # ── 6. Backend (Spring Boot) ─────────────────────────────────
 cd "$PROJECT_DIR/backend"
