@@ -28,7 +28,6 @@ try:
 except ModuleNotFoundError:
     import sys as _sys
     import types as _types
-    import importlib.metadata as _imeta
 
     class _PkgResources(_types.ModuleType):
         """Minimal pkg_resources stub — covers what milvus-lite actually uses."""
@@ -38,20 +37,24 @@ except ModuleNotFoundError:
 
         @staticmethod
         def get_distribution(name: str):
+            # Import locally so the function is self-contained and not affected
+            # by the `del` cleanup that runs after the stub is registered.
+            import importlib.metadata as _m
             try:
-                dist = _imeta.distribution(name)
+                dist = _m.distribution(name)
                 class _Dist:  # noqa: E306
                     version = dist.metadata["Version"]
                 return _Dist()
-            except _imeta.PackageNotFoundError:
+            except _m.PackageNotFoundError:
                 raise _PkgResources.DistributionNotFound(name)
 
     _stub = _PkgResources("pkg_resources")
     _stub.DistributionNotFound = _PkgResources.DistributionNotFound
     _stub.get_distribution = _PkgResources.get_distribution
     _sys.modules["pkg_resources"] = _stub
-    del _sys, _types, _imeta, _stub, _PkgResources  # keep namespace clean
+    del _sys, _types, _stub, _PkgResources  # keep namespace clean
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 
 import re
