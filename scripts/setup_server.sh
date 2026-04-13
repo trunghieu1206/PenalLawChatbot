@@ -250,26 +250,41 @@ else
     warn "nvidia-smi not found — no GPU detected on this machine."
 fi
 
-# Map CUDA driver version → PyTorch wheel.
-# Rule: choose the highest cu-version that is ≤ CUDA driver version.
-# PyTorch official wheels: cu118, cu121, cu124, cu126
+# Map GPU → PyTorch wheel.
+# CRITICAL: must consider BOTH CUDA driver version AND GPU compute capability.
+# PyTorch >=2.4 dropped Pascal (sm_61) and Maxwell (sm_5x) support entirely.
+# Pascal / Maxwell users MUST use cu118 regardless of driver version.
+# PyTorch official wheels: cu118 (sm_37+), cu121 (sm_50+), cu124/cu126 (sm_70+)
 if [ -n "$CUDA_DRIVER_VER" ]; then
     CUDA_MAJOR=$(echo "$CUDA_DRIVER_VER" | cut -d. -f1)
     CUDA_MINOR=$(echo "$CUDA_DRIVER_VER" | cut -d. -f2)
     CUDA_INT=$(( CUDA_MAJOR * 100 + CUDA_MINOR ))   # e.g. 12.4 → 1204
 
-    if   [ "$CUDA_INT" -ge 1206 ]; then
+    # Step 1: detect GPU compute capability via Python (torch is pre-installed in Docker image)
+    GPU_SM=$( "$PYTHON_BIN" -c "
+import torch, sys
+if torch.cuda.is_available():
+    cap = torch.cuda.get_device_capability(0)
+    print(cap[0] * 10 + cap[1])
+else:
+    print(0)
+" 2>/dev/null || echo "0" )
+    info "GPU compute capability: sm_${GPU_SM}"
+
+    # Step 2: if Pascal/Maxwell (sm < 70), cap at cu118 no matter what driver version
+    # because newer PyTorch wheels simply don't include those kernels.
+    if [ "$GPU_SM" -gt 0 ] && [ "$GPU_SM" -lt 70 ]; then
+        TORCH_CU="cu118"
+        warn "GPU sm_${GPU_SM} detected (Pascal/Maxwell architecture)."
+        warn "PyTorch >=2.4 dropped sm_${GPU_SM} support. Forcing cu118 (last version with Pascal kernels)."
+    elif [ "$CUDA_INT" -ge 1206 ]; then
         TORCH_CU="cu126"
     elif [ "$CUDA_INT" -ge 1204 ]; then
         TORCH_CU="cu124"
     elif [ "$CUDA_INT" -ge 1200 ]; then
         TORCH_CU="cu121"
-    elif [ "$CUDA_INT" -ge 1108 ]; then
-        TORCH_CU="cu118"
     elif [ "$CUDA_INT" -ge 1100 ]; then
-        # Driver 11.0–11.7: use cu118 (backward compatible at runtime)
         TORCH_CU="cu118"
-        warn "CUDA driver ${CUDA_DRIVER_VER} is old — using PyTorch cu118 (may have reduced sm support)"
     else
         TORCH_CU=""
         warn "CUDA driver version ${CUDA_DRIVER_VER} is too old for any supported PyTorch GPU wheel."
