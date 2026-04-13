@@ -200,8 +200,7 @@ export default function ChatPage() {
     }
   };
 
-  const roleLabel = activeRole === 'defense' ? 'Defense' : activeRole === 'victim' ? 'Victim\'s Counsel' : 'Judge';
-  const roleAbbr = activeRole === 'defense' ? 'DEF' : activeRole === 'victim' ? 'VIC' : 'JDG';
+  const roleLabel = activeRole === 'defense' ? 'Luật sư Bào chữa' : activeRole === 'victim' ? 'Luật sư Bị hại' : 'Thẩm phán';
   const charCount = input.length;
 
   const handleRoleBtnClick = () => {
@@ -220,14 +219,14 @@ export default function ChatPage() {
       <aside className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : styles.sidebarClosed}`}>
         <div className={styles.sidebarHeader}>
           <div className={styles.logo}>
-            {sidebarOpen && <span className={styles.logoText}>LegalAI</span>}
+            {sidebarOpen && <span className={styles.logoText}>VNPLaw</span>}
           </div>
         </div>
 
         {sidebarOpen && (
           <>
             <button className={`btn btn-primary ${styles.newChatBtn}`} onClick={createNewSession}>
-              ✦ Cuộc trò chuyện mới
+              Cuộc trò chuyện mới
             </button>
 
             <div className={styles.sessionList}>
@@ -265,7 +264,7 @@ export default function ChatPage() {
               className={styles.trainingBtn}
               onClick={() => navigate('/training')}
             >
-              Practice Mode
+              Chế độ Luyện tập
             </button>
 
             <div className={styles.userSection}>
@@ -286,7 +285,7 @@ export default function ChatPage() {
                     }}
                     style={{ width: '100%', marginTop: '8px' }}
                   >
-                    🚪 Đăng xuất
+                    Đăng xuất
                   </button>
                 </>
               ) : (
@@ -294,24 +293,22 @@ export default function ChatPage() {
                   <div className={styles.userInfo}>
                     <span className={styles.userAvatar}>G</span>
                     <div>
-                      <div className={styles.userName}>Guest</div>
-                      <div className={styles.userEmail}>No login required</div>
+                      <div className={styles.userName}>Khách</div>
+                      <div className={styles.userEmail}>Chưa đăng nhập</div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px', minWidth: 0, width: '100%' }}>
+                  <div className={styles.userActions}>
                     <button
                       className="btn btn-ghost"
                       onClick={() => navigate('/login')}
-                      style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                     >
-                      🔐 Đăng nhập
+                      Đăng nhập
                     </button>
                     <button
                       className="btn btn-primary"
                       onClick={() => navigate('/register')}
-                      style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                     >
-                      ➕ Đăng ký
+                      Đăng ký
                     </button>
                   </div>
                 </>
@@ -322,14 +319,16 @@ export default function ChatPage() {
       </aside>
 
       {/* FLOATING SIDEBAR TOGGLE BUTTON — always on top, never covered */}
-      <button
-        className={`btn btn-ghost ${styles.floatingToggleBtn}`}
-        style={{ left: sidebarOpen ? '236px' : '32px' }}
-        onClick={() => setSidebarOpen(o => !o)}
-        title={sidebarOpen ? 'Thu gọn thanh bên' : 'Mở rộng thanh bên'}
-      >
-        {sidebarOpen ? '◀' : '▶'}
-      </button>
+      {!showRoleModal && (
+        <button
+          className={`btn btn-ghost ${styles.floatingToggleBtn}`}
+          style={{ left: sidebarOpen ? '236px' : '32px' }}
+          onClick={() => setSidebarOpen(o => !o)}
+          title={sidebarOpen ? 'Thu gọn thanh bên' : 'Mở rộng thanh bên'}
+        >
+          {sidebarOpen ? '◀' : '▶'}
+        </button>
+      )}
 
       {/* MAIN CHAT AREA */}
       <main className={styles.main}>
@@ -347,13 +346,12 @@ export default function ChatPage() {
                 onClick={handleRoleBtnClick}
                 title={currentSession ? 'Vai trò đã được khóa cho phiên này' : 'Chọn vai trò phân tích'}
               >
-                {roleIcon}
                 <span className={`badge badge-${activeRole}`}>{roleLabel}</span>
-                {currentSession && <span className={styles.roleLockIcon}>🔒</span>}
+                {currentSession && <span className={styles.roleLockIcon}>ĐÃ KHÓA</span>}
               </button>
               {showRoleLockPopup && (
                 <div className={styles.roleLockPopup}>
-                  🔒 Vai trò đã được khóa. Bạn không thể thay đổi vai trò trong phiên đang diễn ra.
+                  Vai trò đã được khóa. Bạn không thể thay đổi vai trò trong phiên đang diễn ra.
                 </div>
               )}
             </div>
@@ -363,14 +361,14 @@ export default function ChatPage() {
         <div className={`${styles.messages} scroll-area`}>
           {messages.length === 0 && (
             <div className={styles.welcome}>
-              <h3 className={styles.welcomeTitle}>Penal Law Assistant</h3>
+              <h3 className={styles.welcomeTitle}>Trợ lý Luật Hình sự</h3>
               <p className={styles.welcomeDesc}>
-                Paste the case content below to receive detailed legal analysis.
+                Dán nội dung hồ sơ vụ án để nhận được phân tích pháp luật chi tiết.
               </p>
               <div className={styles.welcomeHints}>
-                <span>Crime Analysis &amp; Legal Provisions</span>
-                <span>Sentencing &amp; Mitigating Factors</span>
-                <span>Penal Code Citations</span>
+                <span>Phân tích tội danh &amp; Điều luật áp dụng</span>
+                <span>Hình phạt &amp; Tình tiết giảm nhẹ</span>
+                <span>Trích dẫn Bộ luật Hình sự</span>
               </div>
             </div>
           )}
@@ -430,7 +428,7 @@ export default function ChatPage() {
             <h3 className={styles.modalTitle}>Chọn vai trò phân tích</h3>
             <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px', marginTop: '-12px' }}>
               {pendingContent
-                ? '⚠️ Chọn vai trò trước khi bắt đầu. Vai trò sẽ không thể thay đổi sau khi phiên bắt đầu.'
+                ? 'Chọn vai trò trước khi bắt đầu. Vai trò sẽ không thể thay đổi sau khi phiên bắt đầu.'
                 : 'Vai trò sẽ được khóa cho toàn bộ phiên hội thoại này.'}
             </p>
             <RoleSelector selected={role} onChange={handleRoleConfirmed} />

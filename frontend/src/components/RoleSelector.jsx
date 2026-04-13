@@ -3,24 +3,21 @@ import styles from './RoleSelector.module.css';
 const ROLES = [
   {
     id: 'defense',
-    label: 'Defense Counsel',
-    desc: 'Protect defendant\'s rights',
+    label: 'Luật sư Bào chữa',
+    desc: 'Bảo vệ quyền lợi bị cáo',
     color: '#2d5f7a',
-    abbr: 'DEF',
   },
   {
     id: 'neutral',
-    label: 'Judge',
-    desc: 'Objective legal determination',
+    label: 'Thẩm phán',
+    desc: 'Phán quyết khách quan dựa trên chứng cứ',
     color: '#3d5a42',
-    abbr: 'JDG',
   },
   {
     id: 'victim',
-    label: 'Victim\'s Counsel',
-    desc: 'Protect victim\'s rights',
+    label: 'Luật sư Bị hại',
+    desc: 'Bảo vệ quyền lợi nạn nhân',
     color: '#8b3a3a',
-    abbr: 'VIC',
   },
 ];
 
@@ -36,7 +33,6 @@ export default function RoleSelector({ selected, onChange }) {
           type="button"
           aria-pressed={selected === r.id}
         >
-          <span className={styles.abbr}>{r.abbr}</span>
           <span className={styles.label}>{r.label}</span>
           <span className={styles.desc}>{r.desc}</span>
         </button>

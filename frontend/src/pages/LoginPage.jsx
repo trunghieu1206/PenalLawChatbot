@@ -44,8 +44,8 @@ export default function LoginPage() {
       </button>
       <div className={`${styles.container} card animate-fade-in`}>
         <div className={styles.logo}>
-          <h1 className={styles.logoText}>LegalAI</h1>
-          <p className={styles.logoSub}>Hệ thống Trợ lý Pháp luật Hình sự</p>
+          <h1 className={styles.logoText}>VNPLaw</h1>
+          <p className={styles.logoSub}>Hệ Thống Tư Vấn Pháp Luật Hình Sự Việt Nam</p>
         </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>

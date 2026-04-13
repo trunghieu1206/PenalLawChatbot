@@ -42,9 +42,9 @@ function processChildren(children) {
 }
 
 const ROLE_LABELS = {
-  defense: { label: 'Defense', abbr: 'DEF', cls: 'defense' },
-  victim: { label: 'Victim\'s Counsel', abbr: 'VIC', cls: 'victim' },
-  neutral: { label: 'Judge', abbr: 'JDG', cls: 'neutral' },
+  defense: { label: 'Luật sư Bào chữa', cls: 'defense' },
+  victim: { label: 'Luật sư Bị hại', cls: 'victim' },
+  neutral: { label: 'Thẩm phán', cls: 'neutral' },
 };
 
 export default function MessageBubble({ message, role }) {
@@ -59,7 +59,7 @@ export default function MessageBubble({ message, role }) {
       <div className={styles.bubble}>
         {!isUser && role && ROLE_LABELS[role] && (
           <span className={`badge badge-${ROLE_LABELS[role].cls} ${styles.roleBadge}`}>
-            {ROLE_LABELS[role].abbr}
+            {ROLE_LABELS[role].label}
           </span>
         )}
 
@@ -72,7 +72,7 @@ export default function MessageBubble({ message, role }) {
 
         {message.mappedLaws && message.mappedLaws.length > 0 && (
           <div className={styles.lawsTag}>
-            <span className={styles.lawsLabel}>Applicable law:</span>
+            <span className={styles.lawsLabel}>Điều luật áp dụng:</span>
             {message.mappedLaws.map((l, i) => (
               <span key={i} className={`${styles.lawPill} law-citation`}>
                 {l.article} {l.clause}
@@ -84,7 +84,7 @@ export default function MessageBubble({ message, role }) {
         <time className={styles.time}>
           {message.createdAt
             ? new Date(message.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-            : 'Just now'}
+            : 'Vừa xong'}
         </time>
       </div>
     </div>

@@ -6,24 +6,21 @@ import styles from './TrainingPage.module.css';
 const MODES = [
   {
     id: 'neutral',
-    label: 'Judge',
-    desc: 'Objective analysis based on evidence',
+    label: 'Thẩm phán',
+    desc: 'Phân tích khách quan dựa trên chứng cứ',
     badgeClass: 'badge-neutral',
-    abbr: 'JDG',
   },
   {
     id: 'defense',
-    label: 'Defense Counsel',
-    desc: 'Protect defendant\'s rights, reduce penalty',
+    label: 'Luật sư Bào chữa',
+    desc: 'Bảo vệ quyền lợi bị cáo, giảm nhẹ hình phạt',
     badgeClass: 'badge-defense',
-    abbr: 'DEF',
   },
   {
     id: 'victim',
-    label: 'Victim\'s Counsel',
-    desc: 'Protect victim\'s rights, seek strict penalties',
+    label: 'Luật sư Bị hại',
+    desc: 'Bảo vệ bị hại, yêu cầu xử nghiêm',
     badgeClass: 'badge-victim',
-    abbr: 'VIC',
   },
 ];
 
@@ -72,9 +69,9 @@ export default function TrainingPage() {
   };
 
   const getScoreEmoji = (score) => {
-    if (score >= 80) return 'Excellent';
-    if (score >= 60) return 'Good';
-    return 'Needs Improvement';
+    if (score >= 80) return 'Xuất sắc';
+    if (score >= 60) return 'Tốt';
+    return 'Cần cải thiện';
   };
 
   const selectedMode = MODES.find(m => m.id === mode);
@@ -82,16 +79,16 @@ export default function TrainingPage() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <Link to="/chat" className="btn btn-ghost">← Back to Chat</Link>
+        <Link to="/chat" className="btn btn-ghost">← Quay lại Chat</Link>
         <div className={styles.headerTitle}>
-          Practice Mode
+          Chế độ Luyện tập
         </div>
         <div />
       </header>
 
       {/* MODE SELECTOR */}
       <div className={styles.modeBar}>
-        <span className={styles.modeBarLabel}>Select Practice Role:</span>
+        <span className={styles.modeBarLabel}>Chọn vai trò luyện tập:</span>
         <div className={styles.modeOptions}>
           {MODES.map(m => (
             <button
@@ -101,7 +98,6 @@ export default function TrainingPage() {
               disabled={loading}
               title={m.desc}
             >
-              <span className={styles.modeAbbr}>{m.abbr}</span>
               <span className={styles.modeLabel}>{m.label}</span>
               <span className={styles.modeDesc}>{m.desc}</span>
             </button>
@@ -113,10 +109,10 @@ export default function TrainingPage() {
         {/* Left: Input */}
         <div className={styles.panel}>
           <div className="card" style={{ padding: 24 }}>
-            <h3 className={styles.panelTitle}>Case Description</h3>
+            <h3 className={styles.panelTitle}>Nội dung Vụ án</h3>
             <textarea
               className={styles.textarea}
-              placeholder="Paste the case file content here..."
+              placeholder="Dán nội dung hồ sơ vụ án vào đây..."
               value={caseDesc}
               onChange={e => setCaseDesc(e.target.value)}
               rows={10}
@@ -125,11 +121,11 @@ export default function TrainingPage() {
           </div>
           <div className="card" style={{ padding: 24, marginTop: 16 }}>
             <h3 className={styles.panelTitle}>
-              Your Analysis as <span className={`badge ${selectedMode.badgeClass}`}>{selectedMode.label}</span>
+              Phân tích của bạn theo vai trò <span className={`badge ${selectedMode.badgeClass}`}>{selectedMode.label}</span>
             </h3>
             <textarea
               className={styles.textarea}
-              placeholder={`Write your legal analysis from the perspective of ${selectedMode.label}...`}
+              placeholder={`Viết phân tích pháp lý theo góc nhìn ${selectedMode.label}...`}
               value={userAnalysis}
               onChange={e => setUserAnalysis(e.target.value)}
               rows={10}
@@ -144,7 +140,7 @@ export default function TrainingPage() {
               disabled={loading}
               style={{ flex: 1, justifyContent: 'center', padding: 13, fontSize: 15 }}
             >
-              {loading ? <><span className="loader" /> Evaluating...</> : 'Evaluate Analysis'}
+              {loading ? <><span className="loader" /> Đang đánh giá...</> : 'Đánh giá phân tích'}
             </button>
             {result && (
               <button
@@ -152,7 +148,7 @@ export default function TrainingPage() {
                 onClick={handleReset}
                 style={{ padding: 13, fontSize: 14 }}
               >
-                Reset
+                Làm lại
               </button>
             )}
           </div>
@@ -162,9 +158,9 @@ export default function TrainingPage() {
         <div className={styles.panel}>
           {!result ? (
             <div className={styles.placeholder}>
-              <p>Evaluation results will appear here after you submit your analysis.</p>
+              <p>Kết quả đánh giá sẽ hiển thị ở đây sau khi bạn gửi phân tích.</p>
               <p style={{ fontSize: 13, opacity: 0.7, marginTop: 8 }}>
-                The AI will assess each legal point and provide detailed feedback from the <strong>{selectedMode.label}</strong> perspective.
+                AI sẽ đánh giá từng điểm pháp lý và đưa ra nhận xét chi tiết theo vai trò <strong>{selectedMode.label}</strong>.
               </p>
             </div>
           ) : (
@@ -174,17 +170,17 @@ export default function TrainingPage() {
                   {result.score}
                 </div>
                 <div>
-                  <div className={styles.scoreLabel}>Your Score</div>
+                  <div className={styles.scoreLabel}>Điểm số của bạn</div>
                   <div className={styles.scoreDesc}>{getScoreEmoji(result.score)}</div>
                   <div className={styles.scoreRole}>
-                    Evaluated as: <span className={`badge ${selectedMode.badgeClass}`}>{selectedMode.label}</span>
+                    Đánh giá theo vai trò: <span className={`badge ${selectedMode.badgeClass}`}>{selectedMode.label}</span>
                   </div>
                 </div>
               </div>
 
               {result.feedback.strengths?.length > 0 && (
                 <section className={styles.section}>
-                  <h4 className={styles.sectionTitle} style={{ color: 'var(--success)' }}>Strengths</h4>
+                  <h4 className={styles.sectionTitle} style={{ color: 'var(--success)' }}>Điểm mạnh</h4>
                   <ul className={styles.list}>
                     {result.feedback.strengths.map((s, i) => (
                       <li key={i} className={styles.listItemGood}>{s}</li>
@@ -195,7 +191,7 @@ export default function TrainingPage() {
 
               {result.feedback.improvements?.length > 0 && (
                 <section className={styles.section}>
-                  <h4 className={styles.sectionTitle} style={{ color: 'var(--error)' }}>Areas for Improvement</h4>
+                  <h4 className={styles.sectionTitle} style={{ color: 'var(--error)' }}>Cần cải thiện</h4>
                   <ul className={styles.list}>
                     {result.feedback.improvements.map((s, i) => (
                       <li key={i} className={styles.listItemBad}>{s}</li>
@@ -206,7 +202,7 @@ export default function TrainingPage() {
 
               {result.feedback.missed_articles?.length > 0 && (
                 <section className={styles.section}>
-                  <h4 className={styles.sectionTitle} style={{ color: 'var(--accent)' }}>📖 Điều luật bỏ sót</h4>
+                  <h4 className={styles.sectionTitle} style={{ color: 'var(--accent)' }}>Điều luật bỏ sót</h4>
                   <div className={styles.pills}>
                     {result.feedback.missed_articles.map((a, i) => (
                       <span key={i} className="law-citation">{a}</span>
@@ -217,7 +213,7 @@ export default function TrainingPage() {
 
               {result.feedback.suggestion && (
                 <section className={styles.section}>
-                  <h4 className={styles.sectionTitle}>💡 Gợi ý</h4>
+                  <h4 className={styles.sectionTitle}>Gợi ý</h4>
                   <p className={styles.suggestion}>{result.feedback.suggestion}</p>
                 </section>
               )}
