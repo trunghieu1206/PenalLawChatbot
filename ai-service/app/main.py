@@ -15,6 +15,45 @@ import os
 # so pymilvus never sees a file path and crashes with "Illegal uri".
 os.environ.pop("MILVUS_URI", None)
 
+# ── pkg_resources shim ────────────────────────────────────────────────────────
+# milvus-lite <2.4.9 does `from pkg_resources import DistributionNotFound,
+# get_distribution` at module load — only to read its own version string.
+# In conda environments pip cannot reliably replace conda-managed packages, so
+# the old milvus-lite file may never be updated regardless of `pip install`.
+# Solution: inject a minimal stub into sys.modules BEFORE pymilvus is imported.
+# This makes the service independent of the conda installation state.
+# ─────────────────────────────────────────────────────────────────────────────
+try:
+    import pkg_resources  # noqa: F401 — just verify it is importable
+except ModuleNotFoundError:
+    import sys as _sys
+    import types as _types
+    import importlib.metadata as _imeta
+
+    class _PkgResources(_types.ModuleType):
+        """Minimal pkg_resources stub — covers what milvus-lite actually uses."""
+
+        class DistributionNotFound(Exception):
+            pass
+
+        @staticmethod
+        def get_distribution(name: str):
+            try:
+                dist = _imeta.distribution(name)
+                class _Dist:  # noqa: E306
+                    version = dist.metadata["Version"]
+                return _Dist()
+            except _imeta.PackageNotFoundError:
+                raise _PkgResources.DistributionNotFound(name)
+
+    _stub = _PkgResources("pkg_resources")
+    _stub.DistributionNotFound = _PkgResources.DistributionNotFound
+    _stub.get_distribution = _PkgResources.get_distribution
+    _sys.modules["pkg_resources"] = _stub
+    del _sys, _types, _imeta, _stub, _PkgResources  # keep namespace clean
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 import re
 import inspect
 import tempfile
