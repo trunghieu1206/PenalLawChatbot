@@ -2,11 +2,10 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import styles from './MessageBubble.module.css';
 
-// Regex (non-global) to match Vietnamese law article citations like "Điều 51", "Điều 255"
-// BUG-06 FIX: The original code used a module-level regex with the /g flag inside .test(),
-// which advances lastIndex and causes every-other citation to silently fail.
-// Solution: use a non-global regex inline so there is no stale lastIndex state.
-const LAW_SPLIT_REGEX = /(Điều\s+\d+[A-Z]?(?:\s+(?:BLHS|BLTTHS|BL[A-Z]+))?)/g;
+// Regex to match Vietnamese law article citations like "Điều 51", "Điều 255"
+// Handles both old abbreviations (BLHS) and new full names (Bộ luật Hình sự)
+// Format: "Điều 249" or "Điều 249 Bộ luật Hình sự 2025" etc.
+const LAW_SPLIT_REGEX = /(Điều\s+\d+[A-Z]?(?:\s+(?:Bộ\s+luật\s+Hình\s+sự|BLHS|BLTTHS|BL[A-Z]+)(?:\s+\d{4})?(?:\s+\(sửa\s+đổi)+(?:\s+\d{4})?\))?)?)/g;
 
 /**
  * Renders inline law citations as clickable buttons when onLawClick is provided.
@@ -19,8 +18,9 @@ function highlightLawCitations(text, onLawClick, crimeDate) {
     if (!/^Điều\s+\d+/.test(part)) return part;
 
     if (onLawClick) {
-      // Strip law-code suffixes ("BLHS", "BLHS 2015", "BLTTHS", etc.) before lookup
-      const baseArticle = part.replace(/\s+(BLHS|BLTTHS|BL[A-Z]+)\b.*$/i, '').trim();
+      // Strip law-code suffixes and full names before lookup
+      // Removes: "BLHS 2025", "Bộ luật Hình sự 2025 (sửa đổi 2017)", etc.
+      const baseArticle = part.replace(/\s+(?:BLHS|BLTTHS|BL[A-Z]+|Bộ\s+luật\s+Hình\s+sự).*$/i, '').trim();
       return (
         <button
           key={i}

@@ -94,14 +94,20 @@ export const chatApi = {
 // Fetches law text from PostgreSQL via backend.
 // crimeDate (optional): ISO date string "YYYY-MM-DD" — used to select the
 // law version applicable at the time of the crime.
+// source (optional): law source like "Bộ luật Hình sự 2025" — used for disambiguation when
+// the same article number exists in different versions.
 export const lawsApi = {
   /**
    * @param {string} articleNumber - e.g. "Điều 249" or bare "249"
    * @param {string|null} crimeDate - ISO date "YYYY-MM-DD" or null
+   * @param {string|null} source - law source like "Bộ luật Hình sự 2025" or null
    */
-  getLaw: (articleNumber, crimeDate = null) => {
-    const params = crimeDate ? `?crimeDate=${encodeURIComponent(crimeDate)}` : '';
-    return apiClient.get(`/laws/${encodeURIComponent(articleNumber)}${params}`).then(r => r.data);
+  getLaw: (articleNumber, crimeDate = null, source = null) => {
+    const params = new URLSearchParams();
+    if (crimeDate) params.append('crimeDate', crimeDate);
+    if (source) params.append('source', source);
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    return apiClient.get(`/laws/${encodeURIComponent(articleNumber)}${queryString}`).then(r => r.data);
   },
 };
 

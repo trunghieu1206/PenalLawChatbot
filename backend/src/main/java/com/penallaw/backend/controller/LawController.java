@@ -19,13 +19,16 @@ import java.util.stream.Collectors;
  * Provides read-only access to the laws table for the law-reference sidebar.
  * No authentication required — law text is public reference material.
  *
- * GET /api/laws/{articleNumber}?crimeDate=YYYY-MM-DD
+ * GET /api/laws/{articleNumber}?crimeDate=YYYY-MM-DD&source=B%E1%BB%99%20lu%E1%BA%ADt%20H%C3%ACnh%20s%E1%BB%B1%202025
  *
  * articleNumber: bare number (e.g. "249") OR prefixed (e.g. "Điều 249") — both handled.
- *               Law-code suffixes ("BLHS", "BLTTHS", etc.) are automatically stripped.
+ *               Law-code suffixes are automatically stripped.
  * crimeDate: optional ISO date (YYYY-MM-DD). When provided, the version applicable at
  *            that date is placed first in the response (shown as default tab in UI).
  *            ALL other available versions are still returned as additional tabs.
+ * source: optional source filter (e.g. "Bộ luật Hình sự 2025"). When provided, returns ONLY the
+ *         article from that specific source, enabling disambiguation for articles that
+ *         have different content across different legal code versions.
  */
 @RestController
 @RequestMapping("/api/laws")
@@ -38,7 +41,8 @@ public class LawController {
     @GetMapping("/{articleNumber}")
     public ResponseEntity<LawDTOs.LawLookupResponse> getLaw(
             @PathVariable String articleNumber,
-            @RequestParam(required = false) String crimeDate
+            @RequestParam(required = false) String crimeDate,
+            @RequestParam(required = false) String source
     ) {
         // Step 1: Strip "Điều " prefix if present (AI returns "Điều 249", DB stores "249")
         String normalized = articleNumber.trim();
@@ -50,11 +54,19 @@ public class LawController {
         // Catches patterns like "51 BLHS", "51 BLHS 2015", "249 BLTTHS"
         normalized = normalized.replaceAll("(?i)\\s+(BLHS|BLTTHS|BL[A-Z]+).*$", "").trim();
 
-        log.debug("Law lookup: article='{}' (normalized='{}'), crimeDate='{}'",
-                articleNumber, normalized, crimeDate);
+        log.debug("Law lookup: article='{}' (normalized='{}'), source='{}', crimeDate='{}'",
+                articleNumber, normalized, source, crimeDate);
 
-        // Step 3: Fetch ALL versions of this article (most recent first)
-        List<Law> allVersions = lawRepository.findAllVersionsByArticleNumber(normalized);
+        // Step 3: Fetch laws — if source specified, fetch specific version; otherwise fetch ALL versions
+        List<Law> allVersions;
+        if (source != null && !source.isBlank()) {
+            // Source-specific disambiguation (e.g., Article 249 in BLHS 2025 vs BLHS 2009)
+            Law specificVersion = lawRepository.findByArticleNumberAndSource(normalized, source);
+            allVersions = specificVersion != null ? List.of(specificVersion) : List.of();
+        } else {
+            // No source specified — return all versions (most recent first)
+            allVersions = lawRepository.findAllVersionsByArticleNumber(normalized);
+        }
 
         if (allVersions.isEmpty()) {
             log.debug("No versions found for Điều {}", normalized);
