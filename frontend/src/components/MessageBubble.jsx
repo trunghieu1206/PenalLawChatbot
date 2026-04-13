@@ -4,8 +4,8 @@ import styles from './MessageBubble.module.css';
 
 // Regex to match Vietnamese law article citations like "Điều 51", "Điều 255"
 // Handles both old abbreviations (BLHS) and new full names (Bộ luật Hình sự)
-// Format: "Điều 249" or "Điều 249 Bộ luật Hình sự 2025" etc.
-const LAW_SPLIT_REGEX = /(Điều\s+\d+[A-Z]?(?:\s+(?:Bộ\s+luật\s+Hình\s+sự|BLHS|BLTTHS|BL[A-Z]+)(?:\s+\d{4})?(?:\s+\(sửa\s+đổi)+(?:\s+\d{4})?\))?)?)/g;
+// Format: "Điều 249" or "Điều 249 Bộ luật Hình sự 2025" or "Điều 51 BLHS 2015 (sửa đổi 2017)"
+const LAW_SPLIT_REGEX = /(Điều\s+\d+[A-Z]?(?:\s+(?:Bộ\s+luật\s+Hình\s+sự|BLHS|BLTTHS|BL[A-Z]+)(?:\s+\d{4})?(?:\s+\(sửa\s+đổi\s+\d{4}\))?)?)/g;
 
 /**
  * Renders inline law citations as clickable buttons when onLawClick is provided.
