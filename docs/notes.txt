@@ -1,2 +1,4 @@
 - Instead of advising "Sinh viên" in study mode, just use "Người dùng" or "Bạn"
 - when a judgement of a case is returned by AI, in the contents of the chat returned by AI, if a law article is referenced, user can click into that law article and see the original reference for that law article (instead of clicking at the end of the chat), and also for each law article referenced, the correct chapter is displayed, and the correct law document (source) is displayed (for example law from document of 1999 or law from 2018)
+- also when the law reference sidebar is shown, i do not want it to open another window and makes everything in the background, i want a side bar that opens up beside the main window (you can minimize the chat window)
+- and also in the law reference sidebar, replace "LegalAI" with "VNPLaw" and remove the icon
