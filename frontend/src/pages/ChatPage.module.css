@@ -217,17 +217,17 @@
 .userAvatar {
   width: 32px; 
   height: 32px;
-  border-radius: 2px;
-  background: var(--primary);
-  color: white;
-  border: 1px solid var(--primary);
+  border-radius: 50%;
+  background: rgba(45, 95, 122, 0.15);
+  color: var(--primary);
+  border: 2px solid rgba(45, 95, 122, 0.25);
   display: flex; 
   align-items: center; 
   justify-content: center;
   flex-shrink: 0;
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.5px;
+  letter-spacing: 0px;
 }
 
 .userName {

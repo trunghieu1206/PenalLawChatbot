@@ -868,19 +868,19 @@ Cấu trúc:
 
         if is_greeting:
             reply = (
-                "Xin chào! 👋 Tôi là **Trợ lý Pháp luật Hình sự AI**.\n\n"
+                "Xin chào! Tôi là **Trợ lý Pháp luật Hình sự AI**.\n\n"
                 "Tôi có thể giúp bạn:\n"
-                "- 📋 **Phân tích vụ án hình sự** — định tội danh, lượng hình\n"
-                "- ⚖️ **Nhận định của tòa án** hoặc lập luận theo vai trò **bào chữa / bị hại**\n"
-                "- 📜 **Trích dẫn Bộ luật Hình sự** điều khoản liên quan\n"
-                "- 💬 **Giải thích chi tiết** bất kỳ điểm nào trong phân tích\n\n"
+                "- **Phân tích vụ án hình sự** — định tội danh, lượng hình\n"
+                "- **Nhận định của tòa án** hoặc lập luận theo vai trò **bào chữa / bị hại**\n"
+                "- **Trích dẫn Bộ luật Hình sự** điều khoản liên quan\n"
+                "- **Giải thích chi tiết** bất kỳ điểm nào trong phân tích\n\n"
                 "Hãy dán nội dung hồ sơ vụ án hoặc đặt câu hỏi pháp lý để bắt đầu!"
             )
         else:
             reply = (
                 "Xin lỗi, tôi chỉ có thể hỗ trợ các vấn đề liên quan đến **pháp luật hình sự Việt Nam**.\n\n"
                 "Nếu bạn có hồ sơ vụ án hoặc câu hỏi về tội danh, khung hình phạt, "
-                "hay tình tiết tăng nặng/giảm nhẹ, hãy cho tôi biết nhé! ⚖️"
+                "hay tình tiết tăng nặng/giảm nhẹ, hãy cho tôi biết nhé!"
             )
 
         return {"messages": [AIMessage(content=reply)]}
