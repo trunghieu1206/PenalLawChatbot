@@ -47,7 +47,29 @@ const ROLE_LABELS = {
   neutral: { label: 'Thẩm phán', cls: 'neutral' },
 };
 
-function MessageBubble({ message, role }) {
+/**
+ * Parses a Vietnamese date string "dd/mm/yyyy" into ISO "YYYY-MM-DD".
+ * Returns null if not parseable.
+ */
+function parseCrimeDate(dateStr) {
+  if (!dateStr) return null;
+  // Handle "dd/mm/yyyy" or "dd-mm-yyyy"
+  const m = String(dateStr).match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  // Already ISO "YYYY-MM-DD"?
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+  return null;
+}
+
+/**
+ * MessageBubble renders a single chat message.
+ *
+ * Props:
+ *   - message: { id, role, content, mappedLaws?, extractedFacts?, createdAt }
+ *   - role: active session role ("defense" | "victim" | "neutral")
+ *   - onLawClick: (law: MappedLaw, crimeDate: string|null) => void — called when a law pill is clicked
+ */
+function MessageBubble({ message, role, onLawClick }) {
   const isUser = message.role === 'user';
 
   // Format time in GMT+7 (Hanoi time)
@@ -59,7 +81,16 @@ function MessageBubble({ message, role }) {
     return gmt7.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   };
 
+  // Extract crime date from this message's extractedFacts
+  const crimeDate = parseCrimeDate(
+    message.extractedFacts?.ngay_pham_toi
+  );
+
   const avatarLabel = isUser ? 'Bạn' : 'Trợ lý';
+
+  const handleLawPillClick = (law) => {
+    if (onLawClick) onLawClick(law, crimeDate);
+  };
 
   return (
     <div className={`${styles.wrapper} ${isUser ? styles.user : styles.assistant}`}>
@@ -85,9 +116,15 @@ function MessageBubble({ message, role }) {
           <div className={styles.lawsTag}>
             <span className={styles.lawsLabel}>Điều luật áp dụng:</span>
             {message.mappedLaws.map((l, i) => (
-              <span key={i} className={`${styles.lawPill} law-citation`}>
+              <button
+                key={i}
+                className={`${styles.lawPill} ${onLawClick ? styles.lawPillClickable : ''} law-citation`}
+                onClick={() => handleLawPillClick(l)}
+                title={onLawClick ? `Xem nội dung ${l.article} ${l.clause || ''}` : undefined}
+                type="button"
+              >
                 {l.article} {l.clause}
-              </span>
+              </button>
             ))}
           </div>
         )}
@@ -101,3 +138,5 @@ function MessageBubble({ message, role }) {
     </div>
   );
 }
+
+export default MessageBubble;

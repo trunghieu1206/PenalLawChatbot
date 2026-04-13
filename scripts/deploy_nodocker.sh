@@ -30,7 +30,7 @@ error() { echo -e "${RED}[ERR]${NC}   $*"; exit 1; }
 REPO_URL="https://github.com/trunghieu1206/PenalLawChatbot"
 PROJECT_DIR="/root/PenalLawChatbot"
 LOG_DIR="/var/log/penallaw"
-BRANCH="dev"  # ← CHANGE THIS to deploy a different branch (e.g., "dev", "feature/xyz")
+BRANCH="dev"  # ← CHANGE THIS to deploy a different branch (e.g., "master", "feature/xyz")
 mkdir -p "$LOG_DIR"
 chmod 777 "$LOG_DIR"
 
@@ -148,20 +148,39 @@ BACKUP_DIR="$PROJECT_DIR/database/backups"
 TABLE_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM information_schema.tables WHERE table_schema='public';\"" postgres 2>/dev/null || echo "0")
 
 if [ "${TABLE_COUNT:-0}" -eq 0 ] && [ -d "$BACKUP_DIR" ]; then
-    LATEST_BACKUP=$(ls -t "$BACKUP_DIR"/penallaw_backup_*.sql 2>/dev/null | head -1)
-    if [ -n "$LATEST_BACKUP" ]; then
+    # Prefer penallaw_combined_backup.sql (has laws + users/sessions).
+    # Fall back to latest penallaw_backup_*.sql if combined not present.
+    if [ -f "$BACKUP_DIR/penallaw_combined_backup.sql" ]; then
+        LATEST_BACKUP="$BACKUP_DIR/penallaw_combined_backup.sql"
+        info "Using combined backup (laws + chat data): penallaw_combined_backup.sql"
+    else
+        LATEST_BACKUP=$(ls -t "$BACKUP_DIR"/penallaw_backup_*.sql 2>/dev/null | head -1 || echo "")
+    fi
+
+    if [ -n "$LATEST_BACKUP" ] && [ -f "$LATEST_BACKUP" ]; then
         info "DB is empty — restoring from: $(basename "$LATEST_BACKUP")..."
         su -c "cd /tmp && dropdb --if-exists $DB_NAME" postgres 2>/dev/null || true
         su -c "cd /tmp && createdb $DB_NAME" postgres 2>/dev/null || true
-        su -c "psql $DB_NAME < \"$LATEST_BACKUP\"" postgres \
-            >> "$LOG_DIR/postgres.log" 2>&1 \
-            && info "✅ Database restored." \
-            || warn "⚠️  Restore had warnings — check $LOG_DIR/postgres.log"
+
+        # Copy to /tmp so the postgres user can read it
+        TEMP_BACKUP="/tmp/penallaw_restore_$$.sql"
+        cp "$LATEST_BACKUP" "$TEMP_BACKUP"
+        chmod 644 "$TEMP_BACKUP"
+
+        if su - postgres -c "psql $DB_NAME < \"$TEMP_BACKUP\" 2>&1" \
+            >> "$LOG_DIR/postgres.log" 2>&1; then
+            LAWS_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM laws;\"" postgres 2>/dev/null || echo "0")
+            info "✅ Database restored. Laws in DB: ${LAWS_COUNT:-0} articles"
+        else
+            warn "⚠️  Restore had warnings — check $LOG_DIR/postgres.log"
+        fi
+        rm -f "$TEMP_BACKUP"
     else
         info "No backup files found — starting with empty database."
     fi
 elif [ "${TABLE_COUNT:-0}" -gt 0 ]; then
-    skip "DB already has $TABLE_COUNT tables — skipping restore."
+    LAWS_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM laws;\"" postgres 2>/dev/null || echo "0")
+    skip "DB already has $TABLE_COUNT tables (laws: ${LAWS_COUNT:-0}) — skipping restore."
 fi
 
 # ── 4. Check Milvus DB ────────────────────────────────────────

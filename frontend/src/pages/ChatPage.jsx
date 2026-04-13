@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
-import { chatApi } from '../services/api.js';
+import { chatApi, lawsApi } from '../services/api.js';
 import MessageBubble from '../components/MessageBubble.jsx';
 import RoleSelector from '../components/RoleSelector.jsx';
+import LawSidebar from '../components/LawSidebar.jsx';
 import styles from './ChatPage.module.css';
 
 export default function ChatPage() {
@@ -20,6 +21,14 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // Law reference sidebar state
+  const [lawSidebar, setLawSidebar] = useState({
+    open: false,
+    loading: false,
+    data: null,   // LawLookupResponse from backend
+    error: null,
+  });
 
   // Role modal: shown before session creation to force role selection
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -203,6 +212,32 @@ export default function ChatPage() {
   const roleLabel = activeRole === 'defense' ? 'Luật sư Bào chữa' : activeRole === 'victim' ? 'Luật sư Bị hại' : 'Thẩm phán';
   const charCount = input.length;
 
+  /**
+   * Called when user clicks a law pill in MessageBubble.
+   * Fetches the version of the law effective at the crimeDate.
+   */
+  const handleLawClick = async (law, crimeDate) => {
+    const articleRaw = law.article || law.article_number || '';
+    if (!articleRaw) return;
+
+    setLawSidebar({ open: true, loading: true, data: null, error: null });
+
+    try {
+      const data = await lawsApi.getLaw(articleRaw, crimeDate);
+      if (data.versions && data.versions.length === 0) {
+        setLawSidebar({ open: true, loading: false, data, error: `Không tìm thấy ${articleRaw} trong cơ sở dữ liệu.` });
+      } else {
+        setLawSidebar({ open: true, loading: false, data, error: null });
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Lỗi khi tải điều luật.';
+      setLawSidebar({ open: true, loading: false, data: null, error: msg });
+    }
+  };
+
+  const closeLawSidebar = () =>
+    setLawSidebar({ open: false, loading: false, data: null, error: null });
+
   const handleRoleBtnClick = () => {
     if (currentSession) {
       // Show lock popup and auto-dismiss after 2.5s
@@ -375,7 +410,11 @@ export default function ChatPage() {
 
           {messages.map((msg, i) => (
             <div key={msg.id || i} className="animate-fade-in">
-              <MessageBubble message={msg} role={activeRole} />
+              <MessageBubble
+                message={msg}
+                role={activeRole}
+                onLawClick={handleLawClick}
+              />
             </div>
           ))}
 
@@ -442,6 +481,16 @@ export default function ChatPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Law Reference Sidebar */}
+      {lawSidebar.open && (
+        <LawSidebar
+          lawData={lawSidebar.data}
+          loading={lawSidebar.loading}
+          error={lawSidebar.error}
+          onClose={closeLawSidebar}
+        />
       )}
     </div>
   );
