@@ -1,4 +1,4 @@
-- Instead of advising "Sinh viên" in study mode, just use "Người dùng" or "Bạn"
-- when a judgement of a case is returned by AI, in the contents of the chat returned by AI, if a law article is referenced, user can click into that law article and see the original reference for that law article (instead of clicking at the end of the chat), and also for each law article referenced, the correct chapter is displayed, and the correct law document (source) is displayed (for example law from document of 1999 or law from 2018)
-- also when the law reference sidebar is shown, i do not want it to open another window and makes everything in the background, i want a side bar that opens up beside the main window (you can minimize the chat window)
-- and also in the law reference sidebar, replace "LegalAI" with "VNPLaw" and remove the icon
+- in the response returned by AI, some of the law articles still include "BLHS", which makes the system unable to query, deal with this completely
+- also there is a bug that for different source, the same article number might leads to a completely different content. For example article number 249 in BLHS 2025 is about drugs, but article number 249 in BLHS BLHS 2009 is about gambling. Think of a logic to address this issue 
+- in the study mode, for the suggested laws advised by the AI, make it so that when user clicks onto it the original law is shown as a reference. Also in this window, the suggested laws again include the word "BLSH" which makes user unable to understand, please add the full source (for e.g: "BLHS 2009"). 
+- in the system (whole project) remove the keyword "BLHS", and replace with the full "Bộ luật Hình sự" so that it is more understandable for users

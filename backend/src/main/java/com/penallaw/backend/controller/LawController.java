@@ -11,7 +11,9 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Provides read-only access to the laws table for the law-reference sidebar.
@@ -19,9 +21,11 @@ import java.util.List;
  *
  * GET /api/laws/{articleNumber}?crimeDate=YYYY-MM-DD
  *
- * articleNumber: bare number (e.g. "249") OR prefixed (e.g. "Điều 249") — both are handled.
- * crimeDate: optional ISO date (YYYY-MM-DD). When provided, returns the law version
- *            effective at that date. Falls back to active versions if not provided or no match.
+ * articleNumber: bare number (e.g. "249") OR prefixed (e.g. "Điều 249") — both handled.
+ *               Law-code suffixes ("BLHS", "BLTTHS", etc.) are automatically stripped.
+ * crimeDate: optional ISO date (YYYY-MM-DD). When provided, the version applicable at
+ *            that date is placed first in the response (shown as default tab in UI).
+ *            ALL other available versions are still returned as additional tabs.
  */
 @RestController
 @RequestMapping("/api/laws")
@@ -36,43 +40,67 @@ public class LawController {
             @PathVariable String articleNumber,
             @RequestParam(required = false) String crimeDate
     ) {
-        // Normalize: strip "Điều " prefix if present (AI returns "Điều 249", DB stores "249")
+        // Step 1: Strip "Điều " prefix if present (AI returns "Điều 249", DB stores "249")
         String normalized = articleNumber.trim();
         if (normalized.toLowerCase().startsWith("điều ")) {
             normalized = normalized.substring(5).trim();
         }
 
+        // Step 2: Strip law-code suffixes like "BLHS", "BLHS 2015", "BLTTHS", etc.
+        // Catches patterns like "51 BLHS", "51 BLHS 2015", "249 BLTTHS"
+        normalized = normalized.replaceAll("(?i)\\s+(BLHS|BLTTHS|BL[A-Z]+).*$", "").trim();
+
         log.debug("Law lookup: article='{}' (normalized='{}'), crimeDate='{}'",
                 articleNumber, normalized, crimeDate);
 
-        // Attempt version-aware query if crimeDate provided
-        List<Law> laws = List.of();
+        // Step 3: Fetch ALL versions of this article (most recent first)
+        List<Law> allVersions = lawRepository.findAllVersionsByArticleNumber(normalized);
+
+        if (allVersions.isEmpty()) {
+            log.debug("No versions found for Điều {}", normalized);
+            return ResponseEntity.ok(new LawDTOs.LawLookupResponse(
+                    normalized, crimeDate, "not_found", List.of()
+            ));
+        }
+
+        // Step 4: If crimeDate is provided, partition into "applicable at crime date" (first)
+        //         and "other versions" (remaining tabs), so the correct historical law is
+        //         the default tab while all other versions remain accessible.
         String foundBy = "active_fallback";
+        List<Law> sorted;
 
         if (crimeDate != null && !crimeDate.isBlank()) {
             LocalDate date = parseDate(crimeDate);
             if (date != null) {
-                laws = lawRepository.findByArticleNumberAndCrimeDate(normalized, date);
-                if (!laws.isEmpty()) {
+                List<Law> applicable = allVersions.stream()
+                        .filter(l -> (l.getEffectiveDate() == null || !l.getEffectiveDate().isAfter(date))
+                                  && (l.getEffectiveEndDate() == null || !l.getEffectiveEndDate().isBefore(date)))
+                        .collect(Collectors.toList());
+
+                List<Law> others = allVersions.stream()
+                        .filter(l -> !applicable.contains(l))
+                        .collect(Collectors.toList());
+
+                if (!applicable.isEmpty()) {
                     foundBy = "crime_date";
-                    log.debug("Found {} version(s) for Điều {} at {}", laws.size(), normalized, date);
+                    log.debug("Found {} version(s) applicable at {} for Điều {}; {} other version(s) also returned",
+                            applicable.size(), date, normalized, others.size());
+                } else {
+                    log.debug("No version applicable at {} for Điều {}; returning all {} version(s)",
+                            date, normalized, allVersions.size());
                 }
+
+                sorted = new ArrayList<>();
+                sorted.addAll(applicable);   // default tab = crime-date applicable
+                sorted.addAll(others);        // remaining tabs = other historical versions
+            } else {
+                sorted = allVersions; // date parse failed; fall through to most-recent-first
             }
+        } else {
+            sorted = allVersions; // no crime date → most recent version is first tab
         }
 
-        // Fallback: active versions (no date filter)
-        if (laws.isEmpty()) {
-            laws = lawRepository.findActiveByArticleNumber(normalized);
-            log.debug("Fallback: found {} active version(s) for Điều {}", laws.size(), normalized);
-        }
-
-        // Last resort: any version at all
-        if (laws.isEmpty()) {
-            laws = lawRepository.findByArticleNumberOrderByEffectiveDateDesc(normalized);
-            log.debug("Last resort: found {} total version(s) for Điều {}", laws.size(), normalized);
-        }
-
-        List<LawDTOs.LawResponse> versions = laws.stream()
+        List<LawDTOs.LawResponse> versions = sorted.stream()
                 .map(l -> new LawDTOs.LawResponse(
                         l.getId(),
                         l.getArticleNumber(),

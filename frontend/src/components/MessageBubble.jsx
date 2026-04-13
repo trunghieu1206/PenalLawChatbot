@@ -19,13 +19,15 @@ function highlightLawCitations(text, onLawClick, crimeDate) {
     if (!/^Điều\s+\d+/.test(part)) return part;
 
     if (onLawClick) {
+      // Strip law-code suffixes ("BLHS", "BLHS 2015", "BLTTHS", etc.) before lookup
+      const baseArticle = part.replace(/\s+(BLHS|BLTTHS|BL[A-Z]+)\b.*$/i, '').trim();
       return (
         <button
           key={i}
           className={`law-citation ${styles.inlineLawBtn}`}
           title={`Tra cứu ${part}`}
           type="button"
-          onClick={() => onLawClick({ article: part }, crimeDate)}
+          onClick={() => onLawClick({ article: baseArticle }, crimeDate)}
         >
           {part}
         </button>
@@ -138,23 +140,6 @@ function MessageBubble({ message, role, onLawClick }) {
               />
           }
         </div>
-
-        {message.mappedLaws && message.mappedLaws.length > 0 && (
-          <div className={styles.lawsTag}>
-            <span className={styles.lawsLabel}>Điều luật áp dụng:</span>
-            {message.mappedLaws.map((l, i) => (
-              <button
-                key={i}
-                className={`${styles.lawPill} ${onLawClick ? styles.lawPillClickable : ''} law-citation`}
-                onClick={() => handleLawPillClick(l)}
-                title={onLawClick ? `Xem nội dung ${l.article} ${l.clause || ''}` : undefined}
-                type="button"
-              >
-                {l.article} {l.clause}
-              </button>
-            ))}
-          </div>
-        )}
 
         <time className={styles.time}>
           {message.createdAt
