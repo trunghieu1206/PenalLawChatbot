@@ -36,14 +36,23 @@ if [ ! -d "$BACKUP_DIR" ]; then
 fi
 
 info "Looking for backups in: $BACKUP_DIR"
-BACKUP_FILE=$(ls -t "$BACKUP_DIR"/penallaw_backup_*.sql 2>/dev/null | head -n 1 || echo "")
 
-if [ -z "$BACKUP_FILE" ]; then
+# Prefer the combined backup (contains laws + users/sessions data).
+# Fall back to any penallaw_backup_*.sql if combined does not exist.
+if [ -f "$BACKUP_DIR/penallaw_combined_backup.sql" ]; then
+    BACKUP_FILE="$BACKUP_DIR/penallaw_combined_backup.sql"
+    info "Found combined backup (laws + chat data): penallaw_combined_backup.sql"
+else
+    BACKUP_FILE=$(ls -t "$BACKUP_DIR"/penallaw_backup_*.sql 2>/dev/null | head -n 1 || echo "")
+fi
+
+if [ -z "$BACKUP_FILE" ] || [ ! -f "$BACKUP_FILE" ]; then
     error "No backup files found in $BACKUP_DIR"
 fi
 
 BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
-BACKUP_TIME=$(stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' "$BACKUP_FILE" 2>/dev/null || stat -c '%y' "$BACKUP_FILE" 2>/dev/null | cut -d. -f1 || echo "")
+# stat syntax differs between macOS (-f) and Linux (-c) — use GNU/Linux form
+BACKUP_TIME=$(stat -c '%y' "$BACKUP_FILE" 2>/dev/null | cut -d. -f1 || echo "unknown")
 
 info "Latest backup: $(basename "$BACKUP_FILE")"
 echo "   Size: $BACKUP_SIZE | Modified: $BACKUP_TIME"
@@ -156,12 +165,19 @@ if su - postgres -c "psql $DB_NAME < \"$TEMP_BACKUP\" 2>&1" \
     > "/tmp/restore_$$.log" 2>&1; then
     END_TIME=$(date +%s)
     DURATION=$((END_TIME - START_TIME))
+
+    # Verify the restore actually produced tables
+    RESTORED_TABLES=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM information_schema.tables WHERE table_schema='public';\"" postgres 2>/dev/null || echo "0")
+    LAWS_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM laws;\"" postgres 2>/dev/null || echo "0")
+
     info "✅ Restore completed successfully"
     echo ""
     echo "  Database:  $DB_NAME"
     echo "  Source:    $(basename "$BACKUP_FILE")"
     echo "  Size:      $BACKUP_SIZE"
     echo "  Time:      ${DURATION}s"
+    echo "  Tables:    ${RESTORED_TABLES:-?}"
+    echo "  Laws:      ${LAWS_COUNT:-?} articles"
 else
     # Check what went wrong
     RESTORE_LOG=$(cat "/tmp/restore_$$.log" 2>/dev/null || echo "No log found")

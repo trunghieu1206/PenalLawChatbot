@@ -30,7 +30,7 @@ error() { echo -e "${RED}[ERR]${NC}   $*"; exit 1; }
 REPO_URL="https://github.com/trunghieu1206/PenalLawChatbot"
 PROJECT_DIR="/root/PenalLawChatbot"
 LOG_DIR="/var/log/penallaw"
-BRANCH="dev"  # ← CHANGE THIS to deploy a different branch (e.g., "dev", "feature/xyz")
+BRANCH="dev"  # ← CHANGE THIS to deploy a different branch (e.g., "master", "feature/xyz")
 mkdir -p "$LOG_DIR"
 chmod 777 "$LOG_DIR"
 
@@ -148,32 +148,98 @@ BACKUP_DIR="$PROJECT_DIR/database/backups"
 TABLE_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM information_schema.tables WHERE table_schema='public';\"" postgres 2>/dev/null || echo "0")
 
 if [ "${TABLE_COUNT:-0}" -eq 0 ] && [ -d "$BACKUP_DIR" ]; then
-    LATEST_BACKUP=$(ls -t "$BACKUP_DIR"/penallaw_backup_*.sql 2>/dev/null | head -1)
-    if [ -n "$LATEST_BACKUP" ]; then
+    # Prefer penallaw_combined_backup.sql (has laws + users/sessions).
+    # Fall back to latest penallaw_backup_*.sql if combined not present.
+    if [ -f "$BACKUP_DIR/penallaw_combined_backup.sql" ]; then
+        LATEST_BACKUP="$BACKUP_DIR/penallaw_combined_backup.sql"
+        info "Using combined backup (laws + chat data): penallaw_combined_backup.sql"
+    else
+        LATEST_BACKUP=$(ls -t "$BACKUP_DIR"/penallaw_backup_*.sql 2>/dev/null | head -1 || echo "")
+    fi
+
+    if [ -n "$LATEST_BACKUP" ] && [ -f "$LATEST_BACKUP" ]; then
         info "DB is empty — restoring from: $(basename "$LATEST_BACKUP")..."
         su -c "cd /tmp && dropdb --if-exists $DB_NAME" postgres 2>/dev/null || true
         su -c "cd /tmp && createdb $DB_NAME" postgres 2>/dev/null || true
-        su -c "psql $DB_NAME < \"$LATEST_BACKUP\"" postgres \
-            >> "$LOG_DIR/postgres.log" 2>&1 \
-            && info "✅ Database restored." \
-            || warn "⚠️  Restore had warnings — check $LOG_DIR/postgres.log"
+
+        # Copy to /tmp so the postgres user can read it
+        TEMP_BACKUP="/tmp/penallaw_restore_$$.sql"
+        cp "$LATEST_BACKUP" "$TEMP_BACKUP"
+        chmod 644 "$TEMP_BACKUP"
+
+        if su - postgres -c "psql $DB_NAME < \"$TEMP_BACKUP\" 2>&1" \
+            >> "$LOG_DIR/postgres.log" 2>&1; then
+            LAWS_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM laws;\"" postgres 2>/dev/null || echo "0")
+            info "✅ Database restored. Laws in DB: ${LAWS_COUNT:-0} articles"
+        else
+            warn "⚠️  Restore had warnings — check $LOG_DIR/postgres.log"
+        fi
+        rm -f "$TEMP_BACKUP"
     else
         info "No backup files found — starting with empty database."
     fi
 elif [ "${TABLE_COUNT:-0}" -gt 0 ]; then
-    skip "DB already has $TABLE_COUNT tables — skipping restore."
+    LAWS_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM laws;\"" postgres 2>/dev/null || echo "0")
+    skip "DB already has $TABLE_COUNT tables (laws: ${LAWS_COUNT:-0}) — skipping restore."
 fi
 
-# ── 4. Check Milvus DB ────────────────────────────────────────
-DB_PATH="$PROJECT_DIR/ai-service/VN_law_lora.db"
-if [ ! -f "$DB_PATH" ]; then
-    warn "VN_law_lora.db not found — upload it to the server:"
-    warn "  scp -P <PORT> VN_law_lora.db root@<HOST>:$DB_PATH"
-fi
-
-# ── 5. AI Service (FastAPI / uvicorn) ────────────────────────
-info "Starting AI service on port 8000..."
+# ── 4. Check Milvus DB ───────�info "Starting AI service on port 8000..."
 cd "$PROJECT_DIR/ai-service"
+
+# ── Find system Python (torch already pre-installed on this server) ──────────────
+# Skip venv and torch install since both are already available
+info "Detecting system Python with torch pre-installed..."
+
+AI_PYTHON=""
+# Try conda first (has torch pre-configured), then system Python
+for py in /opt/conda/bin/python3 /usr/bin/python3.11 /usr/bin/python3.10 /usr/bin/python3; do
+    if [ -x "$py" ]; then
+        if "$py" -c "import torch; import torch.cuda" 2>/dev/null; then
+            AI_PYTHON="$py"
+            TORCH_VER=$("$py" -c "import torch; print(torch.__version__)" 2>/dev/null)
+            CUDA_AVAIL=$("$py" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null)
+            info "✅ Python: $("$py" --version)  |  torch: $TORCH_VER  |  CUDA: $CUDA_AVAIL"
+            break
+        fi
+    fi
+done
+
+[ -z "$AI_PYTHON" ] && { echo "[ERR] No Python with torch found. Verify torch is installed on this server."; exit 1; }
+
+# ── Verify GPU is available ─────────────────────────────────────────────────────
+if ! "$AI_PYTHON" -c "import torch; assert torch.cuda.is_available(), 'CUDA not available'; print(f'GPU OK: {torch.cuda.get_device_name(0)}')" 2>/dev/null; then
+    error "ERROR: GPU/CUDA not available. Check: nvidia-smi and torch installation."
+fi
+
+# ── Install missing AI service dependencies (except torch) ──────────────────────
+info "Installing AI service requirements (excluding torch)..."
+# milvus-lite's __init__.py imports pkg_resources (from setuptools) at module load
+# time. Install setuptools first to guarantee pkg_resources exists in the pip
+# environment before milvus-lite is imported.
+"$AI_PYTHON" -m pip install "setuptools>=70.0" --quiet 2>&1 | tail -2 || true
+# Filter out torch from requirements to avoid reinstall/downgrade of the
+# conda GPU torch (2.2.1 with CUDA). Without --upgrade, pip will only
+# install/upgrade packages that don't already satisfy the pinned constraints,
+# so torch is never touched.
+grep -v "^torch" "$PROJECT_DIR/ai-service/requirements.txt" > /tmp/requirements_notorch.txt
+"$AI_PYTHON" -m pip install --quiet -r /tmp/requirements_notorch.txt 2>&1 | tail -5 || \
+    { echo "[ERR] Failed to install AI dependencies"; exit 1; }
+# Force-upgrade milvus-lite + pymilvus to ensure we get a version that uses
+# importlib.metadata instead of pkg_resources (fixed in milvus-lite>=2.4.9).
+# This targeted upgrade is safe — neither package declares torch as a dependency.
+"$AI_PYTHON" -m pip install "milvus-lite>=2.4.9" "pymilvus>=2.4.0" --upgrade --quiet 2>&1 | tail -2 || true
+info "AI service dependencies ready."
+
+# ── Verify critical imports BEFORE launching (fail fast) ──────────────────────
+info "Verifying critical imports..."
+"$AI_PYTHON" -c "
+import torch
+assert torch.version.cuda, 'torch has no CUDA build'
+from peft import PeftModel
+from transformers import AutoModel, AutoTokenizer
+import peft, transformers, uvicorn, fastapi
+print(f'✅ All imports OK | torch={torch.__version__} | peft={peft.__version__} | transformers={transformers.__version__}')
+" || { echo "[ERR] Import verification FAILED"; exit 1; }
 
 # Write .env for ai-service
 cat > .env <<EOF
@@ -184,28 +250,24 @@ POSTGRES_PORT=5432
 POSTGRES_DB=${POSTGRES_DB:-penallaw}
 POSTGRES_USER=${POSTGRES_USER:-postgres}
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-# MILVUS_DB_PATH (not MILVUS_URI!) — pymilvus reads MILVUS_URI at import time
-# and crashes if it contains a file path. Use a different env var name.
 MILVUS_DB_PATH=${PROJECT_DIR}/ai-service/VN_law_lora.db
 COLLECTION_NAME=legal_rag_lora
 LLM_MODEL=${LLM_MODEL:-google/gemini-2.5-flash}
 TOP_K=15
 EMBEDDING_ADAPTER=trunghieu1206/lawchatbot-40k
+FORCE_CPU=${FORCE_CPU:-0}
 EOF
 
 pkill -f "uvicorn app.main:app" 2>/dev/null || true
 sleep 1
-
-# MILVUS_URI must NOT be in the shell environment (pymilvus reads at import time)
-# Since we write MILVUS_DB_PATH (not MILVUS_URI) above, this is just a safety net.
 unset MILVUS_URI 2>/dev/null || true
 
-nohup uvicorn app.main:app \
+nohup "$AI_PYTHON" -m uvicorn app.main:app \
     --host 0.0.0.0 \
     --port 8000 \
     --workers 1 \
     > "$LOG_DIR/ai-service.log" 2>&1 &
-info "AI service started (PID $!). Log: $LOG_DIR/ai-service.log"
+info "AI service started (PID $!, Python: $AI_PYTHON). Log: $LOG_DIR/ai-service.log"
 
 # ── 6. Backend (Spring Boot) ─────────────────────────────────
 cd "$PROJECT_DIR/backend"
@@ -223,11 +285,13 @@ if [ -n "$LATEST_JAR" ]; then
 fi
 
 if [ -z "$LATEST_JAR" ] || [ "$POM_CHANGED" = true ]; then
-    info "Building Spring Boot backend (Maven — first run downloads deps, ~2-5 min)..."
-    # --offline flag skips remote repo checks after first download (much faster)
-    mvn package -DskipTests -q 2>&1 | tail -5
+    info "Building Spring Boot backend (Maven)..."
+    # Use --offline on re-deploys (after first setup_server.sh warm-up)
+    # First build might need repos, but -q suppresses verbose output
+    mvn package -DskipTests -o -q 2>&1 | tail -3 || \
+        mvn package -DskipTests -q 2>&1 | tail -3
     LATEST_JAR=$(ls -t target/*.jar | head -1)
-    info "Build complete: $(basename "$LATEST_JAR")"
+    info "✅ Build complete: $(basename "$LATEST_JAR")"
 else
     skip "JAR is up-to-date ($(basename "$LATEST_JAR")) — skipping Maven build"
 fi

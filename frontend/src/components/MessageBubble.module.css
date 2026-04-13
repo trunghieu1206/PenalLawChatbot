@@ -92,5 +92,29 @@
   font-weight: 600;
   color: var(--accent);
   border: 1px solid rgba(45, 95, 122, 0.25);
+  /* Base: looks like a tag */
   cursor: default;
+  /* Reset <button> defaults */
+  font-family: inherit;
+  line-height: inherit;
+  appearance: none;
 }
+
+/* When onLawClick is provided — pill becomes interactive */
+.lawPillClickable {
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+}
+
+.lawPillClickable:hover {
+  background: rgba(45, 95, 122, 0.22);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(45, 95, 122, 0.15);
+  transform: translateY(-1px);
+}
+
+.lawPillClickable:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+

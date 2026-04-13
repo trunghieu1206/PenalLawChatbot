@@ -90,6 +90,21 @@ export const chatApi = {
     apiClient.delete(`/chat/sessions/${sessionId}`).then(r => r.data),
 };
 
+// ---- LAWS API ----
+// Fetches law text from PostgreSQL via backend.
+// crimeDate (optional): ISO date string "YYYY-MM-DD" — used to select the
+// law version applicable at the time of the crime.
+export const lawsApi = {
+  /**
+   * @param {string} articleNumber - e.g. "Điều 249" or bare "249"
+   * @param {string|null} crimeDate - ISO date "YYYY-MM-DD" or null
+   */
+  getLaw: (articleNumber, crimeDate = null) => {
+    const params = crimeDate ? `?crimeDate=${encodeURIComponent(crimeDate)}` : '';
+    return apiClient.get(`/laws/${encodeURIComponent(articleNumber)}${params}`).then(r => r.data);
+  },
+};
+
 export default apiClient;
 
 // ---- AI SERVICE DIRECT CLIENT (proxied via /ai-api/) ----

@@ -15,7 +15,52 @@ import os
 # so pymilvus never sees a file path and crashes with "Illegal uri".
 os.environ.pop("MILVUS_URI", None)
 
+# ── pkg_resources shim ────────────────────────────────────────────────────────
+# milvus-lite <2.4.9 does `from pkg_resources import DistributionNotFound,
+# get_distribution` at module load — only to read its own version string.
+# In conda environments pip cannot reliably replace conda-managed packages, so
+# the old milvus-lite file may never be updated regardless of `pip install`.
+# Solution: inject a minimal stub into sys.modules BEFORE pymilvus is imported.
+# This makes the service independent of the conda installation state.
+# ─────────────────────────────────────────────────────────────────────────────
+try:
+    import pkg_resources  # noqa: F401 — just verify it is importable
+except ModuleNotFoundError:
+    import sys as _sys
+    import types as _types
+
+    class _PkgResources(_types.ModuleType):
+        """Minimal pkg_resources stub — covers what milvus-lite actually uses."""
+
+        class DistributionNotFound(Exception):
+            pass
+
+        @staticmethod
+        def get_distribution(name: str):
+            # Import locally so the function is self-contained and not affected
+            # by the `del` cleanup that runs after the stub is registered.
+            import importlib.metadata as _m
+            try:
+                dist = _m.distribution(name)
+                class _Dist:  # noqa: E306
+                    version = dist.metadata["Version"]
+                return _Dist()
+            except _m.PackageNotFoundError:
+                raise _PkgResources.DistributionNotFound(name)
+
+    _stub = _PkgResources("pkg_resources")
+    _stub.DistributionNotFound = _PkgResources.DistributionNotFound
+    _stub.get_distribution = _PkgResources.get_distribution
+    _sys.modules["pkg_resources"] = _stub
+    del _sys, _types, _stub, _PkgResources  # keep namespace clean
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+
 import re
+import inspect
+import tempfile
+import shutil
 import json
 import numpy as np
 import torch
@@ -51,8 +96,66 @@ load_dotenv()
 # prevents the "Illegal uri: [/path/to/file]" ConnectionConfigException.
 MILVUS_URI = os.getenv("MILVUS_DB_PATH", "./VN_law_lora.db")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "legal_rag_lora")
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 TOP_K = int(os.getenv("TOP_K", "15"))
+
+
+def _detect_device() -> str:
+    """Detect and validate that CUDA is usable (GPU required).
+
+    Runs a real tensor op to verify GPU kernels are compatible with this
+    hardware (e.g. P104-100 / sm_61) — torch.cuda.is_available() is NOT
+    sufficient; it only checks driver presence, not kernel compatibility.
+
+    RAISES RuntimeError if GPU is not available or incompatible.
+    """
+    if os.getenv("FORCE_CPU", "0") == "1":
+        print("⚙️  FORCE_CPU=1 — WARNING: Using CPU (intentional override for testing only)")
+        return "cpu"
+
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "[GPU REQUIRED] CUDA is not available on this machine.\n"
+            "This AI service requires GPU acceleration.\n"
+            "  - Verify NVIDIA driver installed: nvidia-smi\n"
+            "  - Verify PyTorch CUDA wheel matches driver version:\n"
+            "    • Driver 12.0+  → install torch from cu121 wheel\n"
+            "    • Driver 11.8   → install torch from cu118 wheel\n"
+            "  - Run deploy_nodocker.sh to auto-detect and install correct wheel\n"
+            "  - Contact: Check /var/log/penallaw/ai-service.log for details\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        )
+
+    try:
+        probe = torch.zeros(1, device="cuda")
+        _ = probe + 1  # triggers actual kernel dispatch
+        del probe
+        gpu_name = torch.cuda.get_device_name(0)
+        cap = torch.cuda.get_device_capability(0)
+        print(f"⚙️  GPU Ready — {gpu_name} (sm_{cap[0]}{cap[1]})")
+        return "cuda"
+    except Exception as e:
+        raise RuntimeError(
+            f"\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"[GPU PROBE FAILED] CUDA kernel test failed: {type(e).__name__}: {e}\n"
+            f"  This usually means:\n"
+            f"  - PyTorch CUDA version doesn't match driver version\n"
+            f"  - GPU architecture not supported by this PyTorch build\n"
+            f"  - GPU driver too old or incompatible\n"
+            f"\n"
+            f"  FIX: Re-run deploy_nodocker.sh\n"
+            f"       It will detect your actual CUDA driver version and install\n"
+            f"       the matching PyTorch wheel (cu118, cu121, or cu124)\n"
+            f"\n"
+            f"  Detected GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'unknown'}\n"
+            f"  Check driver: nvidia-smi\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        ) from e
+
+
+DEVICE = _detect_device()
 
 # --- GLOBAL STATE ---
 app_state: Dict[str, Any] = {}
@@ -61,6 +164,92 @@ app_state: Dict[str, Any] = {}
 # ===========================================================
 # CUSTOM EMBEDDING CLASS — uses PEFT to load LoRA adapter
 # ===========================================================
+def _load_peft_with_compat(base_model, adapter_name: str):
+    """
+    Load a PEFT LoRA adapter, automatically patching the adapter_config.json
+    when the installed PEFT version doesn't recognise one or more config keys
+    (e.g. `corda_config` introduced in PEFT 0.15 / CorDA).
+
+    Strategy
+    --------
+    1. Try normal PeftModel.from_pretrained().
+    2. On a TypeError caused by unknown kwargs, download adapter_config.json
+       from HuggingFace, strip all keys that LoraConfig.__init__ doesn't
+       accept, write a patched copy to a temp directory alongside all other
+       adapter files, and retry from that temp directory.
+    3. Only fall back to the base model if the retry itself fails.
+    """
+    from peft import LoraConfig  # local import to avoid circular ref
+
+    def _known_lora_keys() -> set:
+        """Return the set of parameter names accepted by LoraConfig.__init__."""
+        sig = inspect.signature(LoraConfig.__init__)
+        return set(sig.parameters.keys()) - {"self"}
+
+    # ── Pass 1: straightforward load ───────────────────────────────────────
+    try:
+        peft_model = PeftModel.from_pretrained(base_model, adapter_name)
+        peft_model = peft_model.merge_and_unload()
+        print("✅ LoRA adapter merged successfully.")
+        return peft_model
+    except TypeError as e:
+        if "unexpected keyword argument" not in str(e):
+            raise  # unrelated TypeError — propagate
+        print(f"⚠️  PEFT config has unknown key(s): {e}")
+        print("   Attempting self-healing: patching adapter_config.json …")
+
+    # ── Pass 2: patch adapter_config.json and retry ─────────────────────────
+    import json as _json
+    from huggingface_hub import hf_hub_download, list_repo_files
+
+    tmp_dir = tempfile.mkdtemp(prefix="peft_patched_")
+    try:
+        # Download every file in the adapter repo into tmp_dir
+        try:
+            repo_files = list(list_repo_files(adapter_name))
+        except Exception:
+            repo_files = ["adapter_config.json", "adapter_model.safetensors"]
+
+        for fname in repo_files:
+            try:
+                src = hf_hub_download(repo_id=adapter_name, filename=fname)
+                dst = os.path.join(tmp_dir, fname)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copy2(src, dst)
+            except Exception:
+                pass  # skip files that can't be fetched (e.g. .gitattributes)
+
+        # Patch adapter_config.json — remove keys unknown to this PEFT version
+        cfg_path = os.path.join(tmp_dir, "adapter_config.json")
+        if not os.path.exists(cfg_path):
+            raise FileNotFoundError("adapter_config.json not found in downloaded repo")
+
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            cfg = _json.load(f)
+
+        known = _known_lora_keys()
+        removed = {k: v for k, v in cfg.items() if k not in known and k != "peft_type"}
+        if removed:
+            print(f"   Stripping unknown config keys: {list(removed.keys())}")
+            for k in removed:
+                del cfg[k]
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                _json.dump(cfg, f, indent=2, ensure_ascii=False)
+
+        # Retry load from patched local directory
+        peft_model = PeftModel.from_pretrained(base_model, tmp_dir)
+        peft_model = peft_model.merge_and_unload()
+        print("✅ LoRA adapter merged successfully (via patched config).")
+        return peft_model
+
+    except Exception as retry_err:
+        print(f"⚠️  Patched load also failed: {type(retry_err).__name__}: {retry_err}")
+        print("   Falling back to base model (embeddings will be less accurate).")
+        return base_model
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 class LoRABGEM3Embeddings(Embeddings):
     def __init__(self, base_model_name: str, adapter_name: str, device: str = "cuda"):
         print(f"🔄 Loading BGE-M3 base model on {device}...")
@@ -71,21 +260,17 @@ class LoRABGEM3Embeddings(Embeddings):
             base_model_name, trust_remote_code=True
         )
 
-        # Load base transformer model
+        # Load base transformer model.
+        # use_safetensors=True bypasses torch.load and the CVE-2025-32434 security
+        # check added in transformers>=4.57 that blocks torch<2.6.
+        # BAAI/bge-m3 ships model.safetensors so this is always safe.
         base_model = AutoModel.from_pretrained(
-            base_model_name, trust_remote_code=True
+            base_model_name, trust_remote_code=True, use_safetensors=True
         )
 
-        # Apply LoRA via PEFT (handles base_model.model.* keys correctly)
+        # Apply LoRA via PEFT — with automatic config-patching for version skew
         print(f"⬇️  Applying LoRA adapter via PEFT: {adapter_name}")
-        try:
-            peft_model = PeftModel.from_pretrained(base_model, adapter_name)
-            # Merge weights into base model for faster inference
-            self.model = peft_model.merge_and_unload()
-            print("✅ LoRA adapter merged successfully — no key mismatches!")
-        except Exception as e:
-            print(f"⚠️  Could not load LoRA adapter: {e}. Falling back to base model.")
-            self.model = base_model
+        self.model = _load_peft_with_compat(base_model, adapter_name)
 
         self.model = self.model.to(device)
         self.model.eval()
@@ -140,6 +325,7 @@ class AgentState(TypedDict):
     rebuttal_against: Optional[str]
     sentencing_data: Optional[Dict[str, Any]]
     chat_history: Optional[List[Dict[str, str]]]
+    is_relevant: Optional[bool]   # set by grade_documents; must be declared or LangGraph drops it
 
 
 # ===========================================================
@@ -399,32 +585,46 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
 
         bias_keywords = ""
         if role == "defense":
-            bias_keywords = "khung hình phạt thấp nhất, tình tiết giảm nhẹ, án treo"
+            bias_keywords = "tình tiết giảm nhẹ, án treo, khung hình phạt thấp nhất"
         elif role == "victim":
-            bias_keywords = "khung hình phạt cao nhất, tình tiết tăng nặng, bồi thường dân sự"
+            bias_keywords = "tình tiết tăng nặng, khung hình phạt cao nhất, bồi thường dân sự"
 
         system_msg = (
-            "Bạn là một chuyên gia Tìm kiếm Pháp lý.\n"
-            "Nhiệm vụ: Viết lại câu hỏi thành truy vấn tìm kiếm tối ưu cho CSDL luật.\n\n"
-            "QUY TẮC:\n"
-            "1. GIỮ NGUYÊN MỐC THỜI GIAN (năm, ngày tháng) trong truy vấn.\n"
-            "2. LOẠI BỎ tên riêng, địa danh không cần thiết.\n"
-            "3. CHUẨN HÓA sang thuật ngữ pháp lý.\n"
-            f"4. THÊM từ khóa: {bias_keywords}\n\n"
-            "OUTPUT: CHỈ xuất ra câu truy vấn (String). Không giải thích."
+            "Bạn là chuyên gia Tìm kiếm Pháp lý Hình sự.\n"
+            "Nhiệm vụ: Từ nội dung vụ án, tạo ra truy vấn ngắn gọn (tối đa 3–4 mệnh đề) "
+            "để tìm kiếm ĐIỀU LUẬT ÁP DỤNG trong cơ sở dữ liệu Bộ luật Hình sự.\n\n"
+            "QUY TẮC BẮT BUỘC:\n"
+            "1. TẬP TRUNG vào: hành vi phạm tội cụ thể, đối tượng phạm tội, "
+            "hậu quả/ tang vật, và loại tội danh.\n"
+            "2. LOẠI BỎ hoàn toàn: ngày xét xử, số vụ án, tên tòa án, địa danh, "
+            "tên bị cáo, nơi ở, thủ tục tố tụng.\n"
+            "3. CHUẨN HÓA sang thuật ngữ pháp lý hình sự (ví dụ: 'tàng trữ trái phép "
+            "chất ma túy', 'Ketamine', 'chất ma túy loại III').\n"
+            f"4. THÊM từ khóa vai trò: {bias_keywords}\n\n"
+            "VÍ DỤ OUTPUT TỐT: "
+            "'tàng trữ trái phép chất ma túy Ketamine 1.623 gam tình tiết giảm nhẹ tái phạm'\n"
+            "VÍ DỤ OUTPUT XẤU (cần tránh): "
+            "'ngày 12 tháng 7 năm 2022 tòa án nhân dân quận Cầu Giấy xét xử sơ thẩm'\n\n"
+            "OUTPUT: CHỈ xuất ra chuỗi truy vấn. Không giải thích. Không dấu chấm câu thừa."
         )
         response = llm.invoke([
             SystemMessage(content=system_msg),
-            HumanMessage(content=f"NỘI DUNG:\n{question}")
+            HumanMessage(content=f"NỘI DUNG VỤ ÁN:\n{question}")
         ])
         cleaned = response.content.strip().replace('"', '').replace("'", "")
-        print(f"  Rewritten: {cleaned[:100]}")
+        print(f"  Rewritten: {cleaned[:120]}")
         return {"question": cleaned, "retry_count": state.get("retry_count", 0) + 1}
 
     # NODE: RETRIEVE
     def retrieve_node(state: AgentState) -> dict:
         print("[NODE: retrieve]")
-        docs = retriever.invoke(state["question"])
+        try:
+            docs = retriever.invoke(state["question"])
+        except Exception as e:
+            # Surface Milvus/embedding errors clearly instead of a silent 500.
+            # Returning empty list lets grading fall back gracefully.
+            print(f"[RETRIEVE ERROR] {type(e).__name__}: {e}")
+            docs = []
         return {"documents": docs}
 
     # NODE: GRADE DOCUMENTS
@@ -1036,6 +1236,7 @@ async def predict_judgment(req: RequestBody):
         "extracted_facts": None,
         "mapped_laws": None,
         "sentencing_data": None,
+        "is_relevant": None,
         "rebuttal_against": req.rebuttal_against,
         "chat_history": req.conversation_history,
     }
@@ -1059,7 +1260,10 @@ async def predict_judgment(req: RequestBody):
             sentencing_data=output.get("sentencing_data"),
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        tb = traceback.format_exc()
+        print(f"[PREDICT ERROR] {type(e).__name__}: {e}\n{tb}")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
 
 
 if __name__ == "__main__":

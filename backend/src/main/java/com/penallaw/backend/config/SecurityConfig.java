@@ -47,6 +47,7 @@ public class SecurityConfig {
                                 "/api/chat/guest/**",          // anonymous guest sessions
                                 "/api/chat/sessions/*/messages", // send & get messages (session-id gated)
                                 "/api/chat/sessions/*",         // delete session
+                                "/api/laws/**",                 // law reference sidebar — public read
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()
