@@ -30,6 +30,7 @@ error() { echo -e "${RED}[ERR]${NC}   $*"; exit 1; }
 REPO_URL="https://github.com/trunghieu1206/PenalLawChatbot"
 PROJECT_DIR="/root/PenalLawChatbot"
 LOG_DIR="/var/log/penallaw"
+BRANCH="dev"  # ← CHANGE THIS to deploy a different branch (e.g., "dev", "feature/xyz")
 mkdir -p "$LOG_DIR"
 chmod 777 "$LOG_DIR"
 
@@ -66,23 +67,23 @@ else
     skip "Node: $(node --version)"
 fi
 
-# ── 1. Clone / pull repo (PRODUCTION: master branch only) ─
+# ── 1. Clone / pull repo (using BRANCH variable defined above) ─
 if [ -d "$PROJECT_DIR/.git" ]; then
-    warn "Repo exists — pulling latest from master..."
-    git -C "$PROJECT_DIR" checkout master
-    git -C "$PROJECT_DIR" pull origin master
+    warn "Repo exists — pulling latest from $BRANCH..."
+    git -C "$PROJECT_DIR" checkout $BRANCH
+    git -C "$PROJECT_DIR" pull origin $BRANCH
 elif [ -d "$PROJECT_DIR" ]; then
     warn "Directory exists but is NOT a git repo (uploaded via scp)."
     warn "Backing up to ${PROJECT_DIR}.bak and cloning fresh..."
     mv "$PROJECT_DIR" "${PROJECT_DIR}.bak"
-    git clone --branch master "$REPO_URL" "$PROJECT_DIR"
+    git clone --branch $BRANCH "$REPO_URL" "$PROJECT_DIR"
     # Restore database and Milvus DB from backup dir
     [ -d "${PROJECT_DIR}.bak/database" ] && cp -r "${PROJECT_DIR}.bak/database" "$PROJECT_DIR/"
     [ -f "${PROJECT_DIR}.bak/ai-service/VN_law_lora.db" ] && \
         cp "${PROJECT_DIR}.bak/ai-service/VN_law_lora.db" "$PROJECT_DIR/ai-service/"
 else
-    info "Cloning repo (master branch)..."
-    git clone --branch master "$REPO_URL" "$PROJECT_DIR"
+    info "Cloning repo ($BRANCH branch)..."
+    git clone --branch $BRANCH "$REPO_URL" "$PROJECT_DIR"
 fi
 cd "$PROJECT_DIR"
 info "Currently on branch: $(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD)"

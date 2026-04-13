@@ -14,9 +14,10 @@ info()  { echo -e "${GREEN}[INFO]${NC}  $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 error() { echo -e "${RED}[ERR]${NC}   $*"; exit 1; }
 
-# ── CONFIG ───────────────────────────────────────────────────
+# ─── CONFIG ────────────────────────────────────────────────
 REPO_URL="https://github.com/trunghieu1206/PenalLawChatbot"
 PROJECT_DIR="/root/PenalLawChatbot"
+BRANCH="master"  # ← CHANGE THIS to deploy a different branch (e.g., "dev", "feature/xyz")
 
 # ── 0. Ensure dockerd is running (no systemd in container) ───
 if ! docker ps &>/dev/null; then
@@ -33,14 +34,14 @@ else
     info "Docker is already running."
 fi
 
-# ── 1. Clone / pull repo (PRODUCTION: master branch only) ─
+# ── 1. Clone / pull repo (using BRANCH variable defined above) ─
 if [ -d "$PROJECT_DIR" ]; then
-    warn "Project directory exists. Pulling latest from master..."
-    git -C "$PROJECT_DIR" checkout master
-    git -C "$PROJECT_DIR" pull origin master
+    warn "Project directory exists. Pulling latest from $BRANCH..."
+    git -C "$PROJECT_DIR" checkout $BRANCH
+    git -C "$PROJECT_DIR" pull origin $BRANCH
 else
-    info "Cloning repository (master branch)..."
-    git clone --branch master "$REPO_URL" "$PROJECT_DIR"
+    info "Cloning repository ($BRANCH branch)..."
+    git clone --branch $BRANCH "$REPO_URL" "$PROJECT_DIR"
 fi
 cd "$PROJECT_DIR"
 info "Currently on branch: $(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD)"
