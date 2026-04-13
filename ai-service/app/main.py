@@ -218,9 +218,12 @@ class LoRABGEM3Embeddings(Embeddings):
             base_model_name, trust_remote_code=True
         )
 
-        # Load base transformer model
+        # Load base transformer model.
+        # use_safetensors=True bypasses torch.load and the CVE-2025-32434 security
+        # check added in transformers>=4.57 that blocks torch<2.6.
+        # BAAI/bge-m3 ships model.safetensors so this is always safe.
         base_model = AutoModel.from_pretrained(
-            base_model_name, trust_remote_code=True
+            base_model_name, trust_remote_code=True, use_safetensors=True
         )
 
         # Apply LoRA via PEFT — with automatic config-patching for version skew
