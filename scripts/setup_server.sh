@@ -88,6 +88,14 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     nginx || { dpkg --configure -a; apt-get install -y --fix-broken; }
 info "Base packages done."
 
+# Ensure all Python venv packages are available (for venv creation in deploy_nodocker.sh)
+info "Installing Python venv packages..."
+for ver in 3.10 3.11; do
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        python${ver}-venv python${ver}-dev 2>/dev/null || true
+done
+info "Python venv packages ready."
+
 # ── 2. Python + pip ─────────────────────────────────────────
 # PyTorch Docker images use Miniconda: Python lives at /opt/conda/bin/python3
 # The system /usr/bin/python3 is a stub with NO pip — so we must use conda's
@@ -353,7 +361,8 @@ uv pip install --system --python "$PYTHON_BIN" \
     "langgraph==0.3.21" \
     sentence-transformers \
     "pymilvus==2.4.4" "milvus-lite==2.4.8" "marshmallow<4.0.0" \
-    peft \
+    "transformers==4.41.2" \
+    "peft==0.11.1" \
     psycopg2-binary \
     openai \
     huggingface_hub \

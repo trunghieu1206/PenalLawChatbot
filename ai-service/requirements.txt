@@ -13,6 +13,6 @@ huggingface_hub>=0.23.0
 pymilvus>=2.4.0
 psycopg2-binary>=2.9.9
 sqlalchemy>=2.0.0
-transformers>=4.40.0
+transformers==4.41.2
 accelerate>=0.29.0
-peft>=0.10.0
+peft==0.11.1

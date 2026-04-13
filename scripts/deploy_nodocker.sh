@@ -183,108 +183,137 @@ elif [ "${TABLE_COUNT:-0}" -gt 0 ]; then
     skip "DB already has $TABLE_COUNT tables (laws: ${LAWS_COUNT:-0}) — skipping restore."
 fi
 
-# ── 4. Check Milvus DB ────────────────────────────────────────
-DB_PATH="$PROJECT_DIR/ai-service/VN_law_lora.db"
-if [ ! -f "$DB_PATH" ]; then
-    warn "VN_law_lora.db not found — upload it to the server:"
-    warn "  scp -P <PORT> VN_law_lora.db root@<HOST>:$DB_PATH"
-fi
-
-# ── 5. AI Service (FastAPI / uvicorn) ────────────────────────
-info "Starting AI service on port 8000..."
+# ── 4. Check Milvus DB ───────�info "Starting AI service on port 8000..."
 cd "$PROJECT_DIR/ai-service"
 
-# ── Detect which Python uvicorn actually runs under ──────────
-# 'uvicorn' in PATH might use system Python (/usr/local/bin) while
-# setup_server.sh installed packages into conda Python (/opt/conda).
-# We find the correct Python by checking where torch is importable
-# with CUDA support, and launch via 'python3 -m uvicorn' explicitly.
-AI_PYTHON=""
-for py in \
-    "$(command -v uvicorn 2>/dev/null && head -1 $(command -v uvicorn) | sed 's|#!||')" \
-    /opt/conda/bin/python3 \
-    /usr/local/bin/python3 \
-    /usr/bin/python3 \
-    python3; do
-    [ -z "$py" ] && continue
-    # Use this Python if it can import torch with CUDA
-    if "$py" -c "import torch; assert torch.version.cuda is not None" 2>/dev/null; then
-        # Prefer the Python where cu118 (or any Pascal-compatible) torch lives
-        TORCH_SM=$("$py" -c "
-import torch
-if torch.cuda.is_available():
-    cap = torch.cuda.get_device_capability(0)
-    print(cap[0]*10+cap[1])
-else:
-    print(0)
-" 2>/dev/null || echo "0")
-        TORCH_VER=$("$py" -c "import torch; print(torch.__version__)" 2>/dev/null)
-        info "Checking Python: $py | torch=$TORCH_VER | GPU sm=${TORCH_SM}"
-        AI_PYTHON="$py"
-        break
-    fi
-done
+# ── Dedicated Python venv for AI service ────────────────────────────────────────────────
+# We avoid using conda/system Python directly because pip-installing torch
+# on top of conda's managed packages leaves inconsistent .dist-info files
+# that cause ABI errors (peft → transformers → ModuleNotFoundError: PreTrainedModel).
+# A fresh isolated venv is the ONLY reliable solution.
+AI_VENV="/root/ai_venv"
+AI_PYTHON="$AI_VENV/bin/python3"
 
-if [ -z "$AI_PYTHON" ]; then
-    # Fall back to first Python with torch, even if no CUDA — _detect_device() will crash clearly
-    AI_PYTHON=$(command -v python3 || echo python3)
-    warn "Could not find a Python with CUDA-capable torch. Service may fail to start."
-    warn "Run setup_server.sh first to install the correct PyTorch wheel."
+# Find system Python 3.10 for venv creation (conda Python is OK for this step)
+SYS_PY=""
+for py in /usr/bin/python3.10 /usr/local/bin/python3.10 /opt/conda/bin/python3.10 \
+           /usr/bin/python3 /usr/local/bin/python3 /opt/conda/bin/python3; do
+    [ -x "$py" ] && SYS_PY="$py" && break
+done
+[ -z "$SYS_PY" ] && { echo "[ERR] No system python3 found"; exit 1; }
+info "System Python for venv: $SYS_PY"
+
+if [ ! -x "$AI_PYTHON" ]; then
+    info "Creating dedicated AI service venv at $AI_VENV ..."
+    "$SYS_PY" -m venv "$AI_VENV" 2>/dev/null \
+        || {
+            # venv creation failed — likely missing python3-venv package
+            PY_VER=$(echo "$SYS_PY" | grep -oP 'python\K[0-9.]+' || echo "3.10")
+            warn "venv creation failed — installing python${PY_VER}-venv..."
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                "python${PY_VER}-venv" "python${PY_VER}-dev" \
+                || { echo "[ERR] Failed to install python-venv"; exit 1; }
+            info "Retrying venv creation..."
+            "$SYS_PY" -m venv "$AI_VENV" \
+                || { echo "[ERR] venv creation still failed after installing python-venv"; exit 1; }
+        }
+    info "Venv created."
+    
+    # Ensure pip is available in the new venv
+    info "Initializing pip in venv..."
+    "$AI_PYTHON" -m ensurepip --upgrade 2>/dev/null \
+        || {
+            # ensurepip not available — use get-pip.py
+            warn "ensurepip not available — using get-pip.py..."
+            curl -sS https://bootstrap.pypa.io/get-pip.py | "$AI_PYTHON" \
+                || { echo "[ERR] pip initialization failed"; exit 1; }
+        }
+    "$AI_PYTHON" -m pip --version || { echo "[ERR] pip verification failed"; exit 1; }
+    info "✅ pip ready in venv"
+else
+    info "Venv already exists at $AI_VENV."
 fi
 
-info "Launching AI service with: $AI_PYTHON"
+# ── Detect GPU sm capability for torch wheel selection ───────────────────────
+# IMPORTANT: Detect CUDA driver version from nvidia-smi BEFORE importing torch
+# (torch import will fail if CUDA version doesn't match the installed wheel)
+GPU_SM=0
+CUDA_VER=0
+if command -v nvidia-smi &>/dev/null; then
+    # Extract CUDA version from nvidia-smi output (e.g. "CUDA Version: 12.0.40")
+    # nvidia-smi output looks like: "CUDA Version: 12.0.40" or "CUDA Version: 11.8"
+    CUDA_VER_STR=$(nvidia-smi 2>/dev/null | grep -oP 'CUDA Version:\s*\K[0-9]+\.[0-9]+' || echo "")
+    
+    if [ -z "$CUDA_VER_STR" ]; then
+        # nvidia-smi exists but CUDA version not found — GPU broken
+        error "ERROR: nvidia-smi found but CUDA version not detected!\n  Run: nvidia-smi\n  If no CUDA version shown, GPU driver is broken or too old."
+    fi
+    
+    CUDA_MAJOR=$(echo "$CUDA_VER_STR" | cut -d. -f1)
+    CUDA_MINOR=$(echo "$CUDA_VER_STR" | cut -d. -f2)
+    CUDA_VER=$((CUDA_MAJOR * 10 + CUDA_MINOR))
+    
+    # Map CUDA version to torch wheel index
+    # CUDA 11.8 = cu118, CUDA 12.0+ = cu121, CUDA 12.4+ = cu124
+    if [ "$CUDA_VER" -ge 124 ]; then
+        TORCH_IDX="https://download.pytorch.org/whl/cu124"
+    elif [ "$CUDA_VER" -ge 120 ]; then
+        TORCH_IDX="https://download.pytorch.org/whl/cu121"
+    else
+        TORCH_IDX="https://download.pytorch.org/whl/cu118"
+    fi
+    
+    info "✅ NVIDIA GPU detected — CUDA driver version: ${CUDA_VER_STR}"
+    info "→ Installing torch from: $TORCH_IDX"
+else
+    # No GPU — this service REQUIRES GPU
+    error "ERROR: No NVIDIA GPU detected (nvidia-smi not found).\n  This AI service REQUIRES GPU acceleration.\n  GPU Options:\n    1. Ensure NVIDIA driver is installed: apt install nvidia-driver-XXX\n    2. Verify driver: nvidia-smi\n    3. Re-run: bash deploy_nodocker.sh"
+fi
 
-# ── Step 1: Always verify torch>=2.4 in AI_PYTHON (runs unconditionally) ─────
-# cu118 builds as old as 2.2.1 exist and pass CUDA probe but break
-# transformers AutoModel which requires PyTorch >=2.4.
+# ── Install torch>=2.4 into venv (idempotent) ──────────────────────────────────
+if ! "$AI_PYTHON" -m pip --version &>/dev/null; then
+    warn "pip not available in venv — retrying initialization..."
+    "$AI_PYTHON" -m ensurepip --upgrade 2>/dev/null \
+        || curl -sS https://bootstrap.pypa.io/get-pip.py | "$AI_PYTHON" \
+        || { echo "[ERR] pip still not available"; exit 1; }
+fi
+
 TORCH_VER=$("$AI_PYTHON" -c "import torch; print(torch.__version__.split('+')[0])" 2>/dev/null || echo "0.0")
-TORCH_MAJOR=$(echo "$TORCH_VER" | cut -d. -f1)
-TORCH_MINOR=$(echo "$TORCH_VER" | cut -d. -f2)
-TORCH_INT=$(( TORCH_MAJOR * 10 + TORCH_MINOR ))
-info "torch in $AI_PYTHON: $TORCH_VER (need >=2.4)"
+TORCH_INT=$(( $(echo "$TORCH_VER" | cut -d. -f1) * 10 + $(echo "$TORCH_VER" | cut -d. -f2) ))
+info "torch in venv: $TORCH_VER (need >=2.4)"
 
 if [ "$TORCH_INT" -lt 24 ]; then
-    warn "torch $TORCH_VER too old — upgrading to >=2.4 now..."
-    GPU_SM_NOW=$("$AI_PYTHON" -c "
-import torch
-if torch.cuda.is_available():
-    c = torch.cuda.get_device_capability(0); print(c[0]*10+c[1])
-else: print(0)" 2>/dev/null || echo 0)
-    if [ "${GPU_SM_NOW:-0}" -gt 0 ] && [ "${GPU_SM_NOW:-0}" -lt 70 ]; then
-        UPGRADE_IDX="https://download.pytorch.org/whl/cu118"
-    elif [ "${GPU_SM_NOW:-0}" -ge 70 ]; then
-        UPGRADE_IDX="https://download.pytorch.org/whl/cu121"
-    else
-        UPGRADE_IDX="https://download.pytorch.org/whl/cpu"
-    fi
-    "$AI_PYTHON" -m pip install \
-        --index-url "$UPGRADE_IDX" \
+    warn "torch $TORCH_VER missing or too old — installing from $TORCH_IDX..."
+    "$AI_PYTHON" -m pip install --quiet \
+        --index-url "$TORCH_IDX" \
         --extra-index-url https://pypi.org/simple \
         "torch>=2.4" torchvision torchaudio \
-        && info "✅ torch upgraded: $("$AI_PYTHON" -c 'import torch; print(torch.__version__)')" \
-        || { echo "[ERR] torch upgrade FAILED. Cannot start AI service."; exit 1; }
+        && info "✅ torch installed: $("$AI_PYTHON" -c 'import torch; print(torch.__version__)')" \
+        || { echo "[ERR] torch install FAILED"; exit 1; }
 else
-    info "✅ torch $TORCH_VER OK (>=2.4)."
+    info "✅ torch $TORCH_VER OK (>=2.4)"
 fi
 
-# ── Step 2: Ensure uvicorn + AI packages are in AI_PYTHON ──────────────────
+# ── Install all AI service dependencies into venv ──────────────────────────────
 if ! "$AI_PYTHON" -c "import uvicorn" 2>/dev/null; then
-    info "uvicorn not found in $AI_PYTHON — installing AI service dependencies..."
-    "$AI_PYTHON" -m pip install --quiet \
-        "fastapi" "uvicorn[standard]" \
-        "pydantic" "python-dotenv" \
-        "langchain==0.3.21" "langchain-core==0.3.51" \
-        "langchain-community" "langchain-openai" "langchain-milvus" \
-        "langgraph==0.3.21" \
-        "sentence-transformers" \
-        "pymilvus==2.4.4" "milvus-lite==2.4.8" "marshmallow<4.0.0" \
-        "peft" \
-        "psycopg2-binary" "openai" "huggingface_hub" "python-docx" "pandas" \
-        || { echo "[ERR] Failed to install AI deps into $AI_PYTHON"; exit 1; }
-    info "AI service dependencies installed into $AI_PYTHON."
+    info "Installing AI service packages from requirements.txt..."
+    "$AI_PYTHON" -m pip install --quiet -r "$PROJECT_DIR/ai-service/requirements.txt" \
+        || { echo "[ERR] Failed to install AI deps into venv"; exit 1; }
+    info "AI service packages installed."
 else
-    info "uvicorn already available in $AI_PYTHON."
+    info "uvicorn already in venv — skipping package install."
 fi
+
+# ── Verify critical imports BEFORE launching (fail fast) ──────────────────────
+info "Verifying critical imports in venv..."
+"$AI_PYTHON" -c "
+import torch
+assert torch.version.cuda, 'torch has no CUDA build'
+from peft import PeftModel
+from transformers import AutoModel, AutoTokenizer
+import uvicorn, fastapi
+print(f'\u2705 All imports OK | torch={torch.__version__}')
+" || { echo "[ERR] Import verification FAILED — venv may be corrupted. Delete $AI_VENV and redeploy."; exit 1; }
 
 # Write .env for ai-service
 cat > .env <<EOF
@@ -295,21 +324,16 @@ POSTGRES_PORT=5432
 POSTGRES_DB=${POSTGRES_DB:-penallaw}
 POSTGRES_USER=${POSTGRES_USER:-postgres}
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-# MILVUS_DB_PATH (not MILVUS_URI!) — pymilvus reads MILVUS_URI at import time
-# and crashes if it contains a file path. Use a different env var name.
 MILVUS_DB_PATH=${PROJECT_DIR}/ai-service/VN_law_lora.db
 COLLECTION_NAME=legal_rag_lora
 LLM_MODEL=${LLM_MODEL:-google/gemini-2.5-flash}
 TOP_K=15
 EMBEDDING_ADAPTER=trunghieu1206/lawchatbot-40k
-# FORCE_CPU: set to 1 only if GPU is intentionally not used.
 FORCE_CPU=${FORCE_CPU:-0}
 EOF
 
 pkill -f "uvicorn app.main:app" 2>/dev/null || true
 sleep 1
-
-# MILVUS_URI must NOT be in the shell environment (pymilvus reads at import time)
 unset MILVUS_URI 2>/dev/null || true
 
 nohup "$AI_PYTHON" -m uvicorn app.main:app \
