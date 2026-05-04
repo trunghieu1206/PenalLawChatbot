@@ -275,9 +275,33 @@ done
 
 # GPU check — warn only. FORCE_CPU default is set in ai-service/app/main.py.
 # If no GPU found, the service will run in CPU mode automatically.
-if ! "$AI_PYTHON" -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
-    warn "CUDA not available — AI service will run in CPU mode (default). This is fine for Oracle Free Tier."
-    warn "To use a GPU, set FORCE_CPU=0 in ai-service/.env after deploy."
+# GPU check — HARD REQUIREMENT if nvidia-smi is present.
+# NEVER pip-upgrade torch here. Upgrading torch breaks torchvision (version coupling).
+# If torch.cuda.is_available() is False despite nvidia-smi working, the nvidia
+# kernel module may not be loaded — this is a system-level issue, not a pip issue.
+if command -v nvidia-smi &>/dev/null; then
+    _TORCH_CUDA=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
+    if [ "$_TORCH_CUDA" = "True" ]; then
+        _GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || echo "unknown")
+        info "✅ GPU ready: $_GPU_NAME | torch CUDA: True"
+    else
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "[GPU REQUIRED] nvidia-smi is present but torch.cuda.is_available() = False"
+        echo "This is a system-level CUDA initialization error, NOT a pip issue."
+        echo "DO NOT reinstall torch — that will break torchvision."
+        echo ""
+        echo "Diagnostic steps:"
+        echo "  1. Check nvidia kernel module: lsmod | grep nvidia"
+        echo "  2. Check device files:         ls -la /dev/nvidia*"
+        echo "  3. Reload module:              sudo rmmod nvidia_uvm && sudo modprobe nvidia_uvm"
+        echo "  4. Check CUDA env:             echo \$CUDA_VISIBLE_DEVICES"
+        echo "  5. Test after fix:             $AI_PYTHON -c 'import torch; print(torch.cuda.is_available())'"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        error "Deploy aborted: GPU present but CUDA unavailable. Fix CUDA init first (see above)."
+    fi
+else
+    warn "nvidia-smi not found — deploying in CPU-only mode."
 fi
 
 # Install AI service deps (excluding torch to avoid downgrading conda's GPU torch)
@@ -294,20 +318,10 @@ grep -v "^torch" "$PROJECT_DIR/ai-service/requirements.txt" > /tmp/requirements_
 # Install FlagEmbedding (required by bge-reranker-v2-m3)
 "$AI_PYTHON" -m pip install "FlagEmbedding>=1.2.0" --quiet 2>&1 | tail -2 || true
 
-# If pip install downgraded torch to a CPU build, reinstall the CUDA wheel.
-# This can happen because torch>=2.1.0 resolves to CPU by default from PyPI.
-_TORCH_CUDA=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
-if [ "$_TORCH_CUDA" = "False" ] && command -v nvidia-smi &>/dev/null; then
-    _CUDA_VER=$(nvidia-smi 2>/dev/null | grep -oP "CUDA Version:\s*\K[0-9]+" | head -1 || echo "0")
-    info "CUDA available but torch has no CUDA support — reinstalling CUDA torch (driver CUDA ${_CUDA_VER}.x)..."
-    if   [ "$_CUDA_VER" -ge 12 ]; then _CU_TAG="cu124"
-    elif [ "$_CUDA_VER" -ge 11 ]; then _CU_TAG="cu118"
-    else _CU_TAG="cu118"; fi
-    "$AI_PYTHON" -m pip install torch --upgrade --quiet \
-        --index-url "https://download.pytorch.org/whl/${_CU_TAG}" 2>&1 | tail -3 || \
-        warn "CUDA torch reinstall failed — service will run on CPU."
-    _TORCH_CUDA=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
-    info "torch CUDA after reinstall: $_TORCH_CUDA"
+# Verify torch still has CUDA after all installs (safety net)
+_TORCH_CUDA_AFTER=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
+if command -v nvidia-smi &>/dev/null && [ "$_TORCH_CUDA_AFTER" = "False" ]; then
+    error "pip install broke CUDA torch! Check if sentence-transformers or another package downgraded torch."
 fi
 
 info "AI service requirements installed."
