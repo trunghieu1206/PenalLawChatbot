@@ -33,6 +33,24 @@
 }
 .headerIcon { font-size: 22px; }
 
+.adminBtn {
+  display: flex; align-items: center; gap: 7px;
+  background: rgba(167,139,250,0.13);
+  border: 1px solid rgba(167,139,250,0.35);
+  border-radius: 9px;
+  padding: 8px 16px;
+  font-size: 13px; font-weight: 600;
+  color: #a78bfa;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+  white-space: nowrap;
+}
+.adminBtn:hover {
+  background: rgba(167,139,250,0.22);
+  color: #c4b5fd;
+  box-shadow: 0 0 14px rgba(167,139,250,0.2);
+}
+
 /* ── Main ────────────────────────────────────────────────── */
 .main {
   max-width: 1200px; margin: 0 auto;

@@ -27,6 +27,50 @@
   flex-wrap: wrap;
 }
 
+/* Navigation row — back to chat + quick links */
+.headerNav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.backBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  color: rgba(226,234,244,0.8);
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+.backBtn:hover {
+  background: rgba(255,255,255,0.13);
+  color: #fff;
+  border-color: rgba(255,255,255,0.25);
+}
+
+.statsBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(77,166,200,0.12);
+  border: 1px solid rgba(77,166,200,0.3);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  color: #4da6c8;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+.statsBtn:hover {
+  background: rgba(77,166,200,0.22);
+  color: #7ec6e0;
+}
+
 .logo        { display: flex; align-items: center; gap: 12px; }
 .logoIcon    { font-size: 28px; }
 .logoTitle   { font-size: 18px; font-weight: 700; color: #fff; }

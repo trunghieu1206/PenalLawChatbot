@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../services/api.js';
 import styles from './AdminPage.module.css';
 
@@ -69,6 +70,7 @@ function FeedbackList({ items, loading }) {
 }
 
 export default function AdminPage() {
+  const navigate = useNavigate();
   const [feedback, setFeedback] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
@@ -90,6 +92,14 @@ export default function AdminPage() {
       {/* Header */}
       <header className={styles.header}>
         <div className={styles.headerInner}>
+          <div className={styles.headerNav}>
+            <button className={styles.backBtn} onClick={() => navigate('/chat')} title="Quay lại trang chat">
+              ← Quay lại Chat
+            </button>
+            <button className={styles.statsBtn} onClick={() => navigate('/stats')} title="Xem thống kê hệ thống">
+              📊 Thống kê
+            </button>
+          </div>
           <div className={styles.logo}>
             <span className={styles.logoIcon}>⚖️</span>
             <div>

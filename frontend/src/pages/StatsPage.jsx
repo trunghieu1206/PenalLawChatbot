@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../services/api.js';
+import { useAuth } from '../hooks/useAuth.jsx';
 import styles from './StatsPage.module.css';
 
 const ROLE_LABEL = { neutral: 'Thẩm phán', defense: 'Luật sư Bào chữa', victim: 'Luật sư Bị hại' };
@@ -53,6 +54,7 @@ function BarChart({ title, data, color }) {
 
 export default function StatsPage() {
   const navigate   = useNavigate();
+  const { user }   = useAuth();
   const [stats, setStats]   = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]   = useState(null);
@@ -79,7 +81,16 @@ export default function StatsPage() {
             <span className={styles.headerIcon}>📊</span>
             Thống kê hệ thống
           </div>
-          <div />
+          {/* Admin shortcut — visible only when logged in as admin */}
+          {user?.role === 'admin' ? (
+            <button
+              className={styles.adminBtn}
+              onClick={() => navigate('/admin')}
+              title="Mở bảng quản lý phản hồi"
+            >
+              🛡 Quản lý phản hồi
+            </button>
+          ) : <div />}
         </div>
       </header>
 

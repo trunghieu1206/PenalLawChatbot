@@ -395,6 +395,16 @@ export default function ChatPage() {
             </h2>
           </div>
           <div className={styles.headerRight}>
+            {/* Admin badge — visible only to admin users, always in the header */}
+            {user?.role === 'admin' && (
+              <button
+                className={styles.adminHeaderBtn}
+                onClick={() => navigate('/admin')}
+                title="Mở bảng quản lý phản hồi (Admin)"
+              >
+                🛡 Admin
+              </button>
+            )}
             {/* Role badge — clickable always; shows lock popup when session is active */}
             <div className={styles.roleBtnWrapper}>
               <button
