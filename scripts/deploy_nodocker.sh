@@ -273,7 +273,33 @@ for py in /opt/conda/bin/python3 /usr/bin/python3.11 /usr/bin/python3.10 /usr/bi
 done
 [ -z "$AI_PYTHON" ] && error "No Python with torch found. Ensure torch is installed (setup_server.sh)."
 
-# GPU check — HARD REQUIREMENT if nvidia-smi is present.
+# Ensure torch cu-tag matches the installed NVIDIA driver version.
+# cu124 requires driver ≥R550; cu121 requires R530; cu118 works from R520.
+# Using a cu tag NEWER than what the driver supports → CUDA unknown error (999).
+if command -v nvidia-smi &>/dev/null; then
+    _DRIVER_CUDA=$(nvidia-smi 2>/dev/null | grep -oP "CUDA Version:\s*\K[0-9]+" | head -1 || echo "0")
+    _TORCH_CU=$(python3 -c "import torch; v=torch.__version__; print(v.split('+')[1] if '+' in v else 'cpu')" 2>/dev/null || echo "cpu")
+    info "  Driver CUDA cap: ${_DRIVER_CUDA}.x  |  torch cu-tag: $_TORCH_CU"
+
+    # Select the highest compatible cu tag for this driver
+    if   [ "$_DRIVER_CUDA" -ge 12 ] && [ "$_DRIVER_CUDA" -ge 13 ]; then _NEED_CU="cu124"  # future-proof
+    elif [ "$_DRIVER_CUDA" -ge 12 ] && [ "$(nvidia-smi 2>/dev/null | grep -oP 'Driver Version: \K[0-9]+' | head -1)" -ge 550 ]; then _NEED_CU="cu124"
+    elif [ "$_DRIVER_CUDA" -ge 12 ] && [ "$(nvidia-smi 2>/dev/null | grep -oP 'Driver Version: \K[0-9]+' | head -1)" -ge 530 ]; then _NEED_CU="cu121"
+    else _NEED_CU="cu118"; fi
+
+    if [ "$_TORCH_CU" != "$_NEED_CU" ] && [ "$_TORCH_CU" != "cpu" ]; then
+        info "  torch $_TORCH_CU is incompatible with this driver — reinstalling torch+torchvision with $_NEED_CU..."
+        _TORCH_BASE=$("$AI_PYTHON" -c "import torch; print(torch.__version__.split('+')[0])" 2>/dev/null || echo "2.5.1")
+        "$AI_PYTHON" -m pip install \
+            "torch==${_TORCH_BASE}+${_NEED_CU}" \
+            "torchvision==0.20.1+${_NEED_CU}" \
+            --index-url "https://download.pytorch.org/whl/${_NEED_CU}" --quiet 2>&1 | tail -3 || \
+            warn "  torch cu-tag reinstall failed — CUDA may not work."
+        TORCH_VER=$("$AI_PYTHON" -c "import torch; print(torch.__version__)" 2>/dev/null)
+        info "  torch after fix: $TORCH_VER"
+    fi
+fi
+
 # NEVER pip-upgrade torch here. Upgrading torch breaks torchvision (version coupling).
 if command -v nvidia-smi &>/dev/null; then
     # Auto-fix: ensure /dev/nvidia-uvm exists.
