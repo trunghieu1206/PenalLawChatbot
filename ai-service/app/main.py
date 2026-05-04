@@ -6,6 +6,31 @@ Enhanced LangGraph pipeline with:
   - Deterministic sentencing calculation
   - Rebuttal mode
   - Structured legal argument generation
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  MODEL CONFIGURATION  (single source of truth)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  EMBEDDING MODEL
+    Model  : trunghieu1206/jina-embeddings-v5-text-nano-retrieval-vn-legal-lora-2026-04-28-19-05
+    Base   : jinaai/jina-embeddings-v5-text-nano (239M params, EuroBERT-210M)
+    Type   : LoRA fine-tuned on Vietnamese legal case questions (~40k pairs)
+    Dim    : 768  |  Context: 8192 tokens  |  task= not supported (LoRA adapter)
+    Override env: EMBEDDING_ADAPTER  (or EMBEDDING_MODEL for backward compat)
+
+  RERANKER
+    Model  : BAAI/bge-reranker-v2-m3
+    Type   : Multilingual cross-encoder  |  Context: 8192 tokens
+    Reason : PhoRanker (itdainb/PhoRanker) was only 256 tokens — too small for
+             Vietnamese law articles which reach 3,574 tokens (Điều 232 BLHS 2017)
+    Override env: RERANKER_MODEL
+
+  LLM  (remote API — no local GPU required)
+    Model  : google/gemini-2.5-flash  (via OpenRouter)
+    Temp   : 0  |  Context: 1M tokens
+    Override env: LLM_MODEL
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
 import os
