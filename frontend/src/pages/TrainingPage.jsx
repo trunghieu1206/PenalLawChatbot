@@ -314,29 +314,38 @@ export default function TrainingPage() {
 
       {/* LAW REFERENCE MODAL */}
       {lawModal.open && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '8px',
-            maxWidth: '600px',
-            maxHeight: '80vh',
-            overflowY: 'auto',
-            padding: '20px',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-          }}>
+        <div
+          onClick={closeLawModal}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              backgroundColor: 'var(--surface, #1e2435)',
+              color: 'var(--text, #e2e8f0)',
+              borderRadius: '10px',
+              maxWidth: '600px',
+              width: '90%',
+              maxHeight: '80vh',
+              overflowY: 'auto',
+              padding: '20px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+              border: '1px solid var(--border, rgba(255,255,255,0.08))',
+            }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0 }}>
+              <h3 style={{ margin: 0, color: 'var(--text, #e2e8f0)' }}>
                 Điều {lawModal.article} {lawModal.source && `(${lawModal.source})`}
               </h3>
               <button
@@ -346,6 +355,8 @@ export default function TrainingPage() {
                   border: 'none',
                   fontSize: '24px',
                   cursor: 'pointer',
+                  color: 'var(--text-muted, #94a3b8)',
+                  lineHeight: 1,
                 }}
               >
                 ×
@@ -359,30 +370,31 @@ export default function TrainingPage() {
             )}
 
             {lawModal.error && (
-              <div style={{ color: 'red', padding: '12px', backgroundColor: '#fee', borderRadius: '4px' }}>
+              <div style={{ color: 'var(--error, #f87171)', padding: '12px', backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: '6px' }}>
                 {lawModal.error}
               </div>
             )}
 
             {lawModal.data && lawModal.data.versions?.length > 0 && (
               <div>
-                <div style={{ marginBottom: '12px', fontSize: '14px', color: '#666' }}>
-                  <strong>{lawModal.data.versions[0].title}</strong>
+                <div style={{ marginBottom: '12px', fontSize: '14px', color: 'var(--text-muted, #94a3b8)' }}>
+                  <strong style={{ color: 'var(--text, #e2e8f0)' }}>{lawModal.data.versions[0].title}</strong>
                   {lawModal.data.versions[0].chapter && ` (Chương ${lawModal.data.versions[0].chapter})`}
                 </div>
                 <div style={{
-                  backgroundColor: '#f5f5f5',
+                  backgroundColor: 'var(--bg, #0f1117)',
                   padding: '12px',
-                  borderRadius: '4px',
+                  borderRadius: '6px',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
                   fontSize: '14px',
                   lineHeight: '1.6',
+                  border: '1px solid var(--border, rgba(255,255,255,0.08))',
                 }}>
                   {lawModal.data.versions[0].content}
                 </div>
                 {lawModal.data.versions[0].source && (
-                  <div style={{ marginTop: '12px', fontSize: '12px', color: '#999', textAlign: 'right' }}>
+                  <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--text-muted, #94a3b8)', textAlign: 'right' }}>
                     Nguồn: {lawModal.data.versions[0].source}
                   </div>
                 )}
@@ -390,7 +402,7 @@ export default function TrainingPage() {
             )}
 
             {lawModal.data && lawModal.data.versions?.length === 0 && (
-              <div style={{ padding: '12px', color: '#999' }}>
+              <div style={{ padding: '12px', color: 'var(--text-muted, #94a3b8)' }}>
                 Không tìm thấy nội dung của điều luật này.
               </div>
             )}

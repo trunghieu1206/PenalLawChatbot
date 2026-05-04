@@ -221,8 +221,8 @@ function MessageBubble({ message, role, sessionId, onLawClick }) {
           </div>
         )}
 
-        {/* Feedback bar — only for AI messages with an id */}
-        {!isUser && message.id && sessionId && (
+        {/* Feedback bar — only for AI messages with a persisted (string) UUID id */}
+        {!isUser && typeof message.id === 'string' && sessionId && (
           <FeedbackBar sessionId={sessionId} messageId={message.id} />
         )}
 
