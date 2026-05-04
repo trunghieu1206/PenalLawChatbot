@@ -704,24 +704,23 @@ async def lifespan(app: FastAPI):
     )
 
     # 4. Cross-encoder reranker (loaded once at startup)
-    # PhoRanker base file is F32 (~540 MB). Load in fp16 on GPU to halve VRAM to ~270 MB.
+    # bge-reranker-v2-m3: multilingual, 8192-token context — fits full Vietnamese law articles
+    # (PhoRanker was only 256 tokens, too small for articles up to 3574 tokens)
     from sentence_transformers import CrossEncoder
     import torch as _torch
+    _RERANKER_MODEL = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-v2-m3")
     cross_encoder = CrossEncoder(
-        "itdainb/PhoRanker",
-        max_length=512,
-        trust_remote_code=True,
+        _RERANKER_MODEL,
+        max_length=8192,
         device=DEVICE,
     )
-    # Older sentence-transformers (<3.0) may not honour max_length= in predict().
-    # Setting model_max_length on the tokenizer directly is the reliable fix.
-    cross_encoder.tokenizer.model_max_length = 512
-    # Apply fp16 on GPU to halve VRAM (~540 MB F32 → ~270 MB fp16).
+    cross_encoder.tokenizer.model_max_length = 8192
+    # Apply fp16 on GPU to halve VRAM.
     if DEVICE == "cuda":
         cross_encoder.model = cross_encoder.model.half()
-        print("✅ PhoRanker loaded (fp16, max_length=512).")
+        print(f"✅ Reranker loaded: {_RERANKER_MODEL} (fp16, max_length=8192).")
     else:
-        print("✅ PhoRanker loaded (fp32, max_length=512).")
+        print(f"✅ Reranker loaded: {_RERANKER_MODEL} (fp32, max_length=8192).")
     del _torch
 
 
@@ -1077,13 +1076,10 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
         semantic_docs = [d for d in docs if not d.metadata.get("_pinned")]
 
         if semantic_docs:
-            # Double safety layer: character truncation + tokenizer.model_max_length=512.
-            # Vietnamese legal text: ~3-5 chars/token.
-            # 100 chars query  ≈ 25-35 tokens
-            # 400 chars doc    ≈ 80-135 tokens
-            # + 3 special tokens  ≈ 108-173 total  (far under 512)
-            _q = query[:100]
-            pairs  = [(_q, d.page_content[:400]) for d in semantic_docs]
+            # bge-reranker-v2-m3 supports 8192 tokens — full articles fit.
+            # Truncate query to 512 chars (~130 tokens) to leave room for the full doc.
+            _q = query[:512]
+            pairs  = [(_q, d.page_content) for d in semantic_docs]
             scores = cross_encoder.predict(pairs)
             ranked_semantic = sorted(zip(scores, semantic_docs), key=lambda x: x[0], reverse=True)
             top_semantic    = [doc for _, doc in ranked_semantic[:_MAX_SEMANTIC_DOCS]]

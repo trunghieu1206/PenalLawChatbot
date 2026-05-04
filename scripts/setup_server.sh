@@ -213,28 +213,33 @@ else
     warn "nvidia-smi not found — GPU check skipped (set FORCE_CPU=1 in .env for CPU-only mode)."
 fi
 
-# ── 6. Pre-download sentence-transformers model ──────────────
-# PhoRanker is loaded at startup via CrossEncoder("itdainb/PhoRanker").
-# Pre-downloading here means the first request won't timeout.
-info "Pre-downloading PhoRanker cross-encoder model (itdainb/PhoRanker)..."
-if "$PYTHON_BIN" -c "from huggingface_hub import snapshot_download; snapshot_download('itdainb/PhoRanker', local_files_only=True)" 2>/dev/null; then
-    skip "PhoRanker already in HuggingFace cache"
-else
-    HF_TOKEN_VAL="${HF_TOKEN:-}"
-    if [ -f /root/PenalLawChatbot/.env ]; then
-        HF_TOKEN_VAL=$(grep -oP '(?<=^HF_TOKEN=)\S+' /root/PenalLawChatbot/.env 2>/dev/null || echo "")
-    fi
-    HF_HUB_VERBOSITY=warning \
-    HF_TOKEN="$HF_TOKEN_VAL" \
-    "$PYTHON_BIN" -c "
+# ── 6. Pre-download models ───────────────────────────────────
+# Downloading here avoids first-request timeout when the service starts.
+RERANKER_MODEL="BAAI/bge-reranker-v2-m3"
+EMBEDDING_MODEL="trunghieu1206/jina-embeddings-v5-text-nano-retrieval-vn-legal-lora-2026-04-28-19-05"
+
+HF_TOKEN_VAL="${HF_TOKEN:-}"
+if [ -f /root/PenalLawChatbot/.env ]; then
+    HF_TOKEN_VAL=$(grep -oP '(?<=^HF_TOKEN=)\S+' /root/PenalLawChatbot/.env 2>/dev/null || echo "")
+fi
+
+for _MODEL in "$RERANKER_MODEL" "$EMBEDDING_MODEL"; do
+    if "$PYTHON_BIN" -c "from huggingface_hub import snapshot_download; snapshot_download('$_MODEL', local_files_only=True)" 2>/dev/null; then
+        skip "Already cached: $_MODEL"
+    else
+        info "Pre-downloading: $_MODEL ..."
+        HF_HUB_VERBOSITY=warning \
+        HF_TOKEN="$HF_TOKEN_VAL" \
+        "$PYTHON_BIN" -c "
 from huggingface_hub import snapshot_download
 try:
-    snapshot_download('itdainb/PhoRanker', token='$HF_TOKEN_VAL' or None)
-    print('✅ PhoRanker downloaded.')
+    snapshot_download('$_MODEL', token='$HF_TOKEN_VAL' or None)
+    print('  ✅ Downloaded: $_MODEL')
 except Exception as e:
-    print(f'⚠️  PhoRanker pre-download failed (will retry at service start): {e}')
-" 2>/dev/null || warn "PhoRanker pre-download skipped — will download at first startup."
-fi
+    print(f'  ⚠️  Pre-download failed (will retry at service start): {e}')
+" 2>/dev/null || warn "Pre-download skipped for $_MODEL — will download at first startup."
+    fi
+done
 
 # ── 7. Wait for Maven pre-warm ───────────────────────────────
 [ -n "${MVN_WARM_JOB:-}" ] && { wait $MVN_WARM_JOB 2>/dev/null; info "Maven cache warm."; } || true
