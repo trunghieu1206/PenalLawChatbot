@@ -291,10 +291,24 @@ grep -v "^torch" "$PROJECT_DIR/ai-service/requirements.txt" > /tmp/requirements_
 "$AI_PYTHON" -m pip install "milvus-lite>=2.4.9" "pymilvus>=2.4.0" \
     --upgrade --quiet 2>&1 | tail -2 || true
 
-# Install sentence-transformers for PhoRanker CrossEncoder
-# Pin to <3.0.0 — 3.x breaks torch 2.2.1 in conda environments
-"$AI_PYTHON" -m pip install "sentence-transformers>=2.6.0,<3.0.0" \
-    --quiet 2>&1 | tail -2 || true
+# Install FlagEmbedding (required by bge-reranker-v2-m3)
+"$AI_PYTHON" -m pip install "FlagEmbedding>=1.2.0" --quiet 2>&1 | tail -2 || true
+
+# If pip install downgraded torch to a CPU build, reinstall the CUDA wheel.
+# This can happen because torch>=2.1.0 resolves to CPU by default from PyPI.
+_TORCH_CUDA=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
+if [ "$_TORCH_CUDA" = "False" ] && command -v nvidia-smi &>/dev/null; then
+    _CUDA_VER=$(nvidia-smi 2>/dev/null | grep -oP "CUDA Version:\s*\K[0-9]+" | head -1 || echo "0")
+    info "CUDA available but torch has no CUDA support — reinstalling CUDA torch (driver CUDA ${_CUDA_VER}.x)..."
+    if   [ "$_CUDA_VER" -ge 12 ]; then _CU_TAG="cu124"
+    elif [ "$_CUDA_VER" -ge 11 ]; then _CU_TAG="cu118"
+    else _CU_TAG="cu118"; fi
+    "$AI_PYTHON" -m pip install torch --upgrade --quiet \
+        --index-url "https://download.pytorch.org/whl/${_CU_TAG}" 2>&1 | tail -3 || \
+        warn "CUDA torch reinstall failed — service will run on CPU."
+    _TORCH_CUDA=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
+    info "torch CUDA after reinstall: $_TORCH_CUDA"
+fi
 
 info "AI service requirements installed."
 
@@ -473,26 +487,35 @@ info "nginx started."
 
 # ── 8. Health checks ──────────────────────────────────────────
 echo ""
-info "Waiting 25s for all services to initialize..."
-sleep 25
+info "Waiting for AI service to be ready (up to 180s — first run downloads ~1.1 GB model)..."
+_ai_ready=false
+for _i in $(seq 1 36); do   # 36 × 5s = 180s
+    if curl -sf --max-time 5 "http://localhost:8000/health" > /dev/null 2>&1; then
+        info "  ✅ AI Service is up (after $((_i * 5))s)"
+        _ai_ready=true
+        break
+    fi
+    sleep 5
+done
+[ "$_ai_ready" = false ] && warn "  ⚠️  AI Service not ready after 180s — check $LOG_DIR/ai-service.log"
 
-check() {
-    local name=$1 url=$2 max_attempts=3 attempt=0
-    while [ $attempt -lt $max_attempts ]; do
-        if curl -sf --max-time 8 "$url" > /dev/null 2>&1; then
-            info "  ✅ $name is up ($url)"
-            return 0
-        fi
-        attempt=$((attempt + 1))
-        [ $attempt -lt $max_attempts ] && sleep 5
-    done
-    warn "  ⚠️  $name not responding at $url — check logs in $LOG_DIR/"
-    return 1
-}
+info "Waiting for Backend to be ready (up to 60s)..."
+_be_ready=false
+for _i in $(seq 1 12); do   # 12 × 5s = 60s
+    if curl -sf --max-time 5 "http://localhost:8080/actuator/health" > /dev/null 2>&1; then
+        info "  ✅ Backend is up (after $((_i * 5))s)"
+        _be_ready=true
+        break
+    fi
+    sleep 5
+done
+[ "$_be_ready" = false ] && warn "  ⚠️  Backend not ready after 60s — check $LOG_DIR/backend.log"
 
-check "AI Service"  "http://localhost:8000/health"
-check "Backend"     "http://localhost:8080/actuator/health"
-check "Frontend"    "http://localhost:80"
+if curl -sf --max-time 5 "http://localhost:80" > /dev/null 2>&1; then
+    info "  ✅ Frontend (nginx) is up"
+else
+    warn "  ⚠️  Frontend not responding — check nginx logs"
+fi
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
