@@ -799,8 +799,10 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
             per_defendant = None
 
         sentencing_data = extract_sentencing_data(facts)
-        print(f"  Facts: {list(facts.keys())}")
-        print(f"  Sentencing data: {sentencing_data}")
+        print("  ┌─── Extracted Facts (JSON) ─────────────────────────────")
+        for k, v in facts.items():
+            print(f"  │  {k}: {json.dumps(v, ensure_ascii=False)}")
+        print(f"  └─── Sentencing data: {json.dumps(sentencing_data, ensure_ascii=False)}")
 
         return {
             "extracted_facts":     facts,
@@ -924,7 +926,9 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
 
         print(f"  [REWRITE] Generated {len(q_list)} queries for role={role!r}")
         for i, q in enumerate(q_list):
-            print(f"    Q{i+1}: {q[:100]}...")
+            print(f"  ┌─ Q{i+1} {'─'*60}")
+            print(f"  │ {q}")
+            print(f"  └{'─'*63}")
         return {"retrieval_queries": q_list}
 
     # NODE 4: PARALLEL RETRIEVE
