@@ -276,16 +276,31 @@ done
 # GPU check — HARD REQUIREMENT if nvidia-smi is present.
 # NEVER pip-upgrade torch here. Upgrading torch breaks torchvision (version coupling).
 if command -v nvidia-smi &>/dev/null; then
-    # Auto-fix: ensure nvidia-uvm is loaded.
-    # Without /dev/nvidia-uvm, torch.cuda.is_available() returns False (CUDA error 999)
-    # even when nvidia-smi and /dev/nvidia0 are present. This is the most common GPU
-    # issue on cloud VPS instances where the module isn't loaded at boot.
+    # Auto-fix: ensure /dev/nvidia-uvm exists.
+    # Without it, torch.cuda.is_available() = False (CUDA error 999) even when
+    # nvidia-smi and /dev/nvidia0 are present.
     if [ ! -e /dev/nvidia-uvm ]; then
-        info "  /dev/nvidia-uvm missing — loading nvidia-uvm module..."
-        modprobe nvidia-uvm 2>/dev/null && info "  ✅ nvidia-uvm loaded." || \
-            warn "  modprobe nvidia-uvm failed — CUDA may not work."
-        # Persist across reboots
-        grep -qxF "nvidia-uvm" /etc/modules 2>/dev/null || echo "nvidia-uvm" >> /etc/modules
+        info "  /dev/nvidia-uvm missing — attempting fix..."
+
+        # Strategy 1: modprobe (works on bare metal, fails in containers)
+        if modprobe nvidia-uvm 2>/dev/null; then
+            info "  ✅ nvidia-uvm loaded via modprobe."
+            grep -qxF "nvidia-uvm" /etc/modules 2>/dev/null || echo "nvidia-uvm" >> /etc/modules
+
+        # Strategy 2: mknod (works in containers/LXC where modprobe is blocked,
+        # as long as the host kernel already has the nvidia-uvm module loaded)
+        elif _UVM_MAJOR=$(awk '/nvidia-uvm/{print $1}' /proc/devices 2>/dev/null) && [ -n "$_UVM_MAJOR" ]; then
+            info "  modprobe blocked (container) — creating device nodes via mknod (major=$_UVM_MAJOR)..."
+            mknod /dev/nvidia-uvm       c "$_UVM_MAJOR" 0 2>/dev/null && \
+            mknod /dev/nvidia-uvm-tools c "$_UVM_MAJOR" 1 2>/dev/null || true
+            chmod 666 /dev/nvidia-uvm /dev/nvidia-uvm-tools 2>/dev/null || true
+            [ -e /dev/nvidia-uvm ] && info "  ✅ /dev/nvidia-uvm created via mknod." || \
+                warn "  mknod failed — CUDA may not work."
+
+        else
+            warn "  Both modprobe and mknod failed. nvidia-uvm not in /proc/devices."
+            warn "  The host kernel may not have the GPU driver loaded."
+        fi
     fi
 
     _TORCH_CUDA=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")

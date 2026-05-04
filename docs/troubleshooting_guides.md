@@ -269,18 +269,27 @@ This is **not** a pip/torch version problem. Do NOT reinstall torch — it will 
 ls -la /dev/nvidia*   # nvidia-uvm will be absent
 ```
 
-### Fix — Manual (one-time)
+### Fix — Bare Metal
 ```bash
 modprobe nvidia-uvm
-ls -la /dev/nvidia-uvm   # should appear now
-/opt/conda/bin/python3 -c "import torch; print(torch.cuda.is_available())"  # should be True
-```
-
-### Fix — Permanent
-```bash
 grep -qxF "nvidia-uvm" /etc/modules || echo "nvidia-uvm" >> /etc/modules
 ```
-This makes the module load automatically on every reboot.
+
+### Fix — Containerized / LXC (modprobe blocked)
+In container environments, `modprobe` is blocked. The nvidia-uvm module is already loaded on the HOST — you just need to create the device file using `mknod`:
+```bash
+# Find the major number registered by the host kernel
+awk '/nvidia-uvm/{print $1}' /proc/devices
+
+# Create the device nodes (replace 511 with your actual major number)
+_UVM_MAJOR=$(awk '/nvidia-uvm/{print $1}' /proc/devices)
+mknod /dev/nvidia-uvm       c $_UVM_MAJOR 0
+mknod /dev/nvidia-uvm-tools c $_UVM_MAJOR 1
+chmod 666 /dev/nvidia-uvm /dev/nvidia-uvm-tools
+
+# Test
+/opt/conda/bin/python3 -c "import torch; print(torch.cuda.is_available())"
+```
 
 ### Fix — Automated (already in `deploy_nodocker.sh`)
 The deploy script now checks for `/dev/nvidia-uvm` before testing CUDA and automatically runs `modprobe nvidia-uvm` + adds it to `/etc/modules` if absent.
