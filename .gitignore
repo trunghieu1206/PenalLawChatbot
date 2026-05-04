@@ -30,12 +30,14 @@ scrape.log
 
 ai-service/scripts/
 
-ai-service/laws_documents_raw/*
+ai-service/laws_documents_raw/
 
-ai-service/logs/*
+ai-service/logs
 
 # Ignore all datasets
 ai-service/scraped_datasets/
 ai-service/test_datasets/
 
 .docx
+
+scripts/

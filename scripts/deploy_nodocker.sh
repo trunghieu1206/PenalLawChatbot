@@ -351,12 +351,27 @@ if [ -n "$LATEST_JAR" ]; then
 fi
 
 if [ "$NEED_BUILD" = true ]; then
-    info "Running Maven build (DskipTests)..."
-    # Try offline first (fast), fall back to online (first run or new dependencies)
-    mvn package -DskipTests -o -q 2>&1 | tail -5 || \
-        mvn package -DskipTests -q 2>&1 | tail -5 || \
-        error "Maven build failed. Check logs above."
-    LATEST_JAR=$(ls -t target/*.jar | head -1)
+    info "Running Maven build (-DskipTests)..."
+    MVN_LOG="$LOG_DIR/maven_build.log"
+
+    # Pipe to tee so output appears live AND gets saved.
+    # Use PIPESTATUS[0] to capture mvn's exit code (not tee's).
+    mvn package -DskipTests 2>&1 | tee "$MVN_LOG"
+    MVN_EXIT=${PIPESTATUS[0]}
+
+    if [ "$MVN_EXIT" -ne 0 ]; then
+        echo ""
+        echo "━━━ Maven build FAILED — last 30 lines of $MVN_LOG ━━━"
+        tail -30 "$MVN_LOG"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        error "Maven build failed. Full log: $MVN_LOG"
+    fi
+
+    LATEST_JAR=$(ls -t target/*.jar 2>/dev/null | head -1 || echo "")
+    if [ -z "$LATEST_JAR" ]; then
+        tail -20 "$MVN_LOG"
+        error "Maven succeeded but no JAR found in target/. See log above."
+    fi
     info "✅ Build complete: $(basename "$LATEST_JAR")"
 else
     skip "JAR up-to-date ($(basename "$LATEST_JAR")) — skipping Maven build"

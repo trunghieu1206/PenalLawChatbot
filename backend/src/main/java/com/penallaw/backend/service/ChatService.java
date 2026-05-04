@@ -161,7 +161,7 @@ public class ChatService {
 
         return new ChatDTOs.MessageResponse(
                 aiMessage.getId(), "assistant", aiResponse.result(),
-                aiResponse.extractedFacts(), aiResponse.mappedLaws(), aiMessage.getCreatedAt()
+                aiResponse.extractedFacts(), aiResponse.mappedLaws(), aiResponse.sentencingData(), aiMessage.getCreatedAt()
         );
     }
 
