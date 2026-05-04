@@ -728,16 +728,43 @@ async def lifespan(app: FastAPI):
         temperature=0
     )
 
-    # 4. Cross-encoder reranker (loaded once at startup)
-    # Use FlagEmbedding.FlagReranker — the official BAAI-maintained class for bge-reranker-v2-m3.
-    # sentence_transformers 3.x CrossEncoder.predict() passes BatchEncoding as input_ids
-    # (instead of a tensor) breaking XLM-RoBERTa → use FlagReranker which handles this correctly.
-    from FlagEmbedding import FlagReranker
+    # 4. Cross-encoder reranker — load directly via AutoModel.
+    # Both sentence_transformers 3.x CrossEncoder AND FlagEmbedding call transformers
+    # internals (prepare_for_model, BatchEncoding unpacking) that broke in transformers 4.57.
+    # Using AutoModelForSequenceClassification directly bypasses all wrapper layers
+    # and works with any transformers version.
+    from transformers import AutoTokenizer, AutoModelForSequenceClassification
+    import torch as _rerank_torch
     _RERANKER_MODEL = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-v2-m3")
-    _use_fp16 = (DEVICE == "cuda")
-    cross_encoder = FlagReranker(_RERANKER_MODEL, use_fp16=_use_fp16)
-    _prec = "fp16" if _use_fp16 else "fp32"
-    print(f"✅ Reranker loaded: {_RERANKER_MODEL} ({_prec}, FlagReranker, max_length=8192).")
+    reranker_tokenizer = AutoTokenizer.from_pretrained(_RERANKER_MODEL)
+    reranker_model = AutoModelForSequenceClassification.from_pretrained(
+        _RERANKER_MODEL,
+        torch_dtype=_rerank_torch.float16 if DEVICE == "cuda" else _rerank_torch.float32,
+    )
+    reranker_model.eval()
+    reranker_model.to(DEVICE)
+    _prec = "fp16" if DEVICE == "cuda" else "fp32"
+    print(f"✅ Reranker loaded: {_RERANKER_MODEL} ({_prec}, AutoModel direct, max_length=8192).")
+    del _rerank_torch
+
+    def _rerank_scores(pairs: list[tuple[str, str]], batch_size: int = 8) -> list[float]:
+        """Score (query, doc) pairs with the reranker. Returns raw logits (higher=more relevant)."""
+        import torch
+        all_scores: list[float] = []
+        for i in range(0, len(pairs), batch_size):
+            batch = pairs[i : i + batch_size]
+            with torch.no_grad():
+                enc = reranker_tokenizer(
+                    [p[0] for p in batch],
+                    [p[1] for p in batch],
+                    padding=True,
+                    truncation=True,
+                    max_length=8192,
+                    return_tensors="pt",
+                ).to(DEVICE)
+                logits = reranker_model(**enc).logits.view(-1).float()
+            all_scores.extend(logits.cpu().tolist())
+        return all_scores
 
 
     # -------------------------------------------------------
@@ -1092,11 +1119,11 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
         semantic_docs = [d for d in docs if not d.metadata.get("_pinned")]
 
         if semantic_docs:
-            # FlagReranker handles full articles (8192-token context).
-            # compute_score() returns raw logits; higher = more relevant.
+            # Direct AutoModel reranker — no wrapper dependency.
+            # Returns raw logits; higher = more relevant.
             _q = query[:512]  # cap query to ~130 tokens, leave room for full doc
             pairs  = [(_q, d.page_content) for d in semantic_docs]
-            scores = cross_encoder.compute_score(pairs, normalize=False)
+            scores = _rerank_scores(pairs)
             ranked_semantic = sorted(zip(scores, semantic_docs), key=lambda x: x[0], reverse=True)
             top_semantic    = [doc for _, doc in ranked_semantic[:_MAX_SEMANTIC_DOCS]]
         else:
