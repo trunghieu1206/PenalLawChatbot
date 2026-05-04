@@ -1267,6 +1267,17 @@ OUTPUT: CHỈ JSON array hợp lệ."""
             for d in documents
         ]))
 
+        # ── DEBUG: show exactly what chunks go into the LLM ────────────
+        print(f"  [GENERATE INPUT] {len(documents)} docs → LLM (role={role}):")
+        for _d in documents:
+            _art  = _d.metadata.get("article_number", "?")
+            _src  = _d.metadata.get("source", "?")
+            _rtag = _d.metadata.get("_temporal_role", "?")
+            _pin  = "📌 " if _d.metadata.get("_pinned") else "   "
+            _prev = _d.page_content[:100].replace("\n", " ")
+            print(f"  {_pin}Điều {str(_art):>4} | {str(_src):<30} | {str(_rtag):<12} | {_prev}...")
+        # ─────────────────────────────────────────────────────────────
+
         # Role-specific instructions
         if role == "defense":
             role_instruction = "VAI TRÒ: LUẬT SƯ BÀO CHỮA cho bị cáo. Mục tiêu: Tìm mọi căn cứ để giảm nhẹ hình phạt xuống mức thấp nhất (hoặc Án treo). Đứng trên góc nhìn luật sư bào chữa, không phải tòa án."
@@ -1320,6 +1331,37 @@ OUTPUT: CHỈ JSON array hợp lệ."""
                 "|------|----------|---------------|------------------|\n"
             )
 
+        # ── Nhân thân context — role-aware ────────────────────────────────
+        # co_tien_an = True means prior conviction(s) exist (even if án tích cleared).
+        # Judge / victim: warn it raises sentence into mid-range, bars án treo.
+        # Defense: reframe as advantage (án tích cleared → no tái phạm under Điều 52).
+        nhan_than_context = ""
+        _facts = state.get("extracted_facts") or {}
+        if _facts.get("co_tien_an"):
+            if role in ("neutral", "victim"):
+                nhan_than_context = (
+                    "\n\n⚠️ NHÂN THÂN BỊ CÁO (BẮT BUỘC CÂN NHẮC KHI LƯỢNG HÌNH):\n"
+                    "- Bị cáo CÓ TIỀN ÁN. Dù án tích đã được xóa theo luật nên KHÔNG áp dụng tình tiết\n"
+                    "  tái phạm (Điều 52 BLHS), nhưng NHÂN THÂN XẤU VẪN là yếu tố Tòa án phải cân nhắc\n"
+                    "  khi quyết định mức hình phạt cụ thể TRONG KHUNG (Điều 45 BLHS).\n"
+                    "- Hệ quả thực tiễn:\n"
+                    "  • KHÔNG áp dụng án treo (nhân thân xấu là điều kiện loại trừ).\n"
+                    "  • Mức hình phạt nên ở GIỮA HOẶC CAO HƠN GIỮA khung dù có 1–2 tình tiết giảm nhẹ.\n"
+                    "  • Thực tiễn xét xử: Tòa thường lấy mức VKS đề nghị làm SÀN khi nhân thân xấu.\n"
+                )
+            else:  # defense
+                nhan_than_context = (
+                    "\n\n📋 VỀ TIỀN ÁN CỦA THÂN CHỦ (LUẬN ĐIỂM CÓ LỢI):\n"
+                    "- Thân chủ đã chấp hành xong hình phạt và được XÓA ÁN TÍCH theo điều luật.\n"
+                    "- Pháp lý: KHÔNG đủ điều kiện tái phạm (Điều 52 BLHS) → đây là lợi thế\n"
+                    "  pháp lý quan trọng nhất cần nhấn mạnh trong luận điểm bào chữa.\n"
+                    "- TUYỆT ĐỐI KHÔNG nhắc đến nhân thân tiêu cực hoặc các án tích đã xóa\n"
+                    "  như yếu tố bất lợi trong luận điểm bào chữa.\n"
+                    "- Tập trung vào: thành khẩn khai báo, hợp tác điều tra, khả năng cải tạo\n"
+                    "  và điều kiện xá hội của thân chủ.\n"
+                )
+        # ─────────────────────────────────────────────────────────────────
+
         # ─────────────────────────────────────────────────────────────────
         # ROLE-SPECIFIC PROMPT TEMPLATES
         # Each template has its own persona, output structure, and framing
@@ -1340,6 +1382,7 @@ Nhiệm vụ: Đọc kỹ hồ sơ vụ án và SOẠN LUẬN ĐIỂM BÀO CHỮ
 
 {deterministic_context}
 {mapped_context}
+{nhan_than_context}
 ----------------
 
 LƯU Ý KHI BÀO CHỮA:
@@ -1390,6 +1433,7 @@ Nhiệm vụ: Đọc kỹ hồ sơ vụ án và SOẠN LUẬN ĐIỂM BẢO VỆ
 
 {deterministic_context}
 {mapped_context}
+{nhan_than_context}
 ----------------
 
 LƯU Ý KHI BẢO VỆ BỊ HẠI:
@@ -1440,6 +1484,7 @@ Nhiệm vụ: Dựa trên dữ liệu vụ án (coi là sự thật duy nhất) 
 
 {deterministic_context}
 {mapped_context}
+{nhan_than_context}
 ----------------
 
 MỘT VÀI LƯU Ý:
@@ -1504,6 +1549,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
                 case_details=case_details,
                 deterministic_context=det_context,
                 mapped_context=mapped_context,
+                nhan_than_context=nhan_than_context,
             )
             
             # Nối lịch sử vào TRƯỚC prompt chính nhưng SAU system prompt (nếu có thể),
