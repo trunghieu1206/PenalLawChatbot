@@ -707,16 +707,21 @@ async def lifespan(app: FastAPI):
     # PhoRanker base file is F32 (~540 MB). Load in fp16 on GPU to halve VRAM to ~270 MB.
     from sentence_transformers import CrossEncoder
     import torch as _torch
-    _ce_dtype = _torch.float16 if DEVICE == "cuda" else _torch.float32
     cross_encoder = CrossEncoder(
         "itdainb/PhoRanker",
         max_length=512,
         trust_remote_code=True,
         device=DEVICE,
-        automodel_args={"torch_dtype": _ce_dtype},
     )
-    print("✅ PhoRanker cross-encoder loaded (dtype={}).".format(_ce_dtype))
-    del _torch, _ce_dtype
+    # Apply fp16 on GPU to halve VRAM usage (~540 MB F32 → ~270 MB fp16).
+    # Done via .half() after load to avoid automodel_args compat issues
+    # with sentence-transformers < 3.0.
+    if DEVICE == "cuda":
+        cross_encoder.model = cross_encoder.model.half()
+        print("✅ PhoRanker cross-encoder loaded (fp16 on GPU).")
+    else:
+        print("✅ PhoRanker cross-encoder loaded (fp32 on CPU).")
+    del _torch
 
 
     # -------------------------------------------------------
@@ -1067,7 +1072,15 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
         semantic_docs = [d for d in docs if not d.metadata.get("_pinned")]
 
         if semantic_docs:
-            pairs  = [(query, d.page_content[:512]) for d in semantic_docs]
+            # Truncate by characters before tokenization.
+            # PhoRanker is RoBERTa-based: 514 position embeddings max.
+            # Vietnamese text averages ~3-4 chars/token, so:
+            #   query  ≤ 200 chars  → ~50-70 tokens
+            #   doc    ≤ 700 chars  → ~175-235 tokens
+            #   [CLS] + [SEP]×2    → 3 tokens
+            #   total              → ~230-310 tokens  (safely under 512)
+            _q = query[:200]
+            pairs  = [(_q, d.page_content[:700]) for d in semantic_docs]
             scores = cross_encoder.predict(pairs)
             ranked_semantic = sorted(zip(scores, semantic_docs), key=lambda x: x[0], reverse=True)
             top_semantic    = [doc for _, doc in ranked_semantic[:_MAX_SEMANTIC_DOCS]]
