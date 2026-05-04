@@ -623,12 +623,23 @@ def extract_sentencing_data(facts: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
+def sanitize_text(text: str) -> str:
+    """Strip lone surrogate characters that crash Python's UTF-8 JSON encoder.
+    Surrogates (U+D800–U+DFFF) appear in text scraped from Vietnamese PDFs via
+    mixed-encoding parsers. encode('utf-8', 'replace') replaces them with U+FFFD (?)."""
+    if not isinstance(text, str):
+        return text
+    return text.encode("utf-8", "replace").decode("utf-8")
+
+
 def cleanup_response(text: str) -> str:
     """
     Remove or replace 'BLHS' abbreviations in AI-generated text.
     Replaces 'BLHS' with 'Bộ luật Hình sự' for clarity.
     This ensures AI responses are user-friendly and don't use abbreviations.
+    Also strips lone surrogate characters that would crash the JSON encoder.
     """
+    text = sanitize_text(text)
     # Replace " BLHS " or " BLHS," with " Bộ luật Hình sự "
     text = re.sub(r"\bBLHS\b", "Bộ luật Hình sự", text, flags=re.IGNORECASE)
     return text
@@ -707,7 +718,7 @@ async def lifespan(app: FastAPI):
             for r in results:
                 entity = r["entity"]
                 docs.append(Document(
-                    page_content=entity.get("content", ""),
+                    page_content=sanitize_text(entity.get("content", "")),
                     metadata={
                         k: entity.get(k, "")
                         for k in self._fields if k != "content"
