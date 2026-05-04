@@ -328,16 +328,25 @@ class JinaEmbeddings(Embeddings):
             device=device,
         )
         self._batch_size = batch_size
-        print("✅ Jina embedding model loaded.")
+
+        # Probe once whether this model supports task= (base Jina does, LoRA adapters may not)
+        try:
+            self._model.encode(["probe"], task="retrieval", show_progress_bar=False)
+            self._supports_task = True
+            print("✅ Jina embedding model loaded (task= supported).")
+        except TypeError:
+            self._supports_task = False
+            print("✅ Jina embedding model loaded (task= not supported — fine-tuned adapter).")
 
     def _encode(self, texts: List[str]) -> List[List[float]]:
-        vecs = self._model.encode(
-            texts,
+        kwargs = dict(
             normalize_embeddings=True,
             batch_size=self._batch_size,
-            task="retrieval",
             show_progress_bar=False,
         )
+        if self._supports_task:
+            kwargs["task"] = "retrieval"
+        vecs = self._model.encode(texts, **kwargs)
         return vecs.tolist()
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
