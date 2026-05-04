@@ -14,7 +14,7 @@ Enhanced LangGraph pipeline with:
   EMBEDDING MODEL
     Model  : trunghieu1206/jina-embeddings-v5-text-nano-retrieval-vn-legal-lora-2026-04-28-19-05
     Base   : jinaai/jina-embeddings-v5-text-nano (239M params, EuroBERT-210M)
-    Type   : LoRA fine-tuned on Vietnamese legal case questions (~40k pairs)
+    Type   : LoRA fine-tuned on Vietnamese legal case questions (~4k pairs)
     Dim    : 768  |  Context: 8192 tokens  |  task= not supported (LoRA adapter)
     Override env: EMBEDDING_ADAPTER  (or EMBEDDING_MODEL for backward compat)
 
@@ -729,24 +729,15 @@ async def lifespan(app: FastAPI):
     )
 
     # 4. Cross-encoder reranker (loaded once at startup)
-    # bge-reranker-v2-m3: multilingual, 8192-token context — fits full Vietnamese law articles
-    # (PhoRanker was only 256 tokens, too small for articles up to 3574 tokens)
-    from sentence_transformers import CrossEncoder
-    import torch as _torch
+    # Use FlagEmbedding.FlagReranker — the official BAAI-maintained class for bge-reranker-v2-m3.
+    # sentence_transformers 3.x CrossEncoder.predict() passes BatchEncoding as input_ids
+    # (instead of a tensor) breaking XLM-RoBERTa → use FlagReranker which handles this correctly.
+    from FlagEmbedding import FlagReranker
     _RERANKER_MODEL = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-v2-m3")
-    cross_encoder = CrossEncoder(
-        _RERANKER_MODEL,
-        max_length=8192,
-        device=DEVICE,
-    )
-    cross_encoder.tokenizer.model_max_length = 8192
-    # Apply fp16 on GPU to halve VRAM.
-    if DEVICE == "cuda":
-        cross_encoder.model = cross_encoder.model.half()
-        print(f"✅ Reranker loaded: {_RERANKER_MODEL} (fp16, max_length=8192).")
-    else:
-        print(f"✅ Reranker loaded: {_RERANKER_MODEL} (fp32, max_length=8192).")
-    del _torch
+    _use_fp16 = (DEVICE == "cuda")
+    cross_encoder = FlagReranker(_RERANKER_MODEL, use_fp16=_use_fp16)
+    _prec = "fp16" if _use_fp16 else "fp32"
+    print(f"✅ Reranker loaded: {_RERANKER_MODEL} ({_prec}, FlagReranker, max_length=8192).")
 
 
     # -------------------------------------------------------
@@ -1101,11 +1092,11 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
         semantic_docs = [d for d in docs if not d.metadata.get("_pinned")]
 
         if semantic_docs:
-            # bge-reranker-v2-m3 supports 8192 tokens — full articles fit.
-            # Truncate query to 512 chars (~130 tokens) to leave room for the full doc.
-            _q = query[:512]
+            # FlagReranker handles full articles (8192-token context).
+            # compute_score() returns raw logits; higher = more relevant.
+            _q = query[:512]  # cap query to ~130 tokens, leave room for full doc
             pairs  = [(_q, d.page_content) for d in semantic_docs]
-            scores = cross_encoder.predict(pairs)
+            scores = cross_encoder.compute_score(pairs, normalize=False)
             ranked_semantic = sorted(zip(scores, semantic_docs), key=lambda x: x[0], reverse=True)
             top_semantic    = [doc for _, doc in ranked_semantic[:_MAX_SEMANTIC_DOCS]]
         else:
