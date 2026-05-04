@@ -12,7 +12,7 @@
 | Embedding model | `trunghieu1206/jina-embeddings-v5-text-nano-retrieval-vn-legal-lora-2026-04-28-19-05` | Fine-tuned from `jinaai/jina-embeddings-v5-text-nano` via LoRA. `task="retrieval"` for both encode calls |
 | Vector DB | Milvus Lite (`.db` file) | Whole-article chunks |
 | Chunks | **Full law article** (VB_1999, VB_2009, VB_2017, VB_2025) | No sub-clause splitting |
-| Reranker | `itdainb/PhoRanker` | Vietnamese cross-encoder — better suited for Vietnamese legal text than English ms-marco models |
+| Reranker | `BAAI/bge-reranker-v2-m3` | Multilingual cross-encoder, 8192-token context — fits full Vietnamese law articles (up to 3,574 tokens). PhoRanker (`itdainb/PhoRanker`) was discarded: its 256-token RoBERTa context could only see the first ~60 chars of each article. |
 | LLM | Gemini 2.5 Flash (OpenRouter) | `temperature=0` |
 | Framework | LangGraph `StateGraph` + FastAPI | |
 
@@ -751,10 +751,12 @@ Loads **once at server startup** (not per-request).
 ```python
 from sentence_transformers import CrossEncoder
 cross_encoder = CrossEncoder(
-    "itdainb/PhoRanker",
-    max_length=512,
-    trust_remote_code=True,
+    "BAAI/bge-reranker-v2-m3",
+    max_length=8192,   # fits full Vietnamese law articles (up to ~3,574 tokens)
 )
+cross_encoder.tokenizer.model_max_length = 8192
+if DEVICE == "cuda":
+    cross_encoder.model = cross_encoder.model.half()  # fp16 on GPU
 ```
 
 #### Node
@@ -784,9 +786,11 @@ def rerank_node(state: AgentState) -> dict:
     pinned_docs   = [d for d in docs if d.metadata.get("_pinned")]
     semantic_docs = [d for d in docs if not d.metadata.get("_pinned")]
 
-    # PhoRanker: raw logits, higher = more relevant. No sigmoid needed for ranking.
+    # bge-reranker-v2-m3: raw logits, higher = more relevant. No sigmoid needed for ranking.
+    # Full article text is passed — no truncation needed (8192-token context).
     if semantic_docs:
-        pairs  = [(query, d.page_content[:512]) for d in semantic_docs]
+        _q = query[:512]   # cap query to ~130 tokens, leaving room for the full article
+        pairs  = [(_q, d.page_content) for d in semantic_docs]
         scores = cross_encoder.predict(pairs)
         ranked_semantic = sorted(zip(scores, semantic_docs), key=lambda x: x[0], reverse=True)
         top_semantic    = [doc for _, doc in ranked_semantic[:_MAX_SEMANTIC_DOCS]]
@@ -1092,18 +1096,18 @@ workflow.add_edge("casual",     END)
 ## 6. New Dependencies (`requirements.txt`)
 
 ```
-sentence-transformers>=3.0.0    # already present for Jina embeddings
-# cross-encoder is included in sentence-transformers — no extra package needed
+sentence-transformers>=2.2.0    # already present for Jina embeddings
+FlagEmbedding                   # required by bge-reranker-v2-m3
 ```
 
 Load in `lifespan` startup:
 ```python
 from sentence_transformers import CrossEncoder
 cross_encoder = CrossEncoder(
-    "itdainb/PhoRanker",
-    max_length=512,
-    trust_remote_code=True,
+    "BAAI/bge-reranker-v2-m3",
+    max_length=8192,
 )
+cross_encoder.tokenizer.model_max_length = 8192
 ```
 
 ---
