@@ -278,21 +278,27 @@ done
 # Using a cu tag NEWER than what the driver supports → CUDA unknown error (999).
 if command -v nvidia-smi &>/dev/null; then
     _DRIVER_CUDA=$(nvidia-smi 2>/dev/null | grep -oP "CUDA Version:\s*\K[0-9]+" | head -1 || echo "0")
-    _TORCH_CU=$(python3 -c "import torch; v=torch.__version__; print(v.split('+')[1] if '+' in v else 'cpu')" 2>/dev/null || echo "cpu")
+    _TORCH_CU=$("$AI_PYTHON" -c "import torch; v=torch.__version__; print(v.split('+')[1] if '+' in v else 'cpu')" 2>/dev/null || echo "cpu")
     info "  Driver CUDA cap: ${_DRIVER_CUDA}.x  |  torch cu-tag: $_TORCH_CU"
 
-    # Select the highest compatible cu tag for this driver
-    if   [ "$_DRIVER_CUDA" -ge 12 ] && [ "$_DRIVER_CUDA" -ge 13 ]; then _NEED_CU="cu124"  # future-proof
-    elif [ "$_DRIVER_CUDA" -ge 12 ] && [ "$(nvidia-smi 2>/dev/null | grep -oP 'Driver Version: \K[0-9]+' | head -1)" -ge 550 ]; then _NEED_CU="cu124"
-    elif [ "$_DRIVER_CUDA" -ge 12 ] && [ "$(nvidia-smi 2>/dev/null | grep -oP 'Driver Version: \K[0-9]+' | head -1)" -ge 530 ]; then _NEED_CU="cu121"
-    else _NEED_CU="cu118"; fi
+    # Select the highest compatible cu tag for this driver.
+    # Use the driver *major version number* (e.g. 525, 550, 535) directly.
+    _DRV_MAJOR=$(nvidia-smi 2>/dev/null | grep -oP 'Driver Version: \K[0-9]+' | head -1 || echo "0")
+    if   [ "$_DRV_MAJOR" -ge 550 ]; then _NEED_CU="cu124"   # CUDA 12.4+ (RTX 40xx, A100 new)
+    elif [ "$_DRV_MAJOR" -ge 530 ]; then _NEED_CU="cu121"   # CUDA 12.1
+    else                                  _NEED_CU="cu118"; fi # CUDA 11.8 — works from R520
+    info "  Driver major: R${_DRV_MAJOR} → selecting $_NEED_CU"
 
     if [ "$_TORCH_CU" != "$_NEED_CU" ] && [ "$_TORCH_CU" != "cpu" ]; then
-        info "  torch $_TORCH_CU is incompatible with this driver — reinstalling torch+torchvision with $_NEED_CU..."
+        info "  torch $_TORCH_CU is incompatible with R${_DRV_MAJOR} driver — reinstalling with $_NEED_CU..."
         _TORCH_BASE=$("$AI_PYTHON" -c "import torch; print(torch.__version__.split('+')[0])" 2>/dev/null || echo "2.5.1")
+        # Derive matching torchvision: torch 2.5.x → torchvision 0.20.x, torch 2.6.x → 0.21.x
+        _TV_VER=$("$AI_PYTHON" -c "
+import torch; p=torch.__version__.split('+')[0].split('.')[:2]
+print(f'0.{int(p[0])*10+int(p[1])-5}.{0}')" 2>/dev/null || echo "0.20.0")
         "$AI_PYTHON" -m pip install \
             "torch==${_TORCH_BASE}+${_NEED_CU}" \
-            "torchvision==0.20.1+${_NEED_CU}" \
+            "torchvision==${_TV_VER}+${_NEED_CU}" \
             --index-url "https://download.pytorch.org/whl/${_NEED_CU}" --quiet 2>&1 | tail -3 || \
             warn "  torch cu-tag reinstall failed — CUDA may not work."
         TORCH_VER=$("$AI_PYTHON" -c "import torch; print(torch.__version__)" 2>/dev/null)
@@ -336,16 +342,11 @@ if command -v nvidia-smi &>/dev/null; then
     else
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "[GPU REQUIRED] nvidia-smi present but torch.cuda.is_available() = False"
-        echo "nvidia-uvm auto-load was attempted but CUDA is still broken."
-        echo "DO NOT reinstall torch — that will break torchvision."
-        echo ""
-        echo "Manual diagnostic:"
-        echo "  ls -la /dev/nvidia*"
-        echo "  modprobe nvidia && modprobe nvidia-uvm && modprobe nvidia-drm"
-        echo "  $AI_PYTHON -c 'import torch; print(torch.cuda.is_available())'"
+        warn "GPU detected but CUDA unavailable — falling back to CPU."
+        warn "This is likely a cloud provider issue (nvidia-uvm not in /proc/devices)."
+        warn "Contact your provider to enable CUDA compute access on this instance."
+        warn "The AI service will run on CPU (slower but fully functional)."
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        error "Deploy aborted: GPU present but CUDA unavailable after auto-fix attempt."
     fi
 else
     warn "nvidia-smi not found — deploying in CPU-only mode."

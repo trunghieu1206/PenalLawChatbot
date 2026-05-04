@@ -170,7 +170,7 @@ info "Node: $(node --version)  |  Java: $(java --version 2>&1 | head -1)  |  Mav
 # ── 4b. Clone project repo (needed for Maven pre-warm + model pre-download) ──
 REPO_URL="https://github.com/trunghieu1206/PenalLawChatbot"
 PROJECT_DIR="/root/PenalLawChatbot"
-BRANCH="master"
+BRANCH="dev"   # keep in sync with deploy_nodocker.sh
 
 if [ -d "$PROJECT_DIR/.git" ]; then
     info "Git repo found — pulling latest ($BRANCH)..."
