@@ -273,13 +273,21 @@ for py in /opt/conda/bin/python3 /usr/bin/python3.11 /usr/bin/python3.10 /usr/bi
 done
 [ -z "$AI_PYTHON" ] && error "No Python with torch found. Ensure torch is installed (setup_server.sh)."
 
-# GPU check — warn only. FORCE_CPU default is set in ai-service/app/main.py.
-# If no GPU found, the service will run in CPU mode automatically.
 # GPU check — HARD REQUIREMENT if nvidia-smi is present.
 # NEVER pip-upgrade torch here. Upgrading torch breaks torchvision (version coupling).
-# If torch.cuda.is_available() is False despite nvidia-smi working, the nvidia
-# kernel module may not be loaded — this is a system-level issue, not a pip issue.
 if command -v nvidia-smi &>/dev/null; then
+    # Auto-fix: ensure nvidia-uvm is loaded.
+    # Without /dev/nvidia-uvm, torch.cuda.is_available() returns False (CUDA error 999)
+    # even when nvidia-smi and /dev/nvidia0 are present. This is the most common GPU
+    # issue on cloud VPS instances where the module isn't loaded at boot.
+    if [ ! -e /dev/nvidia-uvm ]; then
+        info "  /dev/nvidia-uvm missing — loading nvidia-uvm module..."
+        modprobe nvidia-uvm 2>/dev/null && info "  ✅ nvidia-uvm loaded." || \
+            warn "  modprobe nvidia-uvm failed — CUDA may not work."
+        # Persist across reboots
+        grep -qxF "nvidia-uvm" /etc/modules 2>/dev/null || echo "nvidia-uvm" >> /etc/modules
+    fi
+
     _TORCH_CUDA=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
     if [ "$_TORCH_CUDA" = "True" ]; then
         _GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || echo "unknown")
@@ -287,18 +295,16 @@ if command -v nvidia-smi &>/dev/null; then
     else
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "[GPU REQUIRED] nvidia-smi is present but torch.cuda.is_available() = False"
-        echo "This is a system-level CUDA initialization error, NOT a pip issue."
+        echo "[GPU REQUIRED] nvidia-smi present but torch.cuda.is_available() = False"
+        echo "nvidia-uvm auto-load was attempted but CUDA is still broken."
         echo "DO NOT reinstall torch — that will break torchvision."
         echo ""
-        echo "Diagnostic steps:"
-        echo "  1. Check nvidia kernel module: lsmod | grep nvidia"
-        echo "  2. Check device files:         ls -la /dev/nvidia*"
-        echo "  3. Reload module:              sudo rmmod nvidia_uvm && sudo modprobe nvidia_uvm"
-        echo "  4. Check CUDA env:             echo \$CUDA_VISIBLE_DEVICES"
-        echo "  5. Test after fix:             $AI_PYTHON -c 'import torch; print(torch.cuda.is_available())'"
+        echo "Manual diagnostic:"
+        echo "  ls -la /dev/nvidia*"
+        echo "  modprobe nvidia && modprobe nvidia-uvm && modprobe nvidia-drm"
+        echo "  $AI_PYTHON -c 'import torch; print(torch.cuda.is_available())'"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        error "Deploy aborted: GPU present but CUDA unavailable. Fix CUDA init first (see above)."
+        error "Deploy aborted: GPU present but CUDA unavailable after auto-fix attempt."
     fi
 else
     warn "nvidia-smi not found — deploying in CPU-only mode."
