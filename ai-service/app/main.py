@@ -713,14 +713,15 @@ async def lifespan(app: FastAPI):
         trust_remote_code=True,
         device=DEVICE,
     )
-    # Apply fp16 on GPU to halve VRAM usage (~540 MB F32 → ~270 MB fp16).
-    # Done via .half() after load to avoid automodel_args compat issues
-    # with sentence-transformers < 3.0.
+    # Older sentence-transformers (<3.0) may not honour max_length= in predict().
+    # Setting model_max_length on the tokenizer directly is the reliable fix.
+    cross_encoder.tokenizer.model_max_length = 512
+    # Apply fp16 on GPU to halve VRAM (~540 MB F32 → ~270 MB fp16).
     if DEVICE == "cuda":
         cross_encoder.model = cross_encoder.model.half()
-        print("✅ PhoRanker cross-encoder loaded (fp16 on GPU).")
+        print("✅ PhoRanker loaded (fp16, max_length=512).")
     else:
-        print("✅ PhoRanker cross-encoder loaded (fp32 on CPU).")
+        print("✅ PhoRanker loaded (fp32, max_length=512).")
     del _torch
 
 
@@ -1076,15 +1077,13 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
         semantic_docs = [d for d in docs if not d.metadata.get("_pinned")]
 
         if semantic_docs:
-            # Truncate by characters before tokenization.
-            # PhoRanker is RoBERTa-based: 514 position embeddings max.
-            # Vietnamese text averages ~3-4 chars/token, so:
-            #   query  ≤ 200 chars  → ~50-70 tokens
-            #   doc    ≤ 700 chars  → ~175-235 tokens
-            #   [CLS] + [SEP]×2    → 3 tokens
-            #   total              → ~230-310 tokens  (safely under 512)
-            _q = query[:200]
-            pairs  = [(_q, d.page_content[:700]) for d in semantic_docs]
+            # Double safety layer: character truncation + tokenizer.model_max_length=512.
+            # Vietnamese legal text: ~3-5 chars/token.
+            # 100 chars query  ≈ 25-35 tokens
+            # 400 chars doc    ≈ 80-135 tokens
+            # + 3 special tokens  ≈ 108-173 total  (far under 512)
+            _q = query[:100]
+            pairs  = [(_q, d.page_content[:400]) for d in semantic_docs]
             scores = cross_encoder.predict(pairs)
             ranked_semantic = sorted(zip(scores, semantic_docs), key=lambda x: x[0], reverse=True)
             top_semantic    = [doc for _, doc in ranked_semantic[:_MAX_SEMANTIC_DOCS]]
