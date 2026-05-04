@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -87,20 +88,25 @@ public class AdminService {
     public List<AdminDTOs.FeedbackDetail> getAllFeedback() {
         List<Feedback> feedbacks = feedbackRepository.findAllByOrderByCreatedAtDesc();
         return feedbacks.stream().map(f -> {
-            // Load session conversation for context
-            List<ChatMessage> msgs = messageRepository.findBySessionIdOrderByCreatedAtAsc(f.getSessionId());
-            List<AdminDTOs.MessageSummary> conversation = msgs.stream()
-                    .map(m -> new AdminDTOs.MessageSummary(
-                            m.getId(), m.getRole(), m.getContent(), m.getCreatedAt()))
-                    .collect(Collectors.toList());
+            UUID sid = f.getSessionId();
+
+            // Load session conversation for context (skip gracefully if sessionId is missing)
+            List<AdminDTOs.MessageSummary> conversation = List.of();
+            if (sid != null) {
+                conversation = messageRepository.findBySessionIdOrderByCreatedAtAsc(sid)
+                        .stream()
+                        .map(m -> new AdminDTOs.MessageSummary(
+                                m.getId(), m.getRole(), m.getContent(), m.getCreatedAt()))
+                        .collect(Collectors.toList());
+            }
 
             // Session metadata
-            String sessionMode = sessionRepository.findById(f.getSessionId())
-                    .map(ChatSession::getMode)
-                    .orElse("unknown");
+            String sessionMode = (sid != null)
+                    ? sessionRepository.findById(sid).map(ChatSession::getMode).orElse("unknown")
+                    : "unknown";
 
             return new AdminDTOs.FeedbackDetail(
-                    f.getId(), f.getSessionId(), f.getMessageId(),
+                    f.getId(), sid, f.getMessageId(),
                     f.getIsCorrect(), f.getComment(), f.getCreatedAt(),
                     sessionMode, conversation
             );

@@ -50,12 +50,13 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.field}>
-            <label className="label" htmlFor="email">Email</label>
+            <label className="label" htmlFor="email">Email / Tên đăng nhập</label>
             <input
               id="email"
-              type="email"
+              type="text"
+              autoComplete="username"
               className="input"
-              placeholder="example@email.com"
+              placeholder="email@example.com hoặc tên đăng nhập"
               value={form.email}
               onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
               required
@@ -85,12 +86,6 @@ export default function LoginPage() {
           Chưa có tài khoản? <Link to="/register" className={styles.link}>Đăng ký ngay</Link>
         </p>
 
-        {/* Demo credentials hint */}
-        <div style={{ marginTop: '16px', padding: '8px', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: '4px', fontSize: '12px', color: 'var(--text-muted)' }}>
-          <strong>Demo tài khoản:</strong><br/>
-          Email: hieu@gmail.com<br/>
-          Mật khẩu: hieu
-        </div>
       </div>
     </div>
   );

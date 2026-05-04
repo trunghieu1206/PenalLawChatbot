@@ -20,8 +20,8 @@ public class Feedback {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    /** The session this feedback belongs to. */
-    @Column(name = "session_id", nullable = false)
+    /** The session this feedback belongs to (nullable for legacy records). */
+    @Column(name = "session_id")
     private UUID sessionId;
 
     /** The specific AI message being rated (nullable — covers whole session if null). */
