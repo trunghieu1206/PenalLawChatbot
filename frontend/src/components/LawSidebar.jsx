@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import styles from './LawSidebar.module.css';
 
 /**
@@ -19,7 +19,26 @@ export default function LawSidebar({ lawData, onClose, loading, error }) {
     setActiveTab(0);
   }, [lawData?.article_number]);
 
-  const versions = lawData?.versions ?? [];
+  const allVersions = lawData?.versions ?? [];
+
+  /**
+   * Only show versions applicable at crime_date.
+   * When the backend found the article by crime date (found_by === 'crime_date'),
+   * filter to versions whose [effective_date, effective_end_date) range covers that date.
+   * This hides irrelevant historical editions from the sidebar tabs.
+   * Falls back to showing all versions if filtering yields nothing.
+   */
+  const versions = useMemo(() => {
+    if (!lawData?.crime_date || lawData.found_by !== 'crime_date') return allVersions;
+    const crime = new Date(lawData.crime_date);
+    const filtered = allVersions.filter(v => {
+      const start = v.effective_date ? new Date(v.effective_date) : null;
+      const end   = v.effective_end_date ? new Date(v.effective_end_date) : null;
+      return (!start || start <= crime) && (!end || end >= crime);
+    });
+    return filtered.length > 0 ? filtered : allVersions;
+  }, [allVersions, lawData?.crime_date, lawData?.found_by]);
+
   const activeVersion = versions[activeTab] ?? null;
 
   const formatDate = (dateStr) => {
