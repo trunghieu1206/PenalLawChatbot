@@ -632,6 +632,16 @@ def sanitize_text(text: str) -> str:
     return text.encode("utf-8", "replace").decode("utf-8")
 
 
+def _sanitize_msgs(messages: list) -> list:
+    """Strip surrogates from ALL LangChain BaseMessage content immediately before
+    any llm.invoke() call. Last line of defence — catches anything that slipped through
+    upstream sanitization (history, mapped_context, case descriptions, etc.)."""
+    for m in messages:
+        if isinstance(getattr(m, "content", None), str):
+            m.content = sanitize_text(m.content)
+    return messages
+
+
 def cleanup_response(text: str) -> str:
     """
     Remove or replace 'BLHS' abbreviations in AI-generated text.
@@ -828,10 +838,10 @@ Nếu không tìm thấy, trả về null — hệ thống sẽ tự động dù
 OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
 
         try:
-            response = llm.invoke([
+            response = llm.invoke(_sanitize_msgs([
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=f"NỘI DUNG VỤ ÁN:\n{case_text}")
-            ])
+            ]))
             raw = response.content.strip()
             # Strip markdown code fences if present
             raw = re.sub(r"```json?\s*", "", raw).strip("`").strip()
@@ -952,7 +962,7 @@ TRẢ VỀ JSON (null nếu không có thông tin):
 OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
 
         try:
-            response = llm.invoke([HumanMessage(content=prompt)])
+            response = llm.invoke(_sanitize_msgs([HumanMessage(content=prompt)]))
             raw = re.sub(r"```json?\s*", "", response.content.strip()).strip("`").strip()
             queries = json.loads(raw)
             q_list = [
@@ -1216,10 +1226,10 @@ Trả về JSON array:
 OUTPUT: CHỈ JSON array hợp lệ."""
 
         try:
-            response = llm.invoke([
+            response = llm.invoke(_sanitize_msgs([
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=f"SỰ KIỆN:\n{facts_str}\n\nVĂN BẢN LUẬT (có nhãn role):\n{context}\n\nVỤ ÁN:\n{case_text}")
-            ])
+            ]))
             raw    = re.sub(r"```json?\s*", "", response.content.strip()).strip("`").strip()
             mapped = json.loads(raw)
             if not isinstance(mapped, list) or len(mapped) == 0:
@@ -1297,6 +1307,7 @@ OUTPUT: CHỈ JSON array hợp lệ."""
                 f"[{m.get('edition_applied', '')}]: {m.get('applicable_reason', '')}"
                 for m in mapped
             ])
+            mapped_context = sanitize_text(mapped_context)
             mapped_context += (
                 "\n\nNGUY\u00caN T\u1eaec TH\u1edcI HI\u1ec6U B\u1eaeT BU\u1ed8C (\u0110i\u1ec1u 7 BLHS):\n"
                 "- Lu\u1eadt \u00e1p d\u1ee5ng = lu\u1eadt c\u00f3 hi\u1ec7u l\u1ef1c T\u1ea0I TH\u1edcI \u0110I\u1ec2M PH\u1ea0M T\u1ed8I (role=primary).\n"
@@ -1479,9 +1490,9 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
             # Lấy 4 tin nhắn gần nhất để tránh tràn context
             for msg in history[-4:]:
                 if msg.get("role") == "user":
-                    history_msgs.append(HumanMessage(content=msg.get("content", "")))
+                    history_msgs.append(HumanMessage(content=sanitize_text(msg.get("content", ""))))
                 else:
-                    history_msgs.append(AIMessage(content=msg.get("content", "")))
+                    history_msgs.append(AIMessage(content=sanitize_text(msg.get("content", ""))))
         
         chain = prompt | llm | StrOutputParser()
 
@@ -1499,7 +1510,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
             # hoặc đơn giản là ghép tất cả lại. ChatPromptTemplate trả ra List[BaseMessage]
             final_messages = history_msgs + formatted_prompt
             
-            response = llm.invoke(final_messages).content
+            response = llm.invoke(_sanitize_msgs(final_messages)).content
         except Exception as e:
             return {"messages": [AIMessage(content=f"Lỗi xử lý: {e}")]}
 
@@ -1539,15 +1550,15 @@ TIÊU CHÍ (100 điểm):
 **Cần cải thiện:** ...
 **Gợi ý chuẩn:** ..."""
 
-        response = llm.invoke([
+        response = (llm.invoke(_sanitize_msgs([
             SystemMessage(content=system_prompt),
             HumanMessage(content=(
                 f"LẬP LUẬN NGƯỜI DÙNG:\n{user_argument}\n\n"
                 f"KẾT QUẢ CHUẨN:\n{json.dumps(mapped_laws, ensure_ascii=False)}\n\n"
                 f"VĂN BẢN LUẬT:\n{context_text}"
             ))
-        ])
-        return {"messages": [AIMessage(content=response.content)]}
+        ]))).content
+        return {"messages": [AIMessage(content=response)]}
 
 
 
@@ -1599,7 +1610,7 @@ TIÊU CHÍ (100 điểm):
             "Chỉ trả về đúng một từ: \"casual\", \"followup\", hoặc \"new_case\"."
         )
         try:
-            result = llm.invoke([HumanMessage(content=classification_prompt)]).content.strip().lower()
+            result = llm.invoke(_sanitize_msgs([HumanMessage(content=classification_prompt)])).content.strip().lower()
             if "casual" in result:
                 intent = "casual"
             elif "followup" in result:
@@ -1660,7 +1671,7 @@ TIÊU CHÍ (100 điểm):
             else AIMessage(content=m["content"])
             for m in chat_history
         ]
-        response = llm.invoke([
+        response = llm.invoke(_sanitize_msgs([
             SystemMessage(content=(
                 f"Bạn là chuyên gia luật hình sự Việt Nam, góc độ: {role}.\n"
                 "Dựa vào văn bản luật và kết quả ánh xạ đã có, trả lời câu hỏi tiếp theo.\n"
@@ -1672,7 +1683,7 @@ TIÊU CHÍ (100 điểm):
                 f"VĂN BẢN LUẬT (cache):\n{context_text}\n\n"
                 f"KẾT QUẢ ÁNH XẠ (cache):\n{json.dumps(mapped_laws, ensure_ascii=False)}"
             ))
-        ])
+        ]))
         return {"messages": [AIMessage(content=cleanup_response(response.content))]}
 
     # -------------------------------------------------------
@@ -1769,7 +1780,7 @@ async def predict_judgment(req: RequestBody):
     inputs = {
         "question":            sanitize_text(req.case_content),
         "full_case_content":   sanitize_text(req.case_content),
-        "messages":            [HumanMessage(content=req.case_content)],
+        "messages":            [HumanMessage(content=sanitize_text(req.case_content))],
         "user_role":           req.role,
         "retry_count":         0,
         "documents":           [],
