@@ -97,13 +97,13 @@ function parseCrimeDate(dateStr) {
 function MessageBubble({ message, role, onLawClick }) {
   const isUser = message.role === 'user';
 
-  // Format time in GMT+7 (Hanoi time)
+  // Format time in GMT+7 (Vietnam Standard Time)
   const formatTimeGMT7 = (date) => {
-    const d = new Date(date);
-    const offset = 7; // GMT+7
-    const utc = d.getTime() + d.getTimezoneOffset() * 60000;
-    const gmt7 = new Date(utc + 3600000 * offset);
-    return gmt7.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    return new Date(date).toLocaleTimeString('vi-VN', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
   // Extract crime date from this message's extractedFacts
