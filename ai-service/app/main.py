@@ -822,6 +822,7 @@ Trả về JSON với các trường sau (dùng null nếu không tìm thấy th
   "so_luong_bi_cao": integer or null,
   "tang_vat_loai": "loại tang vật",
   "tang_vat_so_luong": "số lượng / khối lượng",
+  "dia_danh": "tỉnh / thành phố nơi xảy ra vụ án (ví dụ: 'Hà Nội', 'Bình Thuận', 'TP. Hồ Chí Minh') — chỉ tên tỉnh/thành, null nếu không có",
   "per_defendant_dates": [
     {"name": "tên bị cáo", "ngay_pham_toi": "dd/mm/yyyy"}
   ]

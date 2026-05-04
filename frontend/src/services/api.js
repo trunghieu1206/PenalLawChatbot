@@ -111,6 +111,32 @@ export const lawsApi = {
   },
 };
 
+// ---- ADMIN API ----
+export const adminApi = {
+  /** Get aggregate dashboard statistics. */
+  getStats: () =>
+    apiClient.get('/admin/stats').then(r => r.data),
+
+  /** Get all feedback records with full conversation context (admin view). */
+  getFeedback: () =>
+    apiClient.get('/admin/feedback').then(r => r.data),
+
+  /**
+   * Submit feedback on an AI response.
+   * @param {string} sessionId - UUID of the chat session
+   * @param {string} messageId - UUID of the AI message being rated
+   * @param {boolean} isCorrect - true = helpful/correct, false = incorrect/unhelpful
+   * @param {string|null} comment - optional text explanation
+   */
+  submitFeedback: (sessionId, messageId, isCorrect, comment = null) =>
+    apiClient.post('/admin/feedback', {
+      session_id: sessionId,
+      message_id: messageId,
+      is_correct: isCorrect,
+      comment,
+    }).then(r => r.data),
+};
+
 export default apiClient;
 
 // ---- AI SERVICE DIRECT CLIENT (proxied via /ai-api/) ----

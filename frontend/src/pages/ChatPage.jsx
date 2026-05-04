@@ -416,6 +416,7 @@ export default function ChatPage() {
               <MessageBubble
                 message={msg}
                 role={activeRole}
+                sessionId={currentSession?.id}
                 onLawClick={handleLawClick}
               />
             </div>

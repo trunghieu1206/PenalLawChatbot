@@ -1,7 +1,8 @@
 # RAG + LangGraph Architecture Design
 ## Vietnamese Penal Law Chatbot — Implementation Specification
 
-> **Status:** Source-of-truth design document. Use this to implement `ai-service/app/main.py`.
+> **Status:** Implementation reference — reflects actual `ai-service/app/main.py` as of **May 2026**.
+> Design-spec sections have been superseded by the working code. Use `main.py` as ground truth.
 
 ---
 
@@ -802,24 +803,57 @@ def rerank_node(state: AgentState) -> dict:
     top_docs = top_semantic + pinned_docs
 
     if not top_docs:
-        # Edge case: both semantic and pinned empty (e.g. empty Milvus collection)
         return {"documents": [], "is_relevant": False}
 
     print(f"  [RERANK] query[:80]: {query[:80]!r}")
-    print(f"  [RERANK] {len(docs)} → {len(top_docs)} docs "
+    print(f"  [RERANK] {len(docs)} \u2192 {len(top_docs)} docs "
           f"(semantic_kept={len(top_semantic)}/{len(semantic_docs)}, pinned={len(pinned_docs)})")
     for score, doc in ranked_semantic[:_MAX_SEMANTIC_DOCS]:
         art  = doc.metadata.get("article_number", "?")
         src  = doc.metadata.get("source", "?")
-        role = doc.metadata.get("_temporal_role", "?")
-        print(f"    [sem] score={score:.4f}  Điều {art} | {src} | {role}")
+        rtag = doc.metadata.get("_temporal_role", "?")
+        print(f"    [sem] score={score:.4f}  \u0110i\u1ec1u {art} | {src} | {rtag}")
     for doc in pinned_docs:
         art     = doc.metadata.get("article_number", "?")
         src     = doc.metadata.get("source", "?")
         purpose = doc.metadata.get("_purpose", "?")
-        print(f"    [pin] Điều {art} | {src} | purpose={purpose}")
+        print(f"    [pin] \u0110i\u1ec1u {art} | {src} | purpose={purpose}")
 
     return {"documents": top_docs, "is_relevant": True}
+```
+
+> [!IMPORTANT]
+> **`CrossEncoder` wrapper from `sentence_transformers` was removed** — the wrapper calls
+> `prepare_for_model` which was dropped in `transformers 4.57`, causing `AttributeError` at runtime.
+> The actual implementation uses `AutoTokenizer` + `AutoModelForSequenceClassification` directly
+> via `_rerank_scores()` (a closure inside `lifespan`). See actual implementation below.
+
+#### Actual reranker implementation (as deployed)
+
+```python
+# Loaded once at startup inside lifespan:
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+reranker_tokenizer = AutoTokenizer.from_pretrained("BAAI/bge-reranker-v2-m3")
+reranker_model     = AutoModelForSequenceClassification.from_pretrained("BAAI/bge-reranker-v2-m3")
+reranker_model.eval().to(DEVICE)
+if DEVICE == "cuda":
+    reranker_model = reranker_model.half()   # fp16 on GPU
+
+def _rerank_scores(pairs: list[tuple[str, str]], batch_size: int = 8) -> list[float]:
+    """Score (query, doc) pairs. Returns raw logits (higher = more relevant)."""
+    import torch
+    all_scores: list[float] = []
+    for i in range(0, len(pairs), batch_size):
+        batch = pairs[i : i + batch_size]
+        with torch.no_grad():
+            enc = reranker_tokenizer(
+                [p[0] for p in batch],
+                [p[1] for p in batch],
+                padding=True, truncation=True, max_length=8192, return_tensors="pt",
+            ).to(DEVICE)
+            logits = reranker_model(**enc).logits.view(-1).float()
+        all_scores.extend(logits.cpu().tolist())
+    return all_scores
 ```
 
 > **Removes `grade_documents` entirely.** No more 15 serial LLM calls per request.
@@ -912,7 +946,48 @@ OUTPUT: CHỈ JSON array hợp lệ."""
 
 Reads `mapped_laws` and `documents` (reranked, tagged with `_temporal_role`).
 
-**Every prompt template must include:**
+**Every prompt template must include `{nhan_than_context}` — a role-aware block built inline:**
+
+```python
+# Built in generate_node after mapped_context, before template formatting:
+nhan_than_context = ""
+_facts = state.get("extracted_facts") or {}
+if _facts.get("co_tien_an"):
+    if role in ("neutral", "victim"):
+        nhan_than_context = (
+            "\n\n\u26a0\ufe0f NH\u00c2N TH\u00c2N B\u1eca C\u00c1O (B\u1eaeT BU\u1ed8C C\u00c2N NH\u1eaeC KHI L\u01af\u1ee2NG H\u00ccNH):\n"
+            "- B\u1ecb c\u00e1o C\u00d3 TI\u1ec0N \u00c1N. D\u00f9 \u00e1n t\u00edch \u0111\u00e3 x\u00f3a (kh\u00f4ng t\u00e1i ph\u1ea1m - \u0110i\u1ec1u 52), NH\u00c2N TH\u00c2N X\u1ea4U V\u1eaaN l\u00e0 y\u1ebfu t\u1ed1\n"
+            "  T\u00f2a ph\u1ea3i c\u00e2n nh\u1eafc khi l\u01b0\u1ee3ng h\u00ecnh trong khung (\u0110i\u1ec1u 45 BLHS).\n"
+            "- KH\u00d4NG \u00e1p d\u1ee5ng \u00e1n treo. M\u1ee9c h\u00ecnh ph\u1ea1t: GI\u1eeeA HO\u1eb6C CAO H\u01a0N GI\u1eeeA khung.\n"
+            "- Th\u1ef1c ti\u1ec5n: T\u00f2a l\u1ea5y m\u1ee9c VKS \u0111\u1ec1 ngh\u1ecb l\u00e0m S\u00c0N khi nh\u00e2n th\u00e2n x\u1ea5u.\n"
+        )
+    else:  # defense
+        nhan_than_context = (
+            "\n\n\ud83d\udccb V\u1ec0 TI\u1ec0N \u00c1N (LU\u1eacN \u0110I\u1ec2M C\u00d3 L\u1ee2I):\n"
+            "- \u00c1n t\u00edch \u0111\u00e3 x\u00f3a \u2192 KH\u00d4NG t\u00e1i ph\u1ea1m (\u0110i\u1ec1u 52) \u2192 l\u1ee3i th\u1ebf ph\u00e1p l\u00fd ch\u1ea7u.\n"
+            "- TUY\u1ec6T \u0110\u1ed0I KH\u00d4NG nh\u1eafc nh\u00e2n th\u00e2n ti\u00eau c\u1ef1c trong lu\u1eadn \u0111i\u1ec3m b\u00e0o ch\u1eefa.\n"
+        )
+```
+
+> [!NOTE]
+> **Future work:** Extract richer nhân thân fields in `extract_facts` (`so_tien_an`, `tien_an_cung_loai`,
+> `thoi_gian_tu_tien_an_gan_nhat`) and promote logic to a dedicated `nhan_than_node` between
+> `extract_facts` and `multi_query_rewrite`. Currently implemented inline in `generate_node`.
+
+**Debug chunk log** (printed at every `generate` call, critical for debugging retrieval quality):
+
+```python
+print(f"  [GENERATE INPUT] {len(documents)} docs \u2192 LLM (role={role}):")
+for _d in documents:
+    _art  = _d.metadata.get("article_number", "?")
+    _src  = _d.metadata.get("source", "?")
+    _rtag = _d.metadata.get("_temporal_role", "?")
+    _pin  = "\ud83d\udccc " if _d.metadata.get("_pinned") else "   "
+    _prev = _d.page_content[:100].replace("\n", " ")
+    print(f"  {_pin}\u0110i\u1ec1u {str(_art):>4} | {str(_src):<30} | {str(_rtag):<12} | {_prev}...")
+```
+
+**Every `llm.invoke()` call is wrapped with `_sanitize_msgs()`** — see Section 9.
 
 ```python
 RETROACTIVITY_RULE = """
@@ -1093,37 +1168,85 @@ workflow.add_edge("casual",     END)
 
 ---
 
-## 6. New Dependencies (`requirements.txt`)
+## 6. Dependencies (Actual)
 
 ```
-sentence-transformers>=2.2.0    # already present for Jina embeddings
-FlagEmbedding                   # required by bge-reranker-v2-m3
+# requirements.txt
+transformers>=4.30.0          # AutoModelForSequenceClassification for reranker
+torch                         # inference + fp16 on GPU
+sentence-transformers>=2.2.0  # kept for JinaEmbeddings wrapper
+FlagEmbedding                 # kept for LoRABGEM3Embeddings (backward compat only)
+langchain-core
+langgraph
+fastapi
+milvus-lite
 ```
 
-Load in `lifespan` startup:
+> [!WARNING]
+> Do **NOT** use `sentence_transformers.CrossEncoder` or `FlagEmbedding.FlagReranker` —
+> both wrappers call `prepare_for_model` which was removed in `transformers 4.57`.
+> The actual reranker uses `AutoTokenizer` + `AutoModelForSequenceClassification` directly.
+
+Load sequence in `lifespan`:
 ```python
-from sentence_transformers import CrossEncoder
-cross_encoder = CrossEncoder(
-    "BAAI/bge-reranker-v2-m3",
-    max_length=8192,
-)
-cross_encoder.tokenizer.model_max_length = 8192
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+reranker_tokenizer = AutoTokenizer.from_pretrained("BAAI/bge-reranker-v2-m3")
+reranker_model     = AutoModelForSequenceClassification.from_pretrained("BAAI/bge-reranker-v2-m3")
+reranker_model.eval().to(DEVICE)
 ```
 
 ---
 
-## 7. Implementation Priority
+## 9. Sanitization Utilities
 
-| Priority | Node / Change | Impact |
+Added May 2026 to fix `UnicodeEncodeError: 'utf-8' codec can't encode characters — surrogates not allowed`
+that occurred when Vietnamese law text scraped from PDFs contained lone surrogate code points.
+
+```python
+def sanitize_text(text: str) -> str:
+    """Strip lone surrogates (U+D800–U+DFFF) that crash Python's UTF-8 JSON encoder."""
+    if not isinstance(text, str):
+        return text
+    return text.encode("utf-8", "replace").decode("utf-8")
+
+def _sanitize_msgs(messages: list) -> list:
+    """Strip surrogates from ALL LangChain BaseMessage content right before llm.invoke().
+    Last line of defence — wraps every single llm.invoke() call."""
+    for m in messages:
+        if isinstance(getattr(m, "content", None), str):
+            m.content = sanitize_text(m.content)
+    return messages
+```
+
+**Applied at multiple layers (defence-in-depth):**
+
+| Layer | Where |
+|---|---|
+| Milvus retrieval | `sanitize_text(page_content)` at `Document` creation (both search + pinned paths) |
+| context_text | `sanitize_text("...".join([...]))` at all 3 build sites |
+| mapped_context | `sanitize_text(mapped_context)` after build |
+| Chat history | `sanitize_text(msg["content"])` when building `history_msgs` |
+| User input | `sanitize_text(req.case_content)` at `predict_judgment` entry |
+| All LLM calls | `_sanitize_msgs([...])` wrapping every `llm.invoke()` (7 call sites) |
+| LLM output | `cleanup_response()` calls `sanitize_text()` before returning |
+
+---
+
+## 7. Implementation Status
+
+| Status | Node / Change | Notes |
 |---|---|---|
-| 🔴 P0 | `multi_query_rewrite` (3 behavior-based queries) | +15–25% retrieval recall |
-| 🔴 P0 | `temporal_priority_tagger` by crime date | Eliminates wrong-edition citations |
-| 🔴 P0 | `ngay_xet_xu` auto-inject GMT+7 | Already implemented in `main.py` |
-| 🟠 P1 | `rerank` (cross-encoder, replaces `grade_documents`) | -50% latency, better precision |
-| 🟠 P1 | `clarification_check` + `clarification_node` | Better UX for incomplete inputs |
-| 🟠 P1 | Fix `map_laws` truncation | Correct mapping for long cases |
-| 🟡 P2 | Structured citation table in `generate` | Frontend citation linking |
-| 🟡 P2 | Route `rebuttal` through `map_laws` | Grounded counter-arguments |
+| ✅ Done | `multi_query_rewrite` (3 behavior-based queries) | Role-biased `circumstance_query` |
+| ✅ Done | `temporal_priority_tagger` by crime date | Tags docs `primary/comparison/adjustment` |
+| ✅ Done | `ngay_xet_xu` auto-inject GMT+7 | Falls back to today only if absent |
+| ✅ Done | `rerank` (direct AutoModel, replaces `grade_documents`) | -50% latency, no CrossEncoder wrapper |
+| ✅ Done | `clarification_check` + `clarification_node` | Validates `hanh_vi` + `ngay_pham_toi` |
+| ✅ Done | Fix `map_laws` truncation | Full case text, all docs passed |
+| ✅ Done | Structured citation table in `generate` | Included in prompt template |
+| ✅ Done | Route `rebuttal` through `map_laws` | Grounded counter-arguments |
+| ✅ Done | Nhân thân xấu role-aware context | Inline in `generate_node`; dedicated node is future work |
+| ✅ Done | Surrogate sanitization (all layers) | `sanitize_text` + `_sanitize_msgs` — see Section 9 |
+| 🟡 P2 | Dedicated `nhan_than_node` | Compute `nhan_than_level`, `co_the_an_treo` from richer facts |
 | 🟢 P3 | Streaming (`ainvoke` → `astream_events`) | UX improvement |
 
 ---
@@ -1146,6 +1269,15 @@ cross_encoder.tokenizer.model_max_length = 8192
 > [!NOTE]
 > Cross-encoder is loaded **once at startup** in `lifespan`. Never instantiate it inside a node.
 
+> [!NOTE]
+> `LoRABGEM3Embeddings` class is kept in `main.py` for backward compatibility but is NOT
+> instantiated — `JinaEmbeddings` is the active embedding class.
+
 > [!WARNING]
-> Do not remove `LoRABGEM3Embeddings` class from `main.py` — keep it for backward compatibility.
-> Only the instantiation has changed to `JinaEmbeddings`.
+> **Do NOT use `CrossEncoder` from `sentence_transformers`** or `FlagReranker` from `FlagEmbedding`.
+> Both call `prepare_for_model` which was removed in `transformers 4.57`. Use `_rerank_scores()`
+> (direct `AutoModelForSequenceClassification`) instead — already implemented in `main.py`.
+
+> [!WARNING]
+> **Do NOT reinstall `torch` alone** when fixing CUDA issues — it will break `torchvision`
+> version coupling. Use `deploy_nodocker.sh` which handles driver-aware `cu` tag selection.

@@ -4,6 +4,7 @@ import ChatPage from './pages/ChatPage.jsx';
 import TrainingPage from './pages/TrainingPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
+import AdminPage from './pages/AdminPage.jsx';
 
 // ProtectedRoute: Only allow authenticated or guest access
 function ProtectedRoute({ children }) {
@@ -29,6 +30,7 @@ function Routes_() {
       <Route path="/register" element={<RedirectIfAuthenticated><RegisterPage /></RedirectIfAuthenticated>} />
       <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
       <Route path="/training" element={<ProtectedRoute><TrainingPage /></ProtectedRoute>} />
+      <Route path="/admin" element={<AdminPage />} />
       <Route path="*" element={<Navigate to="/chat" replace />} />
     </Routes>
   );

@@ -1,109 +1,38 @@
-I’ll provide a clean handoff report you can paste into Claude, including your current architecture, exact problem constraints, and the decisions you’ve made so far.**Project Handoff Report For Claude**
+=====================================================
+Only the prompt template. I did **not** create a new graph node.
 
-**1. Project Overview**
-- Project goal: Vietnamese Criminal Law assistant that helps solve criminal cases from 3 perspectives:
-  - Judge
-  - Defense Lawyer for the victim
-  - Defense Lawyer for the accused
-- Main objective from advisor feedback: focus tightly on criminal case resolution quality, not broad generic legal chatbot features.
+Here's exactly what I did: inside `generate_node`, I added ~12 lines of inline Python that read `state["extracted_facts"].co_tien_an` (a flag already extracted by the existing `extract_facts` node), then conditionally build the `nhan_than_context` string based on `role`. It's purely presentation/framing logic inline in the generate step.
 
-**2. Current System Architecture**
-- Frontend: React (Vite).
-- Backend: Spring Boot.
-- AI service: FastAPI with LangGraph workflow.
-- Retrieval: RAG over vector database containing Vietnamese criminal law documents.
-- Embedding model currently used: BGE-M3.
-- Generation model currently used via API: Gemini-2.5-Flash.
-- Data stores:
-  - PostgreSQL for app/session/history data.
-  - Milvus Lite / vector DB for legal retrieval corpus.
-- Current retrieval corpus status:
-  - Mostly objective law articles (statutes).
-  - No rich role-specific corpus yet (limited precedent/pattern guidance).
+```
+graph flow (unchanged):
+extract_facts → multi_query_rewrite → parallel_retrieve
+    → temporal_priority_tagger → rerank → map_laws → generate
+                                                        ↑
+                                     nhan_than_context built HERE (inline)
+```
 
-**3. Current AI Flow**
-- User inputs case description and chooses role.
-- AI workflow does:
-  - fact extraction
-  - retrieval of relevant legal chunks
-  - generation with role-specific prompt template
-- Current weakness:
-  - role differentiation is mostly prompt-level
-  - retrieval context fed to LLM is not sufficiently role-differentiated
+---
 
-**4. Core Problem To Solve**
-- Advisor says current design is not enough to prove strong perspective switching.
-- Need to show:
-  - what each role must extract from the same case
-  - how content differs across roles
-  - domain-specific answer quality criteria
-  - objective evidence that final system outperforms baseline
+**Should it be a dedicated node? Yes, if you want it to be more sophisticated.**
 
-**5. Role Definitions (Agreed Domain Semantics)**
-- Judge:
-  - objective truth finding
-  - procedural control/compliance
-  - balanced evaluation of incriminating and exculpatory evidence
-  - offense qualification and sentencing decision
-- Defense Lawyer for defendant:
-  - presumption of innocence
-  - attack evidence gaps/procedural violations
-  - due process protection
-  - reclassification to lesser offense when possible
-  - maximize mitigating factors
-- Lawyer for victim:
-  - maximize compensation and restitution logic
-  - emphasize aggravating factors
-  - protect victim dignity in adversarial process
-  - support appeals for too-lenient outcomes
+The current approach only looks at `co_tien_an: bool` (a single flag). A dedicated node would let you do richer analysis — for example:
 
-**6. Key Design Decision Already Reached**
-- Retrieval should remain objective first because corpus is objective law text.
-- Role bias should be introduced after objective retrieval via role-aware evidence selection/framing.
-- Recommended pattern: two-stage context construction
-  - Stage A: objective legal retrieval
-  - Stage B: role-aware selection, weighting, and packaging for generation
+| What a dedicated node could compute | Why it matters |
+|---|---|
+| **Severity level**: `tốt / xấu / rất xấu` | "Rất xấu" = repeated same-type crime → even harder on sentence |
+| **Prior convictions count** | 1 prior vs. 3 priors is very different in practice |
+| **Same-type crime check** | Prior drug crime + current drug crime → courts are much stricter |
+| **Time since last conviction** | Recent (< 5 yr) vs. distant (> 10 yr) affects judicial attitude |
+| **Án treo eligibility flag** | Pre-compute `can_apply_an_treo: bool` as a hard signal |
 
-**7. Chunking Decision Context**
-- Original chunking: one full law article per chunk.
-- Discussed options:
-  - split to clause level (khoản 1/2/3/4)
-  - optional deeper split to point level (a/b/c/d/đ)
-- Current practical decision:
-  - clause-level chunking is acceptable now
-  - keep point-level info as metadata or optional deeper split for list-heavy clauses
-  - preserve enough context to avoid losing legal meaning
+Right now you'd need to expand the `extract_facts` prompt to extract this richer data and then build a `nhan_than_node` in the graph. That's a meaningful improvement but requires more design work. 
 
-**8. Retrieval Module Direction**
-- Use split query bundle, not one query:
-  - shared objective legal queries
-  - role-focused queries
-- Even with same statute corpus, role-specific context can differ by:
-  - selected clauses
-  - evidence ranking weights
-  - emphasis/ordering in final context pack
-- LLM input should be structured pack:
-  - shared legal truth block
-  - role focus block
-  - required citations
-  - constraints (must include / must avoid)
-
-**9. Evaluation Pressure From Advisor**
-- Must compare baseline vs improved system clearly.
-- Must show difference among 3 role outputs on same case.
-
-**11. Dataset Challenges**
-- Current data strongest for objective statute retrieval.
-- Missing/weak parts:
-  - role-guided training annotations
-  - explicit final-answer test set with role-specific gold expectations
-- Needed dataset pattern:
-  - triplet per case: judge answer, victim-lawyer answer, defendant-lawyer answer
-  - include must-include and must-avoid guidance by role
-  - keep non-overlap across train/val/test
+**Want me to build the dedicated node?** If yes, I'd:
+1. Extend the `extract_facts` LLM prompt to also extract `so_tien_an`, `tien_an_cung_loai: bool`, and `thoi_gian_tu_tien_an_gan_nhat`
+2. Add a `nhan_than_node` that computes `nhan_than_level` and `co_the_an_treo` from those fields
+3. Wire it into the graph between `extract_facts` and `multi_query_rewrite`
+4. Replace the inline logic in `generate_node` with a single read of `state["nhan_than"]`
+=====================================================
 
 
-**14. What I Need Claude To Help With Next**
-- Reassess the RAG module architecture for Vietnamese penal law domain specifically
-- Advise me the best architecture that i can implement
 

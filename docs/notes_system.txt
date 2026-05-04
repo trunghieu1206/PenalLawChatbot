@@ -1,3 +1,0 @@
-- response returned by AI’s time is displayed wrongly compared to the time of the user's chat, synchronize this. Also display full date in the format: "yyyy-mm-dd time"
-- when the user just gives a short question to ask, the AI still outputs the whole template of answer (for eg when user asks: "phạm tội giết người cướp của thì bị phạt như nào" then the answer should be law article, not whole template answer of judgement)
-- in study mode, when the content of the case provided by the user is garbage (not the law case) then there should be warning, not going through every nodes which would waste API call to LLM
