@@ -305,6 +305,24 @@ export default function ChatPage() {
               Chế độ Luyện tập
             </button>
 
+            {/* Stats — accessible to all users */}
+            <button
+              className={styles.statsBtn}
+              onClick={() => navigate('/stats')}
+            >
+              📊 Thống kê hệ thống
+            </button>
+
+            {/* Admin Panel — visible only to admin role */}
+            {user?.role === 'admin' && (
+              <button
+                className={styles.adminBtn}
+                onClick={() => navigate('/admin')}
+              >
+                🛡 Quản lý phản hồi
+              </button>
+            )}
+
             <div className={styles.userSection}>
               {user ? (
                 <>

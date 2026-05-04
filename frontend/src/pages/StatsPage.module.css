@@ -1,0 +1,138 @@
+/* ── Page shell ─────────────────────────────────────────── */
+.page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0f1923 0%, #162232 50%, #1a2d40 100%);
+  color: #e2eaf4;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+.header {
+  background: rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  backdrop-filter: blur(12px);
+  position: sticky; top: 0; z-index: 100;
+}
+.headerInner {
+  max-width: 1200px; margin: 0 auto;
+  padding: 14px 32px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.backBtn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px; color: rgba(226,234,244,0.7);
+  cursor: pointer; transition: all 0.15s;
+}
+.backBtn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.headerTitle {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 18px; font-weight: 700; color: #fff;
+}
+.headerIcon { font-size: 22px; }
+
+/* ── Main ────────────────────────────────────────────────── */
+.main {
+  max-width: 1200px; margin: 0 auto;
+  padding: 32px;
+}
+
+/* ── Loading / error ─────────────────────────────────────── */
+.loadingState {
+  display: flex; align-items: center; justify-content: center;
+  gap: 12px; padding: 80px; color: rgba(226,234,244,0.6); font-size: 15px;
+}
+.spinner {
+  width: 22px; height: 22px;
+  border: 3px solid rgba(255,255,255,0.15);
+  border-top-color: #4da6c8;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.errorBanner {
+  background: rgba(231,76,60,0.15);
+  border: 1px solid rgba(231,76,60,0.35);
+  border-radius: 10px; padding: 16px 20px;
+  color: #f1948a; font-size: 14px; margin-bottom: 20px;
+}
+
+/* ── Stat cards ─────────────────────────────────────────── */
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px; margin-bottom: 24px;
+}
+.statCard {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 14px; padding: 22px 20px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.statCard:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+.statIcon  { font-size: 22px; margin-bottom: 2px; }
+.statValue { font-size: 36px; font-weight: 800; letter-spacing: -1px; }
+.statLabel { font-size: 13px; color: rgba(226,234,244,0.55); }
+
+.accent_blue   .statValue { color: #4da6c8; }
+.accent_teal   .statValue { color: #1abc9c; }
+.accent_purple .statValue { color: #a78bfa; }
+.accent_orange .statValue { color: #f39c12; }
+
+/* ── Accuracy row ────────────────────────────────────────── */
+.accuracyRow {
+  display: flex; flex-direction: column; gap: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px; padding: 16px 20px;
+  margin-bottom: 28px;
+}
+.accuracyLabel { font-size: 14px; color: rgba(226,234,244,0.7); }
+.accuracyLabel strong { color: #1abc9c; }
+.accuracyBar  { height: 8px; border-radius: 4px; background: rgba(255,255,255,0.1); overflow: hidden; }
+.accuracyFill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #1abc9c, #4da6c8); transition: width 0.7s ease; }
+
+/* ── Sections ────────────────────────────────────────────── */
+.section { margin-bottom: 32px; }
+.sectionTitle { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 16px; }
+
+/* ── Role cards ─────────────────────────────────────────── */
+.roleGrid { display: flex; gap: 14px; flex-wrap: wrap; }
+.roleCard {
+  flex: 1; min-width: 150px;
+  border-radius: 12px; padding: 20px 24px;
+  border: 1px solid; text-align: center;
+  background: rgba(255,255,255,0.04);
+  transition: transform 0.15s;
+}
+.roleCard:hover { transform: translateY(-2px); }
+.roleCount { font-size: 32px; font-weight: 800; }
+.roleLabel { font-size: 13px; color: rgba(226,234,244,0.55); margin-top: 4px; }
+
+/* ── Charts ─────────────────────────────────────────────── */
+.chartsRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 20px;
+}
+.chartCard {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px; padding: 22px 24px;
+}
+.chartTitle { font-size: 14px; font-weight: 700; margin-bottom: 18px; color: rgba(226,234,244,0.9); }
+.emptyNote  { font-size: 13px; color: rgba(226,234,244,0.4); font-style: italic; }
+
+.barList { display: flex; flex-direction: column; gap: 10px; }
+.barRow  { display: flex; align-items: center; gap: 10px; }
+.barLabel {
+  width: 130px; flex-shrink: 0;
+  font-size: 12px; color: rgba(226,234,244,0.7);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.barTrack { flex: 1; height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; }
+.barFill  { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+.barCount { width: 28px; text-align: right; font-size: 12px; color: rgba(226,234,244,0.55); }

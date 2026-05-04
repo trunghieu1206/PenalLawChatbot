@@ -13,7 +13,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -109,24 +112,12 @@ public class AdminService {
     @Transactional
     public AdminDTOs.FeedbackResponse submitFeedback(UUID sessionId, UUID messageId,
                                                       boolean isCorrect, String comment) {
-        // Upsert: if feedback for this message already exists, update it
-        Optional<Feedback> existing = feedbackRepository.findAllByOrderByCreatedAtDesc().stream()
-                .filter(f -> Objects.equals(f.getMessageId(), messageId))
-                .findFirst();
+        // Upsert: update existing feedback for this message, or create a new record
+        Feedback feedback = feedbackRepository.findByMessageId(messageId)
+                .orElse(Feedback.builder().sessionId(sessionId).messageId(messageId).build());
 
-        Feedback feedback;
-        if (existing.isPresent()) {
-            feedback = existing.get();
-            feedback.setIsCorrect(isCorrect);
-            feedback.setComment(comment);
-        } else {
-            feedback = Feedback.builder()
-                    .sessionId(sessionId)
-                    .messageId(messageId)
-                    .isCorrect(isCorrect)
-                    .comment(comment)
-                    .build();
-        }
+        feedback.setIsCorrect(isCorrect);
+        feedback.setComment(comment);
         feedback = feedbackRepository.save(feedback);
         return new AdminDTOs.FeedbackResponse(feedback.getId(), "Đã ghi nhận phản hồi. Cảm ơn bạn!");
     }
