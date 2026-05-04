@@ -173,7 +173,6 @@ function MessageBubble({ message, role, sessionId, onLawClick }) {
 
   const crimeDate = parseCrimeDate(message.extractedFacts?.ngay_pham_toi);
   const avatarLabel = isUser ? 'Bạn' : 'Trợ lý';
-  const handleLawPillClick = (law) => { if (onLawClick) onLawClick(law, crimeDate); };
 
   return (
     <div className={`${styles.wrapper} ${isUser ? styles.user : styles.assistant}`}>
@@ -206,7 +205,7 @@ function MessageBubble({ message, role, sessionId, onLawClick }) {
                   className={styles.lawPill}
                   title={`${law.offense_name || ''} — ${law.edition_reason || ''}`}
                   type="button"
-                  onClick={() => onLawClick(
+                  onClick={() => onLawClick && onLawClick(
                     { article: law.article, edition_applied: law.edition_applied },
                     crimeDate,
                     law.edition_applied || null

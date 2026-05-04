@@ -10,12 +10,11 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Admin endpoints — no authentication guard for now (thesis scope).
- * Provides dashboard statistics and full feedback history for admin review.
+ * Admin endpoints — secured at the URL level by SecurityConfig.
  *
- * GET  /api/admin/stats         — aggregate dashboard statistics
- * GET  /api/admin/feedback      — all feedback with full session conversations
- * POST /api/admin/feedback      — submit feedback on an AI response (called by users)
+ * GET  /api/admin/stats     — aggregate dashboard statistics (ROLE_ADMIN)
+ * GET  /api/admin/feedback  — all feedback with full session conversations (ROLE_ADMIN)
+ * POST /api/admin/feedback  — submit feedback on an AI response (open to all users)
  */
 @RestController
 @RequestMapping("/api/admin")
@@ -45,12 +44,9 @@ public class AdminController {
     public ResponseEntity<AdminDTOs.FeedbackResponse> submitFeedback(
             @RequestBody AdminDTOs.FeedbackRequest request
     ) {
-        // session_id is required for conversation linking; message_id targets the specific AI turn
         if (request.messageId() == null) {
             return ResponseEntity.badRequest().build();
         }
-        // We derive session from the message — accept session_id directly in a richer DTO later
-        // For now, session_id is embedded in FeedbackRequest as sessionId()
         AdminDTOs.FeedbackResponse resp = adminService.submitFeedback(
                 request.sessionId(),
                 request.messageId(),

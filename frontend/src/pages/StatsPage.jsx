@@ -99,8 +99,7 @@ export default function StatsPage() {
               <StatCard icon="💬" label="Tổng phiên làm việc"   value={stats.total_sessions}   accent="blue"   />
               <StatCard icon="👤" label="Người dùng đã đăng ký" value={stats.total_users}       accent="teal"   />
               <StatCard icon="⚖️" label="Vụ án đã phân tích"    value={stats.cases_processed}   accent="purple" />
-              <StatCard icon="📝" label="Phản hồi nhận được"     value={stats.feedback_total}    accent="orange"
-                sub={accuracy !== null ? `${accuracy}% chính xác` : undefined} />
+              <StatCard icon="📝" label="Phản hồi nhận được"     value={stats.feedback_total}    accent="orange" />
             </div>
 
             {/* Feedback accuracy bar */}
