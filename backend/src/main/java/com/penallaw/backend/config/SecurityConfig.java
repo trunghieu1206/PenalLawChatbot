@@ -32,17 +32,22 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthFilter;
+    // Only UserRepository here — JwtAuthenticationFilter injected via method param to break the cycle
     private final UserRepository userRepository;
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                                   JwtAuthenticationFilter jwtAuthFilter) throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/api/auth/**",
+                                "/api/chat/guest/**",          // anonymous guest sessions
+                                "/api/chat/sessions/*/messages", // send & get messages (session-id gated)
+                                "/api/chat/sessions/*",         // delete session
+                                "/api/laws/**",                 // law reference sidebar — public read
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()
@@ -97,3 +102,4 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 }
+

@@ -10,4 +10,5 @@ import java.util.UUID;
 @Repository
 public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> {
     List<ChatSession> findByUserIdOrderByCreatedAtDesc(UUID userId);
+    List<ChatSession> findByGuestIdOrderByCreatedAtDesc(String guestId);
 }

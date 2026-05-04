@@ -30,13 +30,14 @@ public class AiServiceClient {
     public record PredictRequest(
             @JsonProperty("case_content") String caseContent,
             String role,
-            @JsonProperty("rebuttal_against") String rebuttalAgainst
+            @JsonProperty("rebuttal_against") String rebuttalAgainst,
+            @JsonProperty("conversation_history") List<Map<String, String>> conversationHistory
     ) {}
 
     public record PredictResponse(
             String result,
             @JsonProperty("extracted_facts") Map<String, Object> extractedFacts,
-            @JsonProperty("mapped_laws") List<Map<String, String>> mappedLaws,
+            @JsonProperty("mapped_laws") List<Map<String, Object>> mappedLaws,
             @JsonProperty("sentencing_data") Map<String, Object> sentencingData
     ) {}
 
@@ -44,9 +45,11 @@ public class AiServiceClient {
 
     /**
      * Call Python AI service to get legal analysis.
+     * @param conversationHistory prior messages as [{role, content}] for context
      */
-    public PredictResponse predict(String caseContent, String role, String rebuttalAgainst) {
-        PredictRequest request = new PredictRequest(caseContent, role, rebuttalAgainst);
+    public PredictResponse predict(String caseContent, String role, String rebuttalAgainst,
+                                   List<Map<String, String>> conversationHistory) {
+        PredictRequest request = new PredictRequest(caseContent, role, rebuttalAgainst, conversationHistory);
         return getClient().post()
                 .uri("/predict")
                 .bodyValue(request)

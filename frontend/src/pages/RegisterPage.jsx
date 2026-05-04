@@ -11,6 +11,8 @@ export default function RegisterPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
+  const handleBack = () => navigate('/chat');
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -24,7 +26,12 @@ export default function RegisterPage() {
       login(data);
       navigate('/chat');
     } catch (err) {
-      setError(err.response?.data?.message || err.response?.data?.email || 'Đăng ký thất bại');
+      const errorMsg = err.response?.data?.message 
+        || err.response?.data?.email 
+        || err.response?.data?.error 
+        || err.message 
+        || 'Đăng ký thất bại';
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -33,11 +40,17 @@ export default function RegisterPage() {
   return (
     <div className={styles.page}>
       <div className={styles.bg} />
+      <button
+        className={styles.backBtn}
+        onClick={handleBack}
+        title="Quay lại trang chủ"
+      >
+        ← Quay lại
+      </button>
       <div className={`${styles.container} card animate-fade-in`}>
         <div className={styles.logo}>
-          <span className={styles.logoIcon}>⚖️</span>
-          <h1 className={styles.logoText}>LegalAI</h1>
-          <p className={styles.logoSub}>Tạo tài khoản mới</p>
+          <h1 className={styles.logoText}>VNPLaw</h1>
+          <p className={styles.logoSub}>Tạo Tài Khoản Mới</p>
         </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>

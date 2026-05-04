@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -26,6 +27,13 @@ public class ChatSession {
     @JoinColumn(name = "user_id")
     private User user;
 
+    /** For anonymous/guest sessions (no login required). */
+    @Column(name = "guest_id", length = 64)
+    private String guestId;
+
+    @Column(length = 200)
+    private String title;
+
     @Column(length = 20)
     @Builder.Default
     private String mode = "neutral";
@@ -35,10 +43,12 @@ public class ChatSession {
     private List<ChatMessage> messages = new ArrayList<>();
 
     @CreationTimestamp
-    @Column(name = "created_at", updatable = false)
+    @Column(name = "created_at", updatable = false, nullable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSS]'Z'", timezone = "UTC")
     private LocalDateTime createdAt;
 
     @UpdateTimestamp
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", nullable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSS]'Z'", timezone = "UTC")
     private LocalDateTime updatedAt;
 }

@@ -3,6 +3,7 @@
   height: 100vh;
   overflow: hidden;
   background: var(--bg-base);
+  position: relative; /* needed for floatingToggleBtn absolute positioning */
 }
 
 /* --- SIDEBAR --- */
@@ -38,17 +39,32 @@
 .logoText {
   font-family: var(--font-display);
   font-size: 18px;
-  background: linear-gradient(135deg, #818cf8, #6366f1);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-weight: 700;
+  color: var(--primary);
   white-space: nowrap;
+  letter-spacing: -0.5px;
 }
 
-.toggleBtn {
+/* Floating toggle button — lives at layout level, always on top */
+.floatingToggleBtn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 200;
   padding: 6px 8px;
   font-size: 11px;
   border-radius: var(--radius-sm);
+  transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1), var(--transition);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.floatingToggleBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-accent);
 }
 
 .newChatBtn {
@@ -73,35 +89,89 @@
   margin-top: 20px;
 }
 
-.sessionItem {
+.sessionItemWrapper {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 10px;
+  position: relative;
+}
+
+.sessionItem {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
   border-radius: var(--radius-md);
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  color: var(--text-secondary);
   transition: var(--transition);
   text-align: left;
+  min-width: 0;        /* allow flex child to shrink */
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .sessionItem:hover {
   background: var(--bg-hover);
   border-color: var(--border);
-  color: var(--text-primary);
 }
 
-.sessionActive {
+.sessionActive .sessionItem {
   background: var(--bg-surface);
   border-color: var(--border-accent);
-  color: var(--text-primary);
 }
 
-.sessionDate { color: var(--text-muted); font-size: 11px; margin-left: auto; }
+.sessionItemHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sessionTitle {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 20px; /* space for delete btn */
+}
+
+.deleteSessionBtn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(198, 40, 40, 0.1);
+  color: #C62828;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0;
+  transition: var(--transition);
+}
+
+.sessionItemWrapper:hover .deleteSessionBtn {
+  opacity: 1;
+}
+
+.deleteSessionBtn:hover {
+  background: #C62828;
+  color: white;
+}
+
+.sessionDate { color: var(--text-muted); font-size: 11px; }
 
 .userSection {
   padding: 12px;
@@ -110,6 +180,31 @@
   flex-direction: column;
   gap: 8px;
   flex-shrink: 0;
+  min-width: 0;  /* allow flex children to shrink */
+  overflow: hidden;  /* prevent button overflow */
+}
+
+/* Training Mode Button — prominent, stands out in sidebar */
+.trainingBtn {
+  margin: 0 12px 8px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  text-align: center;
+  flex-shrink: 0;
+  transition: var(--transition);
+  letter-spacing: 0.3px;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35);
+}
+.trainingBtn:hover {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.45);
 }
 
 .userInfo {
@@ -120,12 +215,19 @@
 }
 
 .userAvatar {
-  width: 32px; height: 32px;
+  width: 32px; 
+  height: 32px;
   border-radius: 50%;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: center;
+  background: rgba(45, 95, 122, 0.15);
+  color: var(--primary);
+  border: 2px solid rgba(45, 95, 122, 0.25);
+  display: flex; 
+  align-items: center; 
+  justify-content: center;
   flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0px;
 }
 
 .userName {
@@ -147,10 +249,17 @@
 
 .userActions {
   display: flex;
-  gap: 4px;
+  gap: 8px;
+  width: 100%;
 }
 
-.userActions .btn { padding: 6px 8px; flex: 1; justify-content: center; font-size: 14px; }
+.userActions .btn { 
+  flex: 1;
+  padding: 10px 12px; 
+  justify-content: center; 
+  font-size: 13px;
+  font-weight: 600;
+}
 
 /* --- MAIN --- */
 .main {
@@ -187,6 +296,52 @@
   font-size: 14px;
 }
 
+.roleAbbr {
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.roleLocked {
+  opacity: 0.75;
+}
+
+.roleLockIcon {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+/* Wrapper for role button + popup */
+.roleBtnWrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Lock popup that appears below the role button */
+.roleLockPopup {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  z-index: 50;
+  animation: fadeInDown 0.15s ease;
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* --- MESSAGES --- */
 .messages {
   flex: 1;
@@ -208,19 +363,16 @@
 }
 
 .welcomeIcon {
-  font-size: 64px;
-  margin-bottom: 16px;
-  filter: drop-shadow(0 0 30px rgba(99,102,241,0.4));
+  display: none;
 }
 
 .welcomeTitle {
   font-family: var(--font-display);
   font-size: 28px;
+  font-weight: 700;
   margin-bottom: 12px;
-  background: linear-gradient(135deg, #f1f5f9 0%, #94a3b8 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--primary);
+  letter-spacing: -0.5px;
 }
 
 .welcomeDesc {
@@ -360,4 +512,23 @@
   font-weight: 700;
   margin-bottom: 20px;
   color: var(--text-primary);
+}
+
+/* ── Law Reference Side Panel ── */
+/* Wrapper that animates from 0 → 460px, compressing the chat area */
+.lawPanelWrapper {
+  width: 0;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  /* Ensure it sits at full layout height */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.lawPanelOpen {
+  width: 460px;
+  min-width: 320px;
+  max-width: 46vw;
 }
