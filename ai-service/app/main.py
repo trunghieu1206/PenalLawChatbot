@@ -1040,8 +1040,9 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
                     )
                     for h in hits:
                         doc = Document(
-                            page_content=h.get("content", ""),
-                            metadata={k: h.get(k, "") for k in _OUTPUT_FIELDS if k != "content"},
+                            page_content=sanitize_text(h.get("content", "")),
+                            metadata={k: sanitize_text(h.get(k, "")) if isinstance(h.get(k, ""), str) else h.get(k, "")
+                                      for k in _OUTPUT_FIELDS if k != "content"},
                         )
                         doc.metadata["_pinned"]  = True
                         doc.metadata["_purpose"] = purpose
@@ -1250,11 +1251,11 @@ OUTPUT: CHỈ JSON array hợp lệ."""
         if not documents:
             return {"messages": [AIMessage(content="Xin lỗi, tôi chưa tìm thấy văn bản luật phù hợp.")]}
 
-        context_text = "\n\n".join([
+        context_text = sanitize_text("\n\n".join([
             f"[Điều {d.metadata.get('article_number','?')} - {d.metadata.get('source','Unknown')} | "
             f"role={d.metadata.get('_temporal_role','unknown')}]\n{d.page_content}"
             for d in documents
-        ])
+        ]))
 
         # Role-specific instructions
         if role == "defense":
@@ -1515,11 +1516,11 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
         documents     = state.get("documents") or []
         user_argument = state.get("rebuttal_against", "")
 
-        context_text = "\n\n".join([
+        context_text = sanitize_text("\n\n".join([
             f"[Điều {d.metadata.get('article_number','?')} - {d.metadata.get('source','Unknown')} | "
             f"role={d.metadata.get('_temporal_role','unknown')}]\n{d.page_content}"
             for d in documents
-        ])
+        ]))
 
         system_prompt = f"""Bạn là giám khảo môn luật hình sự Việt Nam.
 Người dùng phân tích vụ án từ góc độ: {role}.
@@ -1649,11 +1650,11 @@ TIÊU CHÍ (100 điểm):
         question     = state["question"]
         role         = state.get("user_role", "neutral")
 
-        context_text = "\n\n".join([
+        context_text = sanitize_text("\n\n".join([
             f"[Điều {d.metadata.get('article_number','?')} - {d.metadata.get('source','Unknown')} | "
             f"role={d.metadata.get('_temporal_role','unknown')}]\n{d.page_content}"
             for d in documents
-        ])
+        ]))
         history_messages = [
             HumanMessage(content=m["content"]) if m["role"] == "user"
             else AIMessage(content=m["content"])
@@ -1766,8 +1767,8 @@ async def predict_judgment(req: RequestBody):
         raise HTTPException(status_code=500, detail="Model not loaded")
 
     inputs = {
-        "question":            req.case_content,
-        "full_case_content":   req.case_content,
+        "question":            sanitize_text(req.case_content),
+        "full_case_content":   sanitize_text(req.case_content),
         "messages":            [HumanMessage(content=req.case_content)],
         "user_role":           req.role,
         "retry_count":         0,
