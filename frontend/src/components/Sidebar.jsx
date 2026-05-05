@@ -11,7 +11,7 @@ export default function Sidebar({ activeTab }) {
   };
 
   const navItems = [
-    { id: 'stats', label: 'Dashboard/Thống kê', icon: 'dashboard', path: '/stats' },
+    { id: 'home', label: 'Dashboard/Thống kê', icon: 'dashboard', path: '/home' },
     { id: 'chat', label: 'Chat', icon: 'chat', path: '/chat' },
     { id: 'training', label: 'Chế độ Luyện tập', icon: 'gavel', path: '/training' },
   ];
@@ -22,7 +22,7 @@ export default function Sidebar({ activeTab }) {
 
   return (
     <nav className="h-screen w-64 border-r fixed left-0 top-0 border-slate-200 shadow-sm bg-slate-50 flex flex-col py-6 px-4 z-50">
-      <div className="mb-8 px-2 flex items-center gap-3 cursor-pointer" onClick={() => navigate('/stats')}>
+      <div className="mb-8 px-2 flex items-center gap-3 cursor-pointer" onClick={() => navigate('/home')}>
         <div className="w-8 h-8 rounded bg-primary text-on-primary flex items-center justify-center font-bold text-lg">V</div>
         <div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight hover:text-primary transition-colors">VNPLaw</h1>

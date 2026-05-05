@@ -115,7 +115,7 @@ export const lawsApi = {
 export const adminApi = {
   /** Get aggregate dashboard statistics. */
   getStats: () =>
-    apiClient.get('/stats').then(r => r.data),
+    apiClient.get('/home').then(r => r.data),
 
   /** Get all feedback records with full conversation context (admin view). */
   getFeedback: () =>

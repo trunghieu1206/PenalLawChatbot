@@ -8,13 +8,13 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * Public statistics endpoint — accessible to any user (no authentication required).
- * GET /api/stats  →  aggregate dashboard statistics (sessions, cases, by province, by role, etc.)
+ * GET /api/home  →  aggregate dashboard statistics (sessions, cases, by province, by role, etc.)
  *
  * Separate from /api/admin/** (which is ROLE_ADMIN only) so that ordinary users
  * can view system-wide metrics without needing admin credentials.
  */
 @RestController
-@RequestMapping("/api/stats")
+@RequestMapping("/api/home")
 @RequiredArgsConstructor
 public class StatsController {
 

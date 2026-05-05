@@ -73,7 +73,7 @@ export default function StatsPage() {
 
   return (
     <div className="bg-background text-on-background font-body-md text-body-md h-full min-h-screen flex overflow-hidden">
-      <Sidebar activeTab="stats" />
+      <Sidebar activeTab="home" />
 
       <main className="ml-64 flex-1 flex flex-col h-screen bg-surface overflow-y-auto pt-16">
         <Topbar />

@@ -12,7 +12,7 @@ export default function Topbar() {
   return (
     <header className="bg-white/80 backdrop-blur-md fixed top-0 right-0 w-[calc(100%-16rem)] z-40 border-b border-surface-variant flex justify-between items-center h-16 px-8 transition-all duration-300">
       <div className="flex items-center gap-6">
-        <span className="text-lg font-black text-slate-900 font-h3 hover:text-primary transition-colors cursor-pointer" onClick={() => navigate('/stats')}>VNPLaw</span>
+        <span className="text-lg font-black text-slate-900 font-h3 hover:text-primary transition-colors cursor-pointer" onClick={() => navigate('/home')}>VNPLaw</span>
         <nav className="hidden md:flex gap-4">
           <button className="font-newsreader text-sm font-medium text-slate-500 hover:text-slate-900 transition-all duration-300">Tài liệu</button>
           <button className="font-newsreader text-sm font-medium text-slate-500 hover:text-slate-900 transition-all duration-300">Lưu trữ</button>

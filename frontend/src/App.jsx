@@ -41,7 +41,7 @@ function Routes_() {
       <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
       <Route path="/training" element={<ProtectedRoute><TrainingPage /></ProtectedRoute>} />
       <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
-      <Route path="/stats" element={<StatsPage />} />
+      <Route path="/home" element={<StatsPage />} />
       <Route path="*" element={<Navigate to="/chat" replace />} />
     </Routes>
   );
