@@ -115,7 +115,9 @@ public class AdminService {
 
             return new AdminDTOs.FeedbackDetail(
                     f.getId(), sid, f.getMessageId(),
-                    f.getIsCorrect(), f.getComment(), f.getStatus(), f.getCreatedAt(),
+                    f.getIsCorrect(), f.getComment(),
+                    f.getStatus() != null ? f.getStatus() : "can_xem_xet",
+                    f.getCreatedAt(),
                     sessionMode, conversation
             );
         }).collect(Collectors.toList());

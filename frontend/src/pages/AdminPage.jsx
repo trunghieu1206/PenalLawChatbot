@@ -98,8 +98,17 @@ export default function AdminPage() {
 
         <div className={styles.content}>
           <div className={styles.pageHeader}>
-            <h1>Quản lý phản hồi</h1>
-            <p>Xem xét và quản lý phản hồi của người dùng về tính chính xác của câu trả lời AI để cải thiện độ chính xác của hệ thống.</p>
+            {activeTab === 'feedback' ? (
+              <>
+                <h1>Quản lý phản hồi</h1>
+                <p>Xem xét và quản lý phản hồi của người dùng về tính chính xác của câu trả lời AI để cải thiện độ chính xác của hệ thống.</p>
+              </>
+            ) : (
+              <>
+                <h1>Thống kê người dùng</h1>
+                <p>Theo dõi số lượng vụ án được tạo bởi từng người dùng và mức độ sử dụng hệ thống trong ngày.</p>
+              </>
+            )}
           </div>
 
           {error && <div className={styles.errorBanner}>{error}</div>}
