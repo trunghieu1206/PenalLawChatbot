@@ -34,6 +34,18 @@ Enhanced LangGraph pipeline with:
 """
 
 import os
+import warnings
+
+# --- WARNING & LOGGING SUPPRESSION ---
+# 1. Suppress Python deprecation warnings (transformers, pkg_resources)
+warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
+warnings.filterwarnings("ignore", category=UserWarning, module=".*pkg_resources.*")
+warnings.filterwarnings("ignore", category=FutureWarning, module="transformers.*")
+
+# 2. Suppress noisy gRPC "too_many_pings" logs from local Milvus Lite
+os.environ["GRPC_VERBOSITY"] = "ERROR"
+os.environ["GRPC_TRACE"] = ""
+# -------------------------------------
 
 # --- CPU PERFORMANCE OPTIMIZATION ---
 # Force PyTorch and underlying C++ math libraries to use all available physical
@@ -432,6 +444,7 @@ class PredictResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
+    model_config = {"protected_namespaces": ()}
     status: str
     device: str
     model_loaded: bool
