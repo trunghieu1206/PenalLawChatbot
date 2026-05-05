@@ -552,6 +552,71 @@
   font-size: 18px;
 }
 
+/* ── Resolve / Unresolve action buttons ───────────────────────── */
+.btnResolve {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: #166534;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.btnResolve:hover { background: #14532d; }
+.btnResolve .material-symbols-outlined { font-size: 18px; }
+
+.btnUnresolve {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--surface-variant);
+  background: var(--surface-container-low);
+  color: var(--on-surface-variant);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.btnUnresolve:hover { background: var(--surface-container-high); color: var(--on-surface); }
+.btnUnresolve .material-symbols-outlined { font-size: 18px; }
+
+/* ── Modal footer ─────────────────────────────────────────────── */
+.modalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--surface-variant);
+  background: var(--surface-container-lowest);
+  flex-shrink: 0;
+}
+
+.modalFooterActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Make iconBtn work as a text+icon close button inside footer */
+.modalFooter .iconBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--on-surface-variant);
+}
+
+
 /* ── Conversation Modal ───────────────────────────────────────── */
 .modalOverlay {
   position: fixed;

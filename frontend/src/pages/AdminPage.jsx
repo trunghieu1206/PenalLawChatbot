@@ -120,7 +120,7 @@ export default function AdminPage() {
               onClick={() => setActiveTab('users')}
             >
               <span className="material-symbols-outlined">manage_accounts</span>
-              Thống kê vụ án
+              Thống kê người dùng
             </button>
           </div>
 
@@ -252,15 +252,24 @@ export default function AdminPage() {
 
                     <div className={styles.detailActions}>
                        {isResolved ? (
-                         <button className="btn btn-outline" type="button" onClick={handleUnresolve}>
+                         <button
+                           className={styles.btnUnresolve}
+                           type="button"
+                           onClick={handleUnresolve}
+                         >
+                           <span className="material-symbols-outlined">undo</span>
                            Đánh dấu cần xem lại
                          </button>
                        ) : (
-                         <button className="btn btn-primary" type="button" onClick={handleResolve}>
-                           Giải quyết
+                         <button
+                           className={styles.btnResolve}
+                           type="button"
+                           onClick={handleResolve}
+                         >
+                           <span className="material-symbols-outlined">check_circle</span>
+                           Đánh dấu đã xem xét
                          </button>
                        )}
-                       <button className="btn btn-outline" type="button">Bỏ qua</button>
                        <button
                          className={styles.viewChatBtn}
                          type="button"
@@ -395,6 +404,38 @@ export default function AdminPage() {
                   </div>
                 ))
               )}
+            </div>
+
+            {/* Modal footer — resolve action */}
+            <div className={styles.modalFooter}>
+              <span className={isResolved ? styles.flagBadgeDone : styles.flagBadge}>
+                {isResolved ? 'Đã xem xét' : 'Cần xem xét'}
+              </span>
+              <div className={styles.modalFooterActions}>
+                {isResolved ? (
+                  <button
+                    className={styles.btnUnresolve}
+                    type="button"
+                    onClick={handleUnresolve}
+                  >
+                    <span className="material-symbols-outlined">undo</span>
+                    Đánh dấu cần xem lại
+                  </button>
+                ) : (
+                  <button
+                    className={styles.btnResolve}
+                    type="button"
+                    onClick={handleResolve}
+                  >
+                    <span className="material-symbols-outlined">check_circle</span>
+                    Đánh dấu đã xem xét
+                  </button>
+                )}
+                <button type="button" className={styles.iconBtn} onClick={() => setShowConversation(false)}>
+                  <span className="material-symbols-outlined">close</span>
+                  Đóng
+                </button>
+              </div>
             </div>
           </div>
         </div>
