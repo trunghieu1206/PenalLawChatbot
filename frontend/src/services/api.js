@@ -6,7 +6,7 @@ import axios from 'axios';
 const apiClient = axios.create({
   baseURL: '/api',
   headers: { 'Content-Type': 'application/json' },
-  timeout: 130000, // 130s — Backend waits for AI service
+  timeout: 660000, // 660s (11 min) — must exceed backend's 600s AI service timeout for CPU inference
 });
 
 // Add Authorization header if token exists
@@ -143,7 +143,7 @@ export default apiClient;
 const aiServiceClient = axios.create({
   baseURL: '/ai-api',
   headers: { 'Content-Type': 'application/json' },
-  timeout: 120000, // 2 minutes for LLM calls
+  timeout: 660000, // 660s (11 min) — CPU LLM inference can take 5-10 min
 });
 
 // ---- PRACTICE MODE API ----

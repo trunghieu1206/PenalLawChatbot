@@ -433,6 +433,7 @@ nohup "$AI_PYTHON" -m uvicorn app.main:app \
     --host 0.0.0.0 \
     --port 8000 \
     --workers 1 \
+    --timeout-keep-alive 660 \
     > "$LOG_DIR/ai-service.log" 2>&1 &
 AI_PID=$!
 info "AI service started (PID $AI_PID). Log: $LOG_DIR/ai-service.log"
@@ -489,6 +490,8 @@ sleep 1
 
 nohup java \
     -Xmx512m \
+    -XX:ActiveProcessorCount=$(nproc) \
+    -XX:+UseParallelGC \
     -jar "$LATEST_JAR" \
     --server.port=8080 \
     --spring.datasource.url="$SPRING_DATASOURCE_URL" \
@@ -496,7 +499,7 @@ nohup java \
     --spring.datasource.password="$SPRING_DATASOURCE_PASSWORD" \
     --jwt.secret="$JWT_SECRET" \
     --ai-service.base-url="$AI_SERVICE_URL" \
-    --ai-service.timeout-seconds=600 \
+    --ai-service.timeout-seconds=660 \
     > "$LOG_DIR/backend.log" 2>&1 &
 BACKEND_PID=$!
 info "Backend started (PID $BACKEND_PID). Log: $LOG_DIR/backend.log"
@@ -536,10 +539,11 @@ server {
     }
 
     # Proxy /ai-api → FastAPI (AI service, port 8000)
+    # CPU inference can take up to 10 min — timeouts must be > 660s client timeout
     location /ai-api/ {
         proxy_pass http://127.0.0.1:8000/;
-        proxy_read_timeout 660s;
-        proxy_send_timeout 660s;
+        proxy_read_timeout 720s;
+        proxy_send_timeout 720s;
         proxy_connect_timeout 10s;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -549,8 +553,8 @@ server {
     # Proxy /api → Spring Boot backend (port 8080)
     location /api/ {
         proxy_pass http://127.0.0.1:8080;
-        proxy_read_timeout 660s;
-        proxy_send_timeout 660s;
+        proxy_read_timeout 720s;
+        proxy_send_timeout 720s;
         proxy_connect_timeout 10s;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
