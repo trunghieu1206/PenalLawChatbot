@@ -26,13 +26,44 @@ skip()  { echo -e "${YELLOW}[SKIP]${NC}  $* (already installed)"; }
 . /etc/os-release
 info "Detected OS: $NAME $VERSION_ID (running as $(whoami))"
 
-# ── 0a. Wait for dpkg lock ──────────────────────────────────
+# ── 0a. Stop auto-update services that hold dpkg lock on fresh Ubuntu VPS ──
+# On Ubuntu 22.04, apt-daily.timer and apt-daily-upgrade.timer fire within
+# seconds of first boot and run unattended-upgrades, holding the dpkg lock
+# for 5-15 minutes while they install pending security updates.
+# We stop them NOW before touching apt; the existing lock-wait loop below
+# acts as a fallback safety net.
+info "Stopping unattended-upgrades / apt-daily (may hold dpkg lock on fresh VPS)..."
+if command -v systemctl &>/dev/null && systemctl is-system-running &>/dev/null 2>&1; then
+    # Systemd available — stop and disable the timers gracefully
+    systemctl stop  unattended-upgrades apt-daily.service apt-daily-upgrade.service 2>/dev/null || true
+    systemctl disable apt-daily.timer apt-daily-upgrade.timer                         2>/dev/null || true
+    systemctl mask  apt-daily.service apt-daily-upgrade.service                        2>/dev/null || true
+    info "  systemd apt timers stopped and masked."
+else
+    # Container / no-systemd — kill unattended-upgrades directly (SIGTERM so it can
+    # exit cleanly rather than leaving dpkg in a partial state)
+    pkill -TERM -x "unattended-upgr" 2>/dev/null || true
+    pkill -TERM -f  "apt-get.*upgrade" 2>/dev/null || true
+    sleep 3
+    info "  Sent SIGTERM to unattended-upgrades (container mode)."
+fi
+
+# Some VPS providers (e.g. DigitalOcean, Vultr, rental servers) run apt via
+# cloud-init on first boot. Wait for it to finish before grabbing the lock.
+if command -v cloud-init &>/dev/null; then
+    info "  Waiting for cloud-init to complete (may take ~30s on first boot)..."
+    cloud-init status --wait 2>/dev/null || true
+fi
+
+# ── 0b. Wait for dpkg lock (fallback for anything we couldn't stop) ─────────
 info "Checking for dpkg lock..."
 LOCK_WAIT=0
 while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || \
       fuser /var/lib/dpkg/lock          >/dev/null 2>&1; do
     if [ $LOCK_WAIT -ge 300 ]; then
-        err "dpkg lock held for >5 min. Kill the process manually then re-run."
+        err "dpkg lock held for >5 min even after stopping unattended-upgrades."
+        err "Find the holder with:  fuser -v /var/lib/dpkg/lock-frontend"
+        err "Then kill it and re-run this script."
         exit 1
     fi
     warn "dpkg lock held — waiting 10s... (${LOCK_WAIT}s elapsed)"
