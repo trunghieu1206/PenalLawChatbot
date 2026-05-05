@@ -8,11 +8,11 @@ scp -P 10000 .env.example root@74.81.39.6:/root/.env.example
 
 # Create backup dir and upload DB backup (mkdir needed before clone runs)
 ssh -p 10000 root@74.81.39.6 "mkdir -p ~/PenalLawChatbot/database/backups"
-scp -P 10000 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_combined_backup.sql \
+scp -P 10000 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260505_103232.sql \
     root@74.81.39.6:~/PenalLawChatbot/database/backups/
 
 # run the installer 
-chmod +x setup_server.sh deploy.sh
+chmod +x setup_server.sh deploy_nodocker.sh
 bash setup_server.sh
 
 # restore database
@@ -33,7 +33,7 @@ chmod 777 ./PenalLawChatbot/database/backups
 ./backup_database.sh
 
 ## download backup to local
-scp -P 2422 'root@n1.ckey.vn:~/PenalLawChatbot/database/backups/penallaw_backup_*.sql' ~/Desktop/Projects/PenalLawChatbot/database/backups/
+scp -P 10000 'root@74.81.39.6:~/PenalLawChatbot/database/backups/penallaw_backup_*.sql' ~/Desktop/Projects/PenalLawChatbot/database/backups/
 
 ## verify 
 ls -lh ~/PenalLawChatbot/database/backups/

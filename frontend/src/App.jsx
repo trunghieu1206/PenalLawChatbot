@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { AuthProvider, useAuth } from './hooks/useAuth.jsx';
+import { trackVisitApi } from './services/api.js';
 import ChatPage from './pages/ChatPage.jsx';
 import TrainingPage from './pages/TrainingPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
@@ -41,13 +43,19 @@ function Routes_() {
       <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
       <Route path="/training" element={<ProtectedRoute><TrainingPage /></ProtectedRoute>} />
       <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
-      <Route path="/stats" element={<StatsPage />} />
+      <Route path="/home" element={<StatsPage />} />
       <Route path="*" element={<Navigate to="/chat" replace />} />
     </Routes>
   );
 }
 
 export default function App() {
+  // Track unique daily visit on first app load.
+  // Safe to call here — trackVisitApi.track() is a no-op if already tracked today.
+  useEffect(() => {
+    trackVisitApi.track();
+  }, []);
+
   return (
     <AuthProvider>
       <BrowserRouter>

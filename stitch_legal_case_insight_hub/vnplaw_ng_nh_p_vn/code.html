@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Đăng nhập - VNPLaw</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;family=Newsreader:wght@500;600;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container": "#edeeef",
+                        "outline": "#74777d",
+                        "surface-bright": "#f8f9fa",
+                        "secondary-fixed": "#ffdea5",
+                        "inverse-surface": "#2e3132",
+                        "primary-container": "#1a2b3c",
+                        "surface-container-highest": "#e1e3e4",
+                        "surface-variant": "#e1e3e4",
+                        "surface-container-high": "#e7e8e9",
+                        "primary": "#041627",
+                        "secondary": "#775a19",
+                        "surface": "#f8f9fa",
+                        "error-container": "#ffdad6",
+                        "primary-fixed-dim": "#b7c8de",
+                        "background": "#f8f9fa",
+                        "tertiary": "#001628",
+                        "primary-fixed": "#d2e4fb",
+                        "surface-dim": "#d9dadb",
+                        "on-tertiary-fixed": "#041d30",
+                        "on-secondary-fixed-variant": "#5d4201",
+                        "surface-container-low": "#f3f4f5",
+                        "tertiary-fixed": "#cee5ff",
+                        "inverse-on-surface": "#f0f1f2",
+                        "on-secondary-fixed": "#261900",
+                        "on-primary-fixed-variant": "#38485a",
+                        "on-tertiary-fixed-variant": "#33495e",
+                        "error": "#ba1a1a",
+                        "on-error-container": "#93000a",
+                        "secondary-fixed-dim": "#e9c176",
+                        "on-tertiary-container": "#7c93ab",
+                        "on-error": "#ffffff",
+                        "on-surface-variant": "#44474c",
+                        "on-primary-fixed": "#0b1d2d",
+                        "surface-tint": "#4f6073",
+                        "tertiary-container": "#142b3f",
+                        "on-primary-container": "#8192a7",
+                        "on-secondary-container": "#785a1a",
+                        "inverse-primary": "#b7c8de",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary-fixed-dim": "#b2c9e2",
+                        "on-background": "#191c1d",
+                        "on-secondary": "#ffffff",
+                        "outline-variant": "#c4c6cd",
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#191c1d",
+                        "secondary-container": "#fed488",
+                        "on-primary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "xl": "80px",
+                        "gutter": "24px",
+                        "base": "8px",
+                        "lg": "48px",
+                        "container-max": "1280px",
+                        "md": "24px",
+                        "sm": "12px",
+                        "xs": "4px"
+                    },
+                    "fontFamily": {
+                        "h1": ["Newsreader"],
+                        "body-md": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "h2": ["Newsreader"],
+                        "h3": ["Newsreader"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "h1": ["48px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "label-sm": ["14px", { "lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "h2": ["36px", { "lineHeight": "1.2", "fontWeight": "600" }],
+                        "h3": ["28px", { "lineHeight": "1.3", "fontWeight": "500" }],
+                        "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-surface text-on-surface font-body-md min-h-screen flex items-center justify-center relative overflow-hidden">
+<!-- Decorative Background Image -->
+<div class="absolute inset-0 z-0 opacity-10">
+<img alt="" class="w-full h-full object-cover" data-alt="A sophisticated, abstract architectural background featuring soft, diffused lighting and geometric shapes. The color palette is minimal, predominantly pale grey and white, reflecting a secure, professional corporate environment. Subtle depth is created by blurred lines and soft shadows, ensuring the background remains non-distracting while establishing a tone of authority and precision." src="https://lh3.googleusercontent.com/aida/ADBb0uhNvdqH07mY8DPve_94lVaMXEWhLpMVEiEZAI3l5gkAeU4ncmp8rFyPvJHW2uxC7NltzDFjrNekQHvXCxIQv4zBo7k9gitE3713U1pEALeZ5Fian3qbE2DGDspZH28SsHwh6Jz4y4WZOOzoFnjKYdWaNfbz3ToGtUU7JUoQjA4RELAfGiAXAUsI7LQp069U7aTyy1pP0HxPtlp8PdIiySuuDt5Oo3_FlYkv9qTc88ZYf8TcMLEAm-N9WsNK0WF8vhbWiDmXk0XnaQ"/>
+</div>
+<!-- Login Container -->
+<div class="relative z-10 w-full max-w-md px-md">
+<!-- Glassmorphism Card -->
+<div class="bg-surface-container-lowest border border-surface-variant shadow-[0px_12px_32px_rgba(26,43,60,0.12)] rounded-lg p-lg flex flex-col gap-md">
+<!-- Brand / Header -->
+<div class="flex flex-col items-center gap-sm mb-sm text-center">
+<h1 class="font-h1 text-h1 text-primary">VNPLaw</h1>
+</div>
+<!-- Form -->
+<form class="flex flex-col gap-md">
+<!-- Email Field -->
+<div class="flex flex-col gap-xs">
+<label class="font-label-sm text-label-sm text-primary" for="email">Email / Tên đăng nhập</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline-variant" style="font-variation-settings: 'FILL' 0;">person</span>
+<input class="w-full pl-lg pr-sm py-sm bg-surface border border-outline-variant rounded-DEFAULT font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary-container focus:ring-2 focus:ring-primary-container/20 transition-all" id="email" name="email" placeholder="Nhập thông tin của bạn" type="text"/>
+</div>
+</div>
+<!-- Password Field -->
+<div class="flex flex-col gap-xs">
+<label class="font-label-sm text-label-sm text-primary" for="password">Mật khẩu</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline-variant" style="font-variation-settings: 'FILL' 0;">lock</span>
+<input class="w-full pl-lg pr-sm py-sm bg-surface border border-outline-variant rounded-DEFAULT font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary-container focus:ring-2 focus:ring-primary-container/20 transition-all" id="password" name="password" placeholder="Nhập mật khẩu" type="password"/>
+</div>
+</div>
+<!-- Options Row -->
+<div class="flex items-center justify-between mt-xs">
+<label class="flex items-center gap-xs cursor-pointer">
+<input class="w-4 h-4 rounded border-outline-variant text-primary-container focus:ring-primary-container bg-surface" type="checkbox"/>
+<span class="font-body-md text-body-md text-on-surface-variant text-sm">Ghi nhớ tôi</span>
+</label>
+<a class="font-body-md text-body-md text-sm text-surface-tint hover:text-primary transition-colors" href="#">Quên mật khẩu?</a>
+</div>
+<!-- Actions -->
+<div class="flex flex-col gap-sm mt-sm">
+<button class="w-full bg-primary-container text-on-primary py-sm rounded-DEFAULT font-label-sm text-label-sm hover:bg-tertiary transition-colors flex items-center justify-center gap-xs" type="submit">
+                        Đăng nhập
+                        <span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 0;">arrow_forward</span>
+</button>
+<div class="text-center mt-sm">
+<span class="font-body-md text-body-md text-on-surface-variant text-sm">Chưa có tài khoản? </span>
+<a class="font-label-sm text-label-sm text-primary hover:text-surface-tint transition-colors" href="#">Đăng ký ngay</a>
+</div>
+</div>
+</form>
+</div>
+</div>
+</body></html>

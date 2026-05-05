@@ -30,6 +30,9 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+  # Keep connections open long enough for CPU LLM inference (up to 10 min)
+  tomcat:
+    connection-timeout: 720000   # 720s in ms — must match nginx read_timeout
 
 # JWT Config
 jwt:
@@ -39,7 +42,7 @@ jwt:
 # AI Service
 ai-service:
   base-url: ${AI_SERVICE_URL:http://localhost:8000}
-  timeout-seconds: 600   # 10 min — CPU inference (embedding + reranker) can take 2-5 min
+  timeout-seconds: 660   # 11 min — CPU embedding+reranker+LLM can take 5-10 min
 
 # Actuator
 management:

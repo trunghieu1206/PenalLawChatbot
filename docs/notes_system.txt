@@ -1,0 +1,7 @@
+backend:
+- should see the statistical analysis of correct and incorrect response for each crime type (and also for every crime type, which already exists)
+- for casual question, remove the user feedback functionality
+
+SYSTEM:
+- increase memory 
+- upgrade to https, fix URL name

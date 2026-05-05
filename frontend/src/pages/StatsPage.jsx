@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import Footer from '../components/Footer.jsx';
 import Topbar from '../components/Topbar.jsx';
 import Sidebar from '../components/Sidebar.jsx';
 import { useNavigate } from 'react-router-dom';
@@ -72,16 +73,46 @@ export default function StatsPage() {
 
   return (
     <div className="bg-background text-on-background font-body-md text-body-md h-full min-h-screen flex overflow-hidden">
-      <Sidebar activeTab="stats" />
+      <Sidebar activeTab="home" />
 
       <main className="ml-64 flex-1 flex flex-col h-screen bg-surface overflow-y-auto pt-16">
         <Topbar />
 
         <div className={styles.content}>
           <div className={styles.pageHeader}>
-            <div>
-              <h1>Dashboard/Thống kê</h1>
-              
+            <h1>Dashboard/Thống kê</h1>
+          </div>
+
+          <div className={styles.descriptionCard}>
+            <div className={styles.descriptionHeader}>
+              <span className="material-symbols-outlined text-primary">gavel</span>
+              <h3>Về Hệ thống VNPLaw</h3>
+            </div>
+            <p>
+              VNPLaw là hệ thống được phát triển để giải quyết một vụ án hình sự, tích hợp chức năng điều chỉnh góc nhìn (thẩm phán, luật sư bảo vệ bị hại, luật sư bảo vệ bị cáo). Hệ thống hỗ trợ phân tích tình tiết vụ án, trích dẫn điều luật tương ứng trong Bộ luật Hình sự và đưa ra câu trả lời theo từng vai trò.
+            </p>
+            <div className={styles.featureGrid}>
+              <div className={styles.featureItem}>
+                <span className="material-symbols-outlined">analytics</span>
+                <div>
+                  <strong>Giải quyết vụ án</strong>
+                  <span>Xử lý vụ án hình sự, trích dẫn điều luật tương ứng theo văn bản pháp luật.</span>
+                </div>
+              </div>
+              <div className={styles.featureItem}>
+                <span className="material-symbols-outlined">diversity_3</span>
+                <div>
+                  <strong>Điều chỉnh góc nhìn</strong>
+                  <span>Xử lý vụ án theo 3 góc nhìn: thẩm phán, luật sư bảo vệ bị hại, luật sư bảo vệ bị cáo.</span>
+                </div>
+              </div>
+              <div className={styles.featureItem}>
+                <span className="material-symbols-outlined">psychology</span>
+                <div>
+                  <strong>Luyện tập kỹ năng</strong>
+                  <span>Đóng vai là thẩm phán/luật sư để rèn luyện khả năng giải quyết vụ án hình sự.</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -96,8 +127,8 @@ export default function StatsPage() {
           {!loading && !error && stats && (
             <>
               <div className={styles.statGrid}>
-                <StatCard label="Lượt truy cập" value={stats.total_sessions} accent="blue" />
-                <StatCard label="Người dùng đã đăng ký" value={stats.total_users} accent="teal" />
+                <StatCard label="Tổng lượt truy cập" value={stats.visitor_count} accent="blue" />
+                <StatCard label="Lượt hội thoại" value={stats.total_sessions} accent="teal" />
                 <StatCard label="Vụ án đã phân tích" value={stats.cases_processed} accent="purple" />
                 <StatCard label="Phản hồi nhận được" value={stats.feedback_total} accent="orange" />
               </div>
@@ -149,6 +180,7 @@ export default function StatsPage() {
             </button>
           </div>
         </div>
+        <Footer />
       </main>
     </div>
   );

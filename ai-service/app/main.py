@@ -50,12 +50,16 @@ os.environ["GRPC_TRACE"] = ""
 # --- CPU PERFORMANCE OPTIMIZATION ---
 # Force PyTorch and underlying C++ math libraries to use all available physical
 # CPU cores optimally. Crucial for CPU inference performance on rented vCPUs.
+# intra_op_threads: parallelism WITHIN a single op (e.g. matrix multiplication)
+# inter_op_threads: parallelism BETWEEN independent ops (pipeline parallelism)
 _cores = os.cpu_count() or 4
-os.environ["OMP_NUM_THREADS"] = str(_cores)
-os.environ["MKL_NUM_THREADS"] = str(_cores)
+os.environ["OMP_NUM_THREADS"]     = str(_cores)
+os.environ["MKL_NUM_THREADS"]     = str(_cores)
 os.environ["OPENBLAS_NUM_THREADS"] = str(_cores)
 import torch  # MUST import torch AFTER setting these env vars
-torch.set_num_threads(_cores)
+torch.set_num_threads(_cores)           # intra-op parallelism
+torch.set_num_interop_threads(_cores)   # inter-op parallelism
+print(f"⚙️  CPU threads: intra={torch.get_num_threads()} / inter={torch.get_num_interop_threads()} / logical cores={_cores}")
 # ------------------------------------
 
 # ⚠️ MUST be before any pymilvus/langchain_milvus imports:

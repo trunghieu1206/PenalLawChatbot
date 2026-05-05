@@ -6,6 +6,7 @@ import com.penallaw.backend.entity.ChatSession;
 import com.penallaw.backend.entity.Feedback;
 import com.penallaw.backend.repository.ChatMessageRepository;
 import com.penallaw.backend.repository.ChatSessionRepository;
+import com.penallaw.backend.repository.DailyVisitRepository;
 import com.penallaw.backend.repository.FeedbackRepository;
 import com.penallaw.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class AdminService {
     private final ChatMessageRepository messageRepository;
     private final FeedbackRepository feedbackRepository;
     private final UserRepository userRepository;
+    private final DailyVisitRepository dailyVisitRepository;
 
     // ── DASHBOARD STATS ──────────────────────────────────────────
 
@@ -77,6 +79,7 @@ public class AdminService {
 
         return new AdminDTOs.DashboardStats(
                 totalSessions, totalUsers, casesProcessed,
+                dailyVisitRepository.count(),
                 byRole, byProvince, byCrimeType,
                 feedbackTotal, feedbackCorrect, feedbackIncorrect
         );

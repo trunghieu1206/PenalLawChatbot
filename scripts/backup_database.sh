@@ -6,14 +6,15 @@
 set -e
 
 # Configuration
-BACKUP_DIR="./database/backups"
+BACKUP_DIR="/root/PenalLawChatbot/database/backups"
 DB_NAME="${POSTGRES_DB:-penallaw}"
 DB_USER="${POSTGRES_USER:-postgres}"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_FILE="$BACKUP_DIR/penallaw_backup_$TIMESTAMP.sql"
 
-# Create backup directory if it doesn't exist
+# Create backup directory and ensure it is writable by postgres user
 mkdir -p "$BACKUP_DIR"
+chmod 777 "$BACKUP_DIR"
 
 echo "🔄 Starting database backup..."
 echo "   Database: $DB_NAME"
@@ -25,12 +26,13 @@ echo ""
 if ! pg_isready -q 2>/dev/null; then
     echo "❌ Error: PostgreSQL is not running"
     echo "   Start PostgreSQL with: sudo systemctl start postgresql"
-    echo "   Or: sudo pg_ctlcluster <version> main start"
     exit 1
 fi
 
 # Perform backup using pg_dump
-if su -c "pg_dump -U $DB_USER $DB_NAME > '$BACKUP_FILE'" postgres 2>/dev/null; then
+# We use sudo -u postgres to avoid password prompts and permission issues on the target file
+if sudo -u postgres pg_dump -U "$DB_USER" "$DB_NAME" > "$BACKUP_FILE"; then
+    chmod 644 "$BACKUP_FILE"
     SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
     LINES=$(wc -l < "$BACKUP_FILE")
     echo "✅ Backup successful!"

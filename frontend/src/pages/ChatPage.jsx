@@ -78,7 +78,8 @@ export default function ChatPage() {
       setMessages([]);
     } catch (err) {
       console.error('Create session failed:', err);
-      setError('Không thể tạo phiên mới.');
+      const msg = err.response?.data?.message || err.message || 'Không thể tạo phiên mới.';
+      setError(msg);
       return;
     }
 
@@ -377,7 +378,7 @@ export default function ChatPage() {
                   <textarea
                     ref={textareaRef}
                     className="flex-1 bg-transparent resize-none py-3 font-body-md text-on-surface outline-none transition-all max-h-32"
-                    placeholder="Đặt câu hỏi tiếp theo..."
+                    placeholder="Nhập nội dung mô tả vụ án"
                     value={input}
                     onChange={e => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
@@ -399,22 +400,17 @@ export default function ChatPage() {
             </section>
 
             {lawSidebar.open && (
-              <aside className="w-80 border-l border-surface-variant bg-surface-container-lowest flex flex-col z-20">
-                <div className="p-4 border-b border-surface-variant flex justify-between items-center bg-surface-bright">
-                  <h3 className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[16px]">menu_book</span> Văn bản Tham chiếu
-                  </h3>
-                  <button onClick={closeLawSidebar} className="text-outline hover:text-on-surface">
-                    <span className="material-symbols-outlined text-[18px]">close</span>
-                  </button>
-                </div>
-                <div className="p-0 overflow-y-auto flex-1 relative">
-                  <LawSidebar lawData={lawSidebar.data} loading={lawSidebar.loading} error={lawSidebar.error} onClose={closeLawSidebar} isEmbedded={true} />
-                </div>
+              <aside className="w-80 border-l border-surface-variant bg-surface-container-lowest flex flex-col overflow-hidden flex-shrink-0">
+                <LawSidebar
+                  lawData={lawSidebar.data}
+                  loading={lawSidebar.loading}
+                  error={lawSidebar.error}
+                  onClose={closeLawSidebar}
+                />
               </aside>
             )}
           </div>
-        </main>
+      </main>
 
         {showRoleModal && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center" onClick={() => setShowRoleModal(false)}>
