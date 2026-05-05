@@ -73,12 +73,12 @@ export default {
               "xs": "4px"
           },
           "fontFamily": {
-              "h1": ["Newsreader", "serif"],
-              "body-md": ["Inter", "sans-serif"],
-              "label-sm": ["Inter", "sans-serif"],
-              "h2": ["Newsreader", "serif"],
-              "h3": ["Newsreader", "serif"],
-              "body-lg": ["Inter", "sans-serif"]
+              "h1": ["ui-sans-serif", "system-ui", "sans-serif"],
+              "body-md": ["ui-sans-serif", "system-ui", "sans-serif"],
+              "label-sm": ["ui-sans-serif", "system-ui", "sans-serif"],
+              "h2": ["ui-sans-serif", "system-ui", "sans-serif"],
+              "h3": ["ui-sans-serif", "system-ui", "sans-serif"],
+              "body-lg": ["ui-sans-serif", "system-ui", "sans-serif"]
           },
           "fontSize": {
               "h1": ["48px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "600" }],

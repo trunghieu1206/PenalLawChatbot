@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { practiceApi, lawsApi } from '../services/api.js';
 import styles from './TrainingPage.module.css';
+import Sidebar from '../components/Sidebar.jsx';
 
 const MODES = [
   {
@@ -168,61 +169,15 @@ export default function TrainingPage() {
   const selectedMode = MODES.find(m => m.id === mode);
 
   return (
-    <div className={styles.page}>
-      <aside className={styles.nav}>
-        <div className={styles.navHeader}>
-          <div className={styles.brandBadge}>V</div>
-          <div>
-            <div className={styles.brandTitle}>VNPLaw</div>
-            <div className={styles.brandSub}>Legal Intelligence</div>
-          </div>
-        </div>
-        <div className={styles.navLinks}>
-          <button className={styles.navItem} type="button" onClick={() => navigate('/chat')}>
-            <span className="material-symbols-outlined">chat</span>
-            Chat
-          </button>
-          <button className={`${styles.navItem} ${styles.navItemActive}`} type="button">
-            <span className="material-symbols-outlined">gavel</span>
-            Chế độ Luyện tập
-          </button>
-          <button className={styles.navItem} type="button" onClick={() => navigate('/stats')}>
-            <span className="material-symbols-outlined">dashboard</span>
-            Bảng điều khiển
-          </button>
-        </div>
-        <div className={styles.navFooter}>
-          <button className={styles.navItem} type="button">
-            <span className="material-symbols-outlined">settings</span>
-            Cài đặt
-          </button>
-          <button className={styles.navItem} type="button">
-            <span className="material-symbols-outlined">help</span>
-            Hỗ trợ
-          </button>
-        </div>
-      </aside>
+    <div className="bg-background text-on-background font-body-md text-body-md h-full min-h-screen flex overflow-hidden">
+      <Sidebar activeTab="training" />
 
-      <main className={styles.main}>
-        <header className={styles.topbar}>
-          <div className={styles.topbarLeft}>
-            <div className={styles.topbarTitle}>VNPLaw Intelligence</div>
-            <nav className={styles.topbarLinks}>
-              <button type="button">Tài liệu</button>
-              <button type="button">Lưu trữ</button>
-            </nav>
-          </div>
-          <div className={styles.topbarRight}>
-            <div className={styles.searchWrap}>
-              <span className="material-symbols-outlined">search</span>
-              <input className={styles.searchInput} placeholder="Tìm kiếm..." />
+      <main className="ml-64 flex-1 flex flex-col h-screen bg-surface overflow-y-auto pt-16">
+        <header className="bg-white/80 backdrop-blur-md fixed top-0 right-0 w-[calc(100%-16rem)] z-40 border-b border-surface-variant flex justify-between items-center h-16 px-8 transition-all duration-300">
+            <div className="flex items-center gap-6">
+              <span className="text-lg font-black text-slate-900 font-h3">VNPLaw</span>
             </div>
-            <Link className="btn btn-primary" to="/chat">
-              <span className="material-symbols-outlined">add</span>
-              Vụ án mới
-            </Link>
-          </div>
-        </header>
+          </header>
 
         <div className={styles.pageHeader}>
           <div>

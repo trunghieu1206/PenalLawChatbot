@@ -175,13 +175,13 @@ function MessageBubble({ message, role, sessionId, onLawClick }) {
   
   if (isUser) {
     return (
-      <div className="flex gap-4 items-start mb-6">
+      <div className="flex gap-4 items-start mb-6 flex-row-reverse">
         <div className="w-8 h-8 rounded-full bg-surface-container-high border border-surface-variant flex-shrink-0 flex items-center justify-center font-bold text-on-surface">
           U
         </div>
-        <div className="bg-surface-container-lowest border border-surface-variant p-4 rounded-lg rounded-tl-none shadow-sm max-w-2xl relative">
+        <div className="bg-surface-container-lowest border border-surface-variant p-4 rounded-lg rounded-tr-none shadow-sm max-w-2xl relative">
           <p className="font-body-md text-on-surface">{message.content}</p>
-          <time className="text-[10px] text-on-surface-variant absolute -bottom-5 left-0">{message.createdAt ? formatTimeGMT7(message.createdAt) : 'Vừa xong'}</time>
+          <time className="text-[10px] text-on-surface-variant absolute -bottom-5 right-0">{message.createdAt ? formatTimeGMT7(message.createdAt) : 'Vừa xong'}</time>
         </div>
       </div>
     );

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import Sidebar from '../components/Sidebar.jsx';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../services/api.js';
 import { useAuth } from '../hooks/useAuth.jsx';
@@ -70,59 +71,18 @@ export default function StatsPage() {
     : null;
 
   return (
-    <div className={styles.page}>
-      <aside className={styles.nav}>
-        <div className={styles.navHeader}>
-          <div className={styles.brandBadge}>V</div>
-          <div>
-            <div className={styles.brandTitle}>VNPLaw</div>
-            <div className={styles.brandSub}>Legal Intelligence</div>
-          </div>
-        </div>
-        <div className={styles.navLinks}>
-          <button className={styles.navItem} type="button" onClick={() => navigate('/chat')}>
-            <span className="material-symbols-outlined">chat</span>
-            Chat
-          </button>
-          <button className={styles.navItem} type="button" onClick={() => navigate('/training')}>
-            <span className="material-symbols-outlined">gavel</span>
-            Chế độ Luyện tập
-          </button>
-          <button className={`${styles.navItem} ${styles.navItemActive}`} type="button">
-            <span className="material-symbols-outlined">dashboard</span>
-            Dashboard/Thống kê
-          </button>
-        </div>
-        <div className={styles.navFooter}>
-          <button className={styles.navItem} type="button">
-            <span className="material-symbols-outlined">settings</span>
-            Cài đặt
-          </button>
-          <button className={styles.navItem} type="button">
-            <span className="material-symbols-outlined">help</span>
-            Hỗ trợ
-          </button>
-        </div>
-      </aside>
+    <div className="bg-background text-on-background font-body-md text-body-md h-full min-h-screen flex overflow-hidden">
+      <Sidebar activeTab="stats" />
 
-      <main className={styles.main}>
-        <header className={styles.topbar}>
-          <div className={styles.topbarLeft}>
-            <div className={styles.topbarTitle}>VNPLaw Intelligence</div>
-            <nav className={styles.topbarLinks}>
-              <button type="button">Tài liệu</button>
-              <button type="button">Lưu trữ</button>
-            </nav>
-          </div>
-          <div className={styles.topbarRight}>
-            <button className="btn btn-outline" type="button">Export Report</button>
-            {user?.role === 'admin' && (
-              <button className="btn btn-primary" type="button" onClick={() => navigate('/admin')}>
-                Quản lý phản hồi
-              </button>
-            )}
-          </div>
-        </header>
+      <main className="ml-64 flex-1 flex flex-col h-screen bg-surface overflow-y-auto pt-16">
+        <header className="bg-white/80 backdrop-blur-md fixed top-0 right-0 w-[calc(100%-16rem)] z-40 border-b border-surface-variant flex justify-between items-center h-16 px-8 transition-all duration-300">
+                <div className="flex items-center gap-6">
+                  <span className="text-lg font-black text-slate-900 font-h3">VNPLaw</span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <button className="bg-surface-container text-on-surface text-sm font-semibold px-4 py-2 rounded hover:bg-surface-container-high transition-colors" type="button">Xuất báo cáo</button>
+                </div>
+              </header>
 
         <div className={styles.content}>
           <div className={styles.pageHeader}>

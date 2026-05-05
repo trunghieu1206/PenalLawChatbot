@@ -5,6 +5,7 @@ import { chatApi, lawsApi } from '../services/api.js';
 import MessageBubble from '../components/MessageBubble.jsx';
 import RoleSelector from '../components/RoleSelector.jsx';
 import LawSidebar from '../components/LawSidebar.jsx';
+import Sidebar from '../components/Sidebar.jsx';
 import styles from './ChatPage.module.css';
 
 export default function ChatPage() {
@@ -256,52 +257,14 @@ export default function ChatPage() {
     return (
       <div className="bg-background text-on-background font-body-md text-body-md h-full min-h-screen flex overflow-hidden">
         {/* SideNavBar */}
-        <nav className="h-screen w-64 border-r fixed left-0 top-0 border-slate-200 shadow-sm bg-slate-50 flex flex-col py-6 px-4 z-50">
-          <div className="mb-8 px-2 flex items-center gap-3">
-            <div className="w-8 h-8 rounded bg-primary text-on-primary flex items-center justify-center font-h3 text-h3">V</div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900 tracking-tight font-h3">VNPLaw</h1>
-              <p className="text-xs text-on-surface-variant font-label-sm">Legal Intelligence</p>
-            </div>
-          </div>
-          <div className="flex-1 space-y-1">
-            <button className="w-full flex items-center gap-3 px-3 py-2 rounded text-slate-900 font-semibold border-r-4 border-slate-900 bg-slate-100 duration-200 ease-in-out">
-              <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
-              <span className="font-label-sm text-label-sm">Chat</span>
-            </button>
-            <button onClick={() => navigate('/training')} className="w-full flex items-center gap-3 px-3 py-2 rounded text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors duration-200 ease-in-out">
-              <span className="material-symbols-outlined">gavel</span>
-              <span className="font-label-sm text-label-sm">Chế độ Luyện tập</span>
-            </button>
-            <button onClick={() => navigate('/stats')} className="w-full flex items-center gap-3 px-3 py-2 rounded text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors duration-200 ease-in-out">
-              <span className="material-symbols-outlined">dashboard</span>
-              <span className="font-label-sm text-label-sm">Bảng điều khiển</span>
-            </button>
-            {user?.role === 'admin' && (
-              <button onClick={() => navigate('/admin')} className="w-full flex items-center gap-3 px-3 py-2 rounded text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors duration-200 ease-in-out">
-                <span className="material-symbols-outlined">admin_panel_settings</span>
-                <span className="font-label-sm text-label-sm">Admin</span>
-              </button>
-            )}
-          </div>
-          <div className="mt-auto space-y-1 pt-4 border-t border-slate-200">
-            <button className="w-full flex items-center gap-3 px-3 py-2 rounded text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors duration-200 ease-in-out">
-              <span className="material-symbols-outlined">settings</span>
-              <span className="font-label-sm text-label-sm">Cài đặt</span>
-            </button>
-            <button onClick={() => { logout(); navigate('/login'); }} className="w-full flex items-center gap-3 px-3 py-2 rounded text-slate-500 hover:text-error hover:bg-red-50 transition-colors duration-200 ease-in-out">
-              <span className="material-symbols-outlined">logout</span>
-              <span className="font-label-sm text-label-sm">Đăng xuất</span>
-            </button>
-          </div>
-        </nav>
+        <Sidebar activeTab="chat" />
 
         {/* Main Content Area */}
         <main className="ml-64 flex-1 flex flex-col h-screen bg-surface">
           {/* TopAppBar */}
           <header className="bg-white/80 backdrop-blur-md fixed top-0 right-0 w-[calc(100%-16rem)] z-40 border-b border-surface-variant flex justify-between items-center h-16 px-8 transition-all duration-300">
             <div className="flex items-center gap-6">
-              <span className="text-lg font-black text-slate-900 font-h3">VNPLaw Intelligence</span>
+              <span className="text-lg font-black text-slate-900 font-h3">VNPLaw</span>
               <nav className="hidden md:flex gap-4">
                 <button className="font-newsreader text-sm font-medium text-slate-500 hover:text-slate-900 transition-all duration-300">Tài liệu</button>
                 <button className="font-newsreader text-sm font-medium text-slate-500 hover:text-slate-900 transition-all duration-300">Lưu trữ</button>
@@ -312,9 +275,7 @@ export default function ChatPage() {
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm">search</span>
                 <input className="pl-9 pr-4 py-1.5 bg-surface-container-low border border-surface-variant rounded-full text-sm font-body-md focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none w-64 transition-all" placeholder="Tìm kiếm án lệ..." type="text"/>
               </div>
-              <button onClick={createNewSession} className="bg-primary-container text-on-primary font-label-sm text-label-sm px-4 py-2 rounded hover:bg-primary transition-colors flex items-center gap-2">
-                <span className="material-symbols-outlined text-sm">add</span> Vụ án Mới
-              </button>
+              
               <div className="flex items-center gap-3 border-l border-surface-variant pl-4 ml-2">
                 <button className="text-on-surface-variant hover:text-primary transition-colors">
                   <span className="material-symbols-outlined">notifications</span>
@@ -331,7 +292,12 @@ export default function ChatPage() {
             {/* History List */}
             <aside className="w-72 border-r border-surface-variant bg-surface-bright flex flex-col overflow-y-auto">
               <div className="p-4 border-b border-surface-variant sticky top-0 bg-surface-bright/95 backdrop-blur z-10">
-                <h3 className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Tư vấn Gần đây</h3>
+                <div className="flex justify-between items-center">
+                  <h3 className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Tư vấn Gần đây</h3>
+                  <button onClick={createNewSession} className="text-primary hover:bg-surface-container p-1 rounded transition-colors" title="Vụ án Mới">
+                    <span className="material-symbols-outlined text-sm">add</span>
+                  </button>
+                </div>
               </div>
               <div className="flex-1 p-2 space-y-1">
                 {sessions.length === 0 && <div className="p-4 text-sm text-on-surface-variant text-center">Chưa có cuộc hội thoại nào</div>}
