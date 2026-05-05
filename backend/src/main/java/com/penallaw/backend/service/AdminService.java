@@ -4,6 +4,7 @@ import com.penallaw.backend.dto.AdminDTOs;
 import com.penallaw.backend.entity.ChatMessage;
 import com.penallaw.backend.entity.ChatSession;
 import com.penallaw.backend.entity.Feedback;
+import com.penallaw.backend.entity.User;
 import com.penallaw.backend.repository.ChatMessageRepository;
 import com.penallaw.backend.repository.ChatSessionRepository;
 import com.penallaw.backend.repository.DailyVisitRepository;
@@ -14,6 +15,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -110,10 +115,41 @@ public class AdminService {
 
             return new AdminDTOs.FeedbackDetail(
                     f.getId(), sid, f.getMessageId(),
-                    f.getIsCorrect(), f.getComment(), f.getCreatedAt(),
+                    f.getIsCorrect(), f.getComment(),
+                    f.getStatus() != null ? f.getStatus() : "can_xem_xet",
+                    f.getCreatedAt(),
                     sessionMode, conversation
             );
         }).collect(Collectors.toList());
+    }
+
+    // ── USER CASE STATS ───────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public List<AdminDTOs.UserCaseStat> getUserCaseStats() {
+        LocalDateTime startOfToday = LocalDateTime.of(LocalDate.now(), LocalTime.MIDNIGHT);
+
+        // All-time totals per user
+        List<Object[]> totals = sessionRepository.findUserSessionCounts();
+
+        // Today's totals per user
+        Map<UUID, Long> todayMap = sessionRepository.findUserSessionCountsToday(startOfToday)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> ((User) row[0]).getId(),
+                        row -> (Long) row[1]
+                ));
+
+        return totals.stream()
+                .map(row -> {
+                    User u = (User) row[0];
+                    long total = (Long) row[1];
+                    long today = todayMap.getOrDefault(u.getId(), 0L);
+                    return new AdminDTOs.UserCaseStat(
+                            u.getId(), u.getEmail(), u.getFullName(), u.getRole(), total, today);
+                })
+                .sorted(Comparator.comparingLong(AdminDTOs.UserCaseStat::totalCases).reversed())
+                .collect(Collectors.toList());
     }
 
     // ── SUBMIT FEEDBACK ───────────────────────────────────────────
@@ -129,6 +165,20 @@ public class AdminService {
         feedback.setComment(comment);
         feedback = feedbackRepository.save(feedback);
         return new AdminDTOs.FeedbackResponse(feedback.getId(), "Đã ghi nhận phản hồi. Cảm ơn bạn!");
+    }
+
+    // ── UPDATE FEEDBACK STATUS ────────────────────────────────────
+
+    @Transactional
+    public AdminDTOs.FeedbackResponse updateFeedbackStatus(UUID feedbackId, String newStatus) {
+        if (!"can_xem_xet".equals(newStatus) && !"da_xem_xet".equals(newStatus)) {
+            throw new IllegalArgumentException("Trạng thái không hợp lệ: " + newStatus);
+        }
+        Feedback feedback = feedbackRepository.findById(feedbackId)
+                .orElseThrow(() -> new RuntimeException("Feedback not found: " + feedbackId));
+        feedback.setStatus(newStatus);
+        feedbackRepository.save(feedback);
+        return new AdminDTOs.FeedbackResponse(feedbackId, "Đã cập nhật trạng thái.");
     }
 
     // ── HELPERS ───────────────────────────────────────────────────

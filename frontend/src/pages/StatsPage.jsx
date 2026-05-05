@@ -159,6 +159,10 @@ export default function StatsPage() {
                 </div>
               </section>
 
+              <section className={styles.section}>
+                <h2>Thống kê số vụ án theo tỉnh thành/tội danh</h2>
+              </section>
+
               <div className={styles.chartsRow}>
                 <BarChart
                   title="Thống kê theo tỉnh thành"
