@@ -106,7 +106,7 @@ export default function StatsPage() {
                 <div className={styles.accuracyRow}>
                   <span>
                     Độ chính xác phản hồi: <strong>{accuracy}%</strong>
-                    &ensp;({stats.feedback_correct} chính xác / {stats.feedback_incorrect} sai)
+                    &ensp;({stats.feedback_correct} / {stats.feedback_total})
                   </span>
                   <div className={styles.accuracyBar}>
                     <div className={styles.accuracyFill} style={{ width: `${accuracy}%` }} />
