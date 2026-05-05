@@ -244,6 +244,72 @@ else
     warn "nvidia-smi not found — GPU check skipped (set FORCE_CPU=1 in .env for CPU-only mode)."
 fi
 
+# ── 5b. Install torch + AI service deps ──────────────────────
+# deploy_nodocker.sh requires at least one Python interpreter that can
+# `import torch`. We install it here so the deploy never fails with
+# "No Python with torch found".
+#
+# Strategy:
+#   GPU server  → pick cu118/cu121/cu124 based on driver; fall back to 2.4.1+cu118
+#                 (last cu118 build) if the same torch version has no cu118 wheel.
+#   CPU server  → install lightweight CPU-only wheel (~200 MB).
+info "Installing torch for AI service..."
+
+_TORCH_ALREADY=false
+"$PYTHON_BIN" -c "import torch" 2>/dev/null && _TORCH_ALREADY=true
+
+if [ "$_TORCH_ALREADY" = "false" ]; then
+    if command -v nvidia-smi &>/dev/null; then
+        # Detect driver and select the highest compatible cu-tag
+        _DRV_MAJOR=$(nvidia-smi 2>/dev/null | grep -oP 'Driver Version: \K[0-9]+' | head -1 || echo "0")
+        if   [ "$_DRV_MAJOR" -ge 550 ]; then _CU_TAG="cu124"; _TORCH_VER="2.5.1"; _TV_VER="0.20.1"
+        elif [ "$_DRV_MAJOR" -ge 530 ]; then _CU_TAG="cu121"; _TORCH_VER="2.5.1"; _TV_VER="0.20.1"
+        else                                  _CU_TAG="cu118"; _TORCH_VER="2.4.1"; _TV_VER="0.19.1"; fi
+        info "  GPU R${_DRV_MAJOR} → installing torch==${_TORCH_VER}+${_CU_TAG}..."
+
+        _GPU_TORCH_OK=false
+        # Try preferred version first, fall back to 2.4.1 (last cu118-compatible release)
+        for _TB in "$_TORCH_VER" "2.4.1"; do
+            _TVB=$(python3 -c "p='$_TB'.split('.')[:2]; print(f'0.{int(p[0])*10+int(p[1])-5}.1')" 2>/dev/null || echo "0.19.1")
+            if "$PYTHON_BIN" -m pip install \
+                    "torch==${_TB}+${_CU_TAG}" "torchvision==${_TVB}+${_CU_TAG}" \
+                    --index-url "https://download.pytorch.org/whl/${_CU_TAG}" \
+                    --quiet 2>&1 | tail -3; then
+                _GPU_TORCH_OK=true
+                info "  ✅ Installed torch ${_TB}+${_CU_TAG}"
+                break
+            fi
+            warn "  torch ${_TB}+${_CU_TAG} unavailable — trying fallback..."
+        done
+        [ "$_GPU_TORCH_OK" = "false" ] && warn "  GPU torch failed — falling back to CPU torch."
+    fi
+
+    # CPU fallback (no GPU, or GPU install failed)
+    if ! "$PYTHON_BIN" -c "import torch" 2>/dev/null; then
+        info "  Installing CPU torch (~200 MB)..."
+        "$PYTHON_BIN" -m pip install torch torchvision \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --quiet 2>&1 | tail -3 || warn "  CPU torch install failed — check pip output."
+    fi
+else
+    skip "torch already importable — skipping install"
+fi
+
+# Install remaining AI service deps from requirements.txt (excluding torch
+# to avoid pip downgrading the GPU torch we just installed).
+if [ -f "$PROJECT_DIR/ai-service/requirements.txt" ]; then
+    info "  Installing remaining AI service deps (requirements.txt minus torch)..."
+    grep -v "^torch" "$PROJECT_DIR/ai-service/requirements.txt" > /tmp/req_notorch.txt
+    "$PYTHON_BIN" -m pip install -r /tmp/req_notorch.txt --quiet 2>&1 | tail -5 || \
+        warn "  Some AI deps failed — deploy_nodocker.sh will retry them."
+    "$PYTHON_BIN" -m pip install "milvus-lite>=2.4.9" "pymilvus>=2.4.0" \
+        "FlagEmbedding>=1.2.0" --quiet 2>&1 | tail -3 || true
+    rm -f /tmp/req_notorch.txt
+    info "  AI service deps installed."
+else
+    warn "  $PROJECT_DIR/ai-service/requirements.txt not found — will install at deploy time."
+fi
+
 # ── 6. Pre-download models ───────────────────────────────────
 # Downloading here avoids first-request timeout when the service starts.
 RERANKER_MODEL="BAAI/bge-reranker-v2-m3"
