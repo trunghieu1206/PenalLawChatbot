@@ -34,6 +34,18 @@ Enhanced LangGraph pipeline with:
 """
 
 import os
+
+# --- CPU PERFORMANCE OPTIMIZATION ---
+# Force PyTorch and underlying C++ math libraries to use all available physical
+# CPU cores optimally. Crucial for CPU inference performance on rented vCPUs.
+_cores = os.cpu_count() or 4
+os.environ["OMP_NUM_THREADS"] = str(_cores)
+os.environ["MKL_NUM_THREADS"] = str(_cores)
+os.environ["OPENBLAS_NUM_THREADS"] = str(_cores)
+import torch  # MUST import torch AFTER setting these env vars
+torch.set_num_threads(_cores)
+# ------------------------------------
+
 # ⚠️ MUST be before any pymilvus/langchain_milvus imports:
 # pymilvus reads MILVUS_URI from os.environ at import time (Connections singleton).
 # We NEVER set MILVUS_URI in the environment — instead we use MILVUS_DB_PATH
