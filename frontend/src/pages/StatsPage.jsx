@@ -82,7 +82,40 @@ export default function StatsPage() {
           <div className={styles.pageHeader}>
             <div>
               <h1>Dashboard/Thống kê</h1>
-              
+              <div className={styles.descriptionCard}>
+                <div className={styles.descriptionHeader}>
+                  <span className="material-symbols-outlined text-primary">gavel</span>
+                  <h3>Về Hệ thống VNPLaw Intelligence</h3>
+                </div>
+                <p>
+                  VNPLaw là nền tảng trí tuệ nhân tạo chuyên sâu trong lĩnh vực <strong>Pháp luật Hình sự Việt Nam</strong>. 
+                  Hệ thống hỗ trợ tự động phân tích tình tiết vụ án, trích xuất dữ liệu pháp lý và đề xuất áp dụng các điều khoản 
+                  của Bộ luật Hình sự một cách chính xác theo từng vai trò tố tụng.
+                </p>
+                <div className={styles.featureGrid}>
+                  <div className={styles.featureItem}>
+                    <span className="material-symbols-outlined">analytics</span>
+                    <div>
+                      <strong>Giải quyết vụ án</strong>
+                      <span>Phân tích kịch bản tội phạm và định tội danh tự động.</span>
+                    </div>
+                  </div>
+                  <div className={styles.featureItem}>
+                    <span className="material-symbols-outlined">history_edu</span>
+                    <div>
+                      <strong>Tra cứu án lệ</strong>
+                      <span>Kết nối thông tin với hệ thống văn bản pháp luật hiện hành.</span>
+                    </div>
+                  </div>
+                  <div className={styles.featureItem}>
+                    <span className="material-symbols-outlined">psychology</span>
+                    <div>
+                      <strong>Luyện tập kỹ năng</strong>
+                      <span>Đóng vai Thẩm phán, Luật sư để rèn luyện tư duy lập luận.</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
