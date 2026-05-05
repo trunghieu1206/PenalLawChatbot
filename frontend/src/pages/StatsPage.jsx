@@ -80,38 +80,37 @@ export default function StatsPage() {
 
         <div className={styles.content}>
           <div className={styles.pageHeader}>
-            <div>
-              <h1>Dashboard/Thống kê</h1>
-              <div className={styles.descriptionCard}>
-                <div className={styles.descriptionHeader}>
-                  <span className="material-symbols-outlined text-primary">gavel</span>
-                  <h3>Về Hệ thống VNPLaw</h3>
+            <h1>Dashboard/Thống kê</h1>
+          </div>
+
+          <div className={styles.descriptionCard}>
+            <div className={styles.descriptionHeader}>
+              <span className="material-symbols-outlined text-primary">gavel</span>
+              <h3>Về Hệ thống VNPLaw</h3>
+            </div>
+            <p>
+              VNPLaw là hệ thống được phát triển để giải quyết một vụ án hình sự, tích hợp chức năng điều chỉnh góc nhìn (thẩm phán, luật sư bảo vệ bị hại, luật sư bảo vệ bị cáo). Hệ thống hỗ trợ phân tích tình tiết vụ án, trích dẫn điều luật tương ứng trong Bộ luật Hình sự và đưa ra câu trả lời theo từng vai trò.
+            </p>
+            <div className={styles.featureGrid}>
+              <div className={styles.featureItem}>
+                <span className="material-symbols-outlined">analytics</span>
+                <div>
+                  <strong>Giải quyết vụ án</strong>
+                  <span>Xử lý vụ án hình sự, trích dẫn điều luật tương ứng theo văn bản pháp luật.</span>
                 </div>
-                <p>
-                  VNPLaw là hệ thống được phát triển để giải quyết một vụ án hình sự, tích hợp chức năng điều chỉnh góc nhìn (thẩm phán, luật sư bảo vệ bị hại, luật sư bảo vệ bị cáo). Hệ thống hỗ trợ phân tích tình tiết vụ án, trích dẫn điều luật tương ứng trong Bộ luật Hình sự và đưa ra câu trả lời theo từng vai trò.
-                </p>
-                <div className={styles.featureGrid}>
-                  <div className={styles.featureItem}>
-                    <span className="material-symbols-outlined">analytics</span>
-                    <div>
-                      <strong>Giải quyết vụ án</strong>
-                      <span>Xử lý vụ án hình sự, trích dẫn điều luật tương ứng theo văn bản pháp luật.</span>
-                    </div>
-                  </div>
-                  <div className={styles.featureItem}>
-                    <span className="material-symbols-outlined">diversity_3</span>
-                    <div>
-                      <strong>Điều chỉnh góc nhìn</strong>
-                      <span>Xử lý vụ án theo 3 góc nhìn: thẩm phán, luật sư bảo vệ bị hại, luật sư bảo vệ bị cáo.</span>
-                    </div>
-                  </div>
-                  <div className={styles.featureItem}>
-                    <span className="material-symbols-outlined">psychology</span>
-                    <div>
-                      <strong>Luyện tập kỹ năng</strong>
-                      <span>Đóng vai là thẩm phán/luật sư để rèn luyện khả năng giải quyết vụ án hình sự.</span>
-                    </div>
-                  </div>
+              </div>
+              <div className={styles.featureItem}>
+                <span className="material-symbols-outlined">diversity_3</span>
+                <div>
+                  <strong>Điều chỉnh góc nhìn</strong>
+                  <span>Xử lý vụ án theo 3 góc nhìn: thẩm phán, luật sư bảo vệ bị hại, luật sư bảo vệ bị cáo.</span>
+                </div>
+              </div>
+              <div className={styles.featureItem}>
+                <span className="material-symbols-outlined">psychology</span>
+                <div>
+                  <strong>Luyện tập kỹ năng</strong>
+                  <span>Đóng vai là thẩm phán/luật sư để rèn luyện khả năng giải quyết vụ án hình sự.</span>
                 </div>
               </div>
             </div>
