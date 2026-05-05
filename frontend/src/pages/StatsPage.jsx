@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import Topbar from '../components/Topbar.jsx';
+import Sidebar from '../components/Sidebar.jsx';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../services/api.js';
 import { useAuth } from '../hooks/useAuth.jsx';
@@ -7,12 +9,11 @@ import styles from './StatsPage.module.css';
 const ROLE_LABEL = { neutral: 'Thẩm phán', defense: 'Luật sư Bào chữa', victim: 'Luật sư Bị hại' };
 const ROLE_COLOR = { neutral: '#4da6c8', defense: '#a78bfa', victim: '#fb923c' };
 
-function StatCard({ label, value, icon, accent }) {
+function StatCard({ label, value, accent }) {
   return (
-    <div className={`${styles.statCard} ${accent ? styles[`accent_${accent}`] : ''}`}>
-      <span className={styles.statIcon}>{icon}</span>
-      <div className={styles.statValue}>{value ?? '—'}</div>
-      <div className={styles.statLabel}>{label}</div>
+    <div className={`${styles.statCard} ${accent ? styles[`accent_${accent}`] : ''} flex flex-col justify-center items-center text-center p-6 gap-2`}>
+      <div className="text-sm font-semibold text-slate-500">{label}</div>
+      <div className="text-4xl font-bold text-slate-900">{value ?? '—'}</div>
     </div>
   );
 }
@@ -70,65 +71,17 @@ export default function StatsPage() {
     : null;
 
   return (
-    <div className={styles.page}>
-      <aside className={styles.nav}>
-        <div className={styles.navHeader}>
-          <div className={styles.brandBadge}>V</div>
-          <div>
-            <div className={styles.brandTitle}>VNPLaw</div>
-            <div className={styles.brandSub}>Legal Intelligence</div>
-          </div>
-        </div>
-        <div className={styles.navLinks}>
-          <button className={styles.navItem} type="button" onClick={() => navigate('/chat')}>
-            <span className="material-symbols-outlined">chat</span>
-            Chat
-          </button>
-          <button className={styles.navItem} type="button" onClick={() => navigate('/training')}>
-            <span className="material-symbols-outlined">gavel</span>
-            Chế độ Luyện tập
-          </button>
-          <button className={`${styles.navItem} ${styles.navItemActive}`} type="button">
-            <span className="material-symbols-outlined">dashboard</span>
-            Dashboard/Thống kê
-          </button>
-        </div>
-        <div className={styles.navFooter}>
-          <button className={styles.navItem} type="button">
-            <span className="material-symbols-outlined">settings</span>
-            Cài đặt
-          </button>
-          <button className={styles.navItem} type="button">
-            <span className="material-symbols-outlined">help</span>
-            Hỗ trợ
-          </button>
-        </div>
-      </aside>
+    <div className="bg-background text-on-background font-body-md text-body-md h-full min-h-screen flex overflow-hidden">
+      <Sidebar activeTab="stats" />
 
-      <main className={styles.main}>
-        <header className={styles.topbar}>
-          <div className={styles.topbarLeft}>
-            <div className={styles.topbarTitle}>VNPLaw Intelligence</div>
-            <nav className={styles.topbarLinks}>
-              <button type="button">Tài liệu</button>
-              <button type="button">Lưu trữ</button>
-            </nav>
-          </div>
-          <div className={styles.topbarRight}>
-            <button className="btn btn-outline" type="button">Export Report</button>
-            {user?.role === 'admin' && (
-              <button className="btn btn-primary" type="button" onClick={() => navigate('/admin')}>
-                Quản lý phản hồi
-              </button>
-            )}
-          </div>
-        </header>
+      <main className="ml-64 flex-1 flex flex-col h-screen bg-surface overflow-y-auto pt-16">
+        <Topbar />
 
         <div className={styles.content}>
           <div className={styles.pageHeader}>
             <div>
               <h1>Dashboard/Thống kê</h1>
-              <p>System metrics and operational overview.</p>
+              
             </div>
           </div>
 
@@ -143,17 +96,17 @@ export default function StatsPage() {
           {!loading && !error && stats && (
             <>
               <div className={styles.statGrid}>
-                <StatCard icon="💬" label="Tổng phiên làm việc" value={stats.total_sessions} accent="blue" />
-                <StatCard icon="👤" label="Người dùng đã đăng ký" value={stats.total_users} accent="teal" />
-                <StatCard icon="⚖️" label="Vụ án đã phân tích" value={stats.cases_processed} accent="purple" />
-                <StatCard icon="📝" label="Phản hồi nhận được" value={stats.feedback_total} accent="orange" />
+                <StatCard label="Lượt truy cập" value={stats.total_sessions} accent="blue" />
+                <StatCard label="Người dùng đã đăng ký" value={stats.total_users} accent="teal" />
+                <StatCard label="Vụ án đã phân tích" value={stats.cases_processed} accent="purple" />
+                <StatCard label="Phản hồi nhận được" value={stats.feedback_total} accent="orange" />
               </div>
 
               {stats.feedback_total > 0 && (
                 <div className={styles.accuracyRow}>
                   <span>
                     Độ chính xác phản hồi: <strong>{accuracy}%</strong>
-                    &ensp;({stats.feedback_correct} chính xác / {stats.feedback_incorrect} sai)
+                    &ensp;({stats.feedback_correct} / {stats.feedback_total})
                   </span>
                   <div className={styles.accuracyBar}>
                     <div className={styles.accuracyFill} style={{ width: `${accuracy}%` }} />
@@ -162,14 +115,14 @@ export default function StatsPage() {
               )}
 
               <section className={styles.section}>
-                <h2>Phân bổ Vai trò</h2>
+                <h2>Lượt câu trả lời đưa ra theo vai trò</h2>
                 <div className={styles.roleGrid}>
                   {['neutral', 'defense', 'victim'].map(r => (
-                    <div key={r} className={styles.roleCard} style={{ borderColor: `${ROLE_COLOR[r]}44` }}>
-                      <div className={styles.roleCount} style={{ color: ROLE_COLOR[r] }}>
+                    <div key={r} className={styles.roleCard} style={{ borderColor: `${ROLE_COLOR[r]}44`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '24px' }}>
+                      <div className="text-sm font-semibold text-slate-500">{ROLE_LABEL[r]}</div>
+                      <div className="text-4xl font-bold" style={{ color: ROLE_COLOR[r] }}>
                         {stats.by_role?.[r] ?? 0}
                       </div>
-                      <div className={styles.roleLabel}>{ROLE_LABEL[r]}</div>
                     </div>
                   ))}
                 </div>
@@ -177,18 +130,24 @@ export default function StatsPage() {
 
               <div className={styles.chartsRow}>
                 <BarChart
-                  title="Vụ án theo địa danh (tỉnh/thành)"
+                  title="Thống kê theo tỉnh thành"
                   data={stats.by_province}
                   color="linear-gradient(90deg,#4f6073,#7c93ab)"
                 />
                 <BarChart
-                  title="Vụ án theo loại tội danh"
+                  title="Thống kê theo tội danh"
                   data={stats.by_crime_type}
                   color="linear-gradient(90deg,#775a19,#c5a059)"
                 />
               </div>
             </>
           )}
+          
+          <div className="mt-12 flex justify-center pb-12">
+            <button onClick={() => navigate('/chat')} className="bg-primary text-on-primary px-8 py-3 rounded-full text-lg font-bold shadow-md hover:bg-primary-container hover:text-on-primary-container transition-colors">
+              Giải quyết vụ án ngay
+            </button>
+          </div>
         </div>
       </main>
     </div>

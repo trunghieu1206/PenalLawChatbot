@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
+import Topbar from '../components/Topbar.jsx';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { chatApi, lawsApi } from '../services/api.js';
 import MessageBubble from '../components/MessageBubble.jsx';
 import RoleSelector from '../components/RoleSelector.jsx';
 import LawSidebar from '../components/LawSidebar.jsx';
+import Sidebar from '../components/Sidebar.jsx';
 import styles from './ChatPage.module.css';
 
 export default function ChatPage() {
@@ -253,287 +255,183 @@ export default function ChatPage() {
     ? user.fullName.split(' ').slice(0, 2).map(part => part[0]).join('')
     : user?.email?.[0]?.toUpperCase() || 'G';
 
-  return (
-    <div className={styles.page}>
-      <aside className={styles.nav}>
-        <div className={styles.navHeader}>
-          <div className={styles.brandBadge}>V</div>
-          <div>
-            <div className={styles.brandTitle}>VNPLaw</div>
-            <div className={styles.brandSub}>Legal Intelligence</div>
-          </div>
-        </div>
-        <div className={styles.navLinks}>
-          <button className={`${styles.navItem} ${styles.navItemActive}`} type="button">
-            <span className="material-symbols-outlined">chat</span>
-            Chat
-          </button>
-          <button className={styles.navItem} type="button" onClick={() => navigate('/training')}>
-            <span className="material-symbols-outlined">gavel</span>
-            Chế độ Luyện tập
-          </button>
-          <button className={styles.navItem} type="button" onClick={() => navigate('/stats')}>
-            <span className="material-symbols-outlined">dashboard</span>
-            Bảng điều khiển
-          </button>
-          {user?.role === 'admin' && (
-            <button className={styles.navItem} type="button" onClick={() => navigate('/admin')}>
-              <span className="material-symbols-outlined">admin_panel_settings</span>
-              Quản lý phản hồi
-            </button>
-          )}
-        </div>
-        <div className={styles.navFooter}>
-          <button className={styles.navItem} type="button">
-            <span className="material-symbols-outlined">settings</span>
-            Cài đặt
-          </button>
-          <button className={styles.navItem} type="button">
-            <span className="material-symbols-outlined">help</span>
-            Hỗ trợ
-          </button>
-        </div>
-      </aside>
+    return (
+      <div className="bg-background text-on-background font-body-md text-body-md h-full min-h-screen flex overflow-hidden">
+        {/* SideNavBar */}
+        <Sidebar activeTab="chat" />
 
-      <main className={styles.main}>
-        <header className={styles.topbar}>
-          <div className={styles.topbarLeft}>
-            <div className={styles.topbarTitle}>VNPLaw Intelligence</div>
-            <nav className={styles.topbarLinks}>
-              <button type="button">Tài liệu</button>
-              <button type="button">Lưu trữ</button>
-            </nav>
-          </div>
-          <div className={styles.topbarRight}>
-            <div className={styles.searchWrap}>
-              <span className="material-symbols-outlined">search</span>
-              <input className={styles.searchInput} placeholder="Tìm kiếm án lệ..." />
-            </div>
-            <button className="btn btn-primary" type="button" onClick={createNewSession}>
-              <span className="material-symbols-outlined">add</span>
-              Vụ án mới
-            </button>
-            <div className={styles.userActions}>
-              <button className={styles.iconBtn} type="button" title="Thông báo">
-                <span className="material-symbols-outlined">notifications</span>
-              </button>
-              <button className={styles.avatarBtn} type="button" title={user?.email || 'Khách'}>
-                {userInitials}
-              </button>
-            </div>
-          </div>
-        </header>
+        {/* Main Content Area */}
+        <main className="ml-64 flex-1 flex flex-col h-screen bg-surface">
+          {/* TopAppBar */}
+          <Topbar />
 
-        <div className={styles.canvas}>
-          <aside className={styles.history}>
-            <div className={styles.historyHeader}>
-              <span>Tư vấn gần đây</span>
-            </div>
-            <div className={styles.historyList}>
-              {sessions.length === 0 && (
-                <div className={styles.emptyNote}>Chưa có cuộc hội thoại nào</div>
-              )}
-              {sessions.map((s) => (
-                <div
-                  key={s.id}
-                  className={`${styles.sessionCard} ${currentSession?.id === s.id ? styles.sessionActive : ''}`}
-                  onClick={() => handleSessionClick(s)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSessionClick(s); }}
-                >
-                  <div className={styles.sessionMeta}>
-                    <span>
-                      {new Date(s.createdAt).toLocaleDateString('vi-VN', {
-                        timeZone: 'Asia/Ho_Chi_Minh',
-                        day: '2-digit', month: '2-digit', year: 'numeric'
-                      })}
-                    </span>
+          {/* Canvas */}
+          <div className="flex-1 mt-16 flex overflow-hidden">
+            {/* History List */}
+            <aside className="w-72 border-r border-surface-variant bg-surface-bright flex flex-col overflow-y-auto">
+              <div className="p-4 border-b border-surface-variant sticky top-0 bg-surface-bright/95 backdrop-blur z-10">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Tư vấn Gần đây</h3>
+                  <button onClick={createNewSession} className="text-primary hover:bg-surface-container p-1 rounded transition-colors" title="Vụ án Mới">
+                    <span className="material-symbols-outlined text-sm">add</span>
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 p-2 space-y-1">
+                {sessions.length === 0 && <div className="p-4 text-sm text-on-surface-variant text-center">Chưa có cuộc hội thoại nào</div>}
+                {sessions.map((s) => {
+                  const isActive = currentSession?.id === s.id;
+                  return (
                     <button
-                      className={styles.sessionDelete}
-                      onClick={(e) => handleDeleteSession(e, s.id)}
-                      title="Xóa phiên"
-                      type="button"
+                      key={s.id}
+                      onClick={() => handleSessionClick(s)}
+                      className={`w-full text-left p-3 rounded transition-all group relative ${isActive ? 'bg-surface-container-high border border-surface-variant shadow-sm' : 'hover:bg-surface-container-low border border-transparent'}`}
                     >
-                      <span className="material-symbols-outlined">close</span>
+                      <div className="flex justify-between items-start mb-1">
+                        <span className={`font-label-sm text-[12px] ${isActive ? 'text-primary' : 'text-on-surface-variant'}`}>
+                          {new Date(s.createdAt).toLocaleDateString('vi-VN')}
+                        </span>
+                        <span 
+                          onClick={(e) => handleDeleteSession(e, s.id)}
+                          className="material-symbols-outlined text-[14px] text-outline hover:text-error opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                        >close</span>
+                      </div>
+                      <h4 className={`font-body-md text-sm font-medium line-clamp-2 leading-snug ${isActive ? 'text-on-surface' : 'text-on-surface opacity-80 group-hover:opacity-100'}`}>
+                        {s.title || 'Phiên mới'}
+                      </h4>
+                    </button>
+                  );
+                })}
+              </div>
+            </aside>
+
+            {/* Main Chat Area */}
+            <section className="flex-1 flex flex-col bg-surface relative min-w-0">
+              <div className="px-8 py-3 border-b border-surface-variant bg-surface-container-lowest flex-shrink-0">
+                <div className="max-w-3xl mx-auto flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <h2 className="text-lg font-bold text-on-surface truncate max-w-sm mb-0.5">
+                      {currentSession ? currentSession.title : 'Phân tích vụ án mới'}
+                    </h2>
+                    <div className="flex items-center gap-1 text-xs text-on-surface-variant">
+                      <span className="material-symbols-outlined text-[14px]">calendar_today</span>
+                      <span>Ngày: {new Date().toLocaleDateString('vi-VN')}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 relative">
+                    <button onClick={handleRoleBtnClick} className="flex items-center gap-2 bg-surface-container text-on-surface font-label-sm text-xs px-3 py-1.5 rounded border border-surface-variant hover:bg-surface-container-high transition-colors">
+                      <span className="material-symbols-outlined text-sm">person</span>
+                      {roleLabel}
+                      {currentSession && <span className="material-symbols-outlined text-[14px] text-outline">lock</span>}
+                    </button>
+                    {showRoleLockPopup && (
+                      <div className="absolute top-10 right-0 bg-inverse-surface text-inverse-on-surface text-xs px-3 py-1.5 rounded shadow-md whitespace-nowrap z-50">
+                        Vai trò đã bị khóa cho phiên này.
+                      </div>
+                    )}
+                    <button className="text-primary hover:bg-surface-container p-2 rounded transition-colors border border-transparent hover:border-surface-variant">
+                      <span className="material-symbols-outlined">download</span>
                     </button>
                   </div>
-                  <div className={styles.sessionTitle}>
-                    {s.title || (s.id ? `Phiên #${s.id.substring(0, 8)}` : 'Cuộc trò chuyện mới')}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className={styles.historyFooter}>
-              {user ? (
-                <button
-                  className="btn btn-outline"
-                  type="button"
-                  onClick={() => {
-                    logout();
-                    navigate('/login');
-                  }}
-                >
-                  Đăng xuất
-                </button>
-              ) : (
-                <div className={styles.historyAuth}>
-                  <button className="btn btn-ghost" type="button" onClick={() => navigate('/login')}>
-                    Đăng nhập
-                  </button>
-                  <button className="btn btn-primary" type="button" onClick={() => navigate('/register')}>
-                    Đăng ký
-                  </button>
-                </div>
-              )}
-            </div>
-          </aside>
-
-          <section className={styles.chatPanel}>
-            <div className={styles.caseHeader}>
-              <div>
-                <div className={styles.caseTags}>
-                  <span className={styles.tagNeutral}>Luật Hình sự</span>
-                  <span className={styles.tagSecondary}>Đang xem xét</span>
-                </div>
-                <h2 className={styles.caseTitle}>
-                  {currentSession ? currentSession.title : 'Phân tích vụ án mới'}
-                </h2>
-                <div className={styles.caseMeta}>
-                  <span>
-                    <span className="material-symbols-outlined">calendar_today</span>
-                    {new Date().toLocaleDateString('vi-VN')}
-                  </span>
-                  <span>
-                    <span className="material-symbols-outlined">account_balance</span>
-                    People&apos;s Court
-                  </span>
                 </div>
               </div>
-              <div className={styles.caseActions}>
-                <button className={styles.iconBtn} type="button" title="Tải xuống">
-                  <span className="material-symbols-outlined">download</span>
-                </button>
-                <div className={styles.roleBtnWrap}>
-                  <button
-                    className={styles.roleBtn}
-                    onClick={handleRoleBtnClick}
-                    type="button"
-                  >
-                    <span className={`badge badge-${activeRole}`}>{roleLabel}</span>
-                    {currentSession && <span className={styles.roleLocked}>Đã khóa</span>}
-                  </button>
-                  {showRoleLockPopup && (
-                    <div className={styles.rolePopup}>
-                      Vai trò đã được khóa cho phiên này.
+
+              <div className="flex-1 overflow-y-auto px-8 py-8">
+                <div className="max-w-3xl mx-auto space-y-8 pb-12">
+                  {messages.length === 0 && (
+                     <div className="text-center py-12 text-on-surface-variant">
+                       <h3 className="font-h3 text-xl mb-2 text-on-surface">Trợ lý Luật Hình sự</h3>
+                       <p className="font-body-md text-sm mb-6">Dán nội dung hồ sơ vụ án để nhận phân tích pháp luật chi tiết.</p>
+                       <div className="flex justify-center gap-4 text-xs font-label-sm opacity-60">
+                         <span>• Phân tích tội danh</span>
+                         <span>• Điều luật áp dụng</span>
+                         <span>• Tình tiết giảm nhẹ</span>
+                       </div>
+                     </div>
+                  )}
+                  {messages.map((msg) => (
+                    <div key={msg.id} className="animate-fade-in">
+                      <MessageBubble message={msg} role={activeRole} sessionId={currentSession?.id} onLawClick={handleLawClick} />
+                    </div>
+                  ))}
+                  {loading && (
+                    <div className="flex gap-4 items-start animate-fade-in">
+                      <div className="w-8 h-8 rounded-full bg-primary text-on-primary flex-shrink-0 flex items-center justify-center font-h3 text-sm">V</div>
+                      <div className="bg-surface-container-lowest border border-surface-variant p-4 rounded-lg rounded-tl-none shadow-sm flex gap-1 items-center">
+                        <div className="w-2 h-2 rounded-full bg-primary animate-pulse" style={{animationDelay: '0ms'}}></div>
+                        <div className="w-2 h-2 rounded-full bg-primary animate-pulse" style={{animationDelay: '150ms'}}></div>
+                        <div className="w-2 h-2 rounded-full bg-primary animate-pulse" style={{animationDelay: '300ms'}}></div>
+                      </div>
                     </div>
                   )}
+                  {error && <div className="p-3 bg-error-container text-on-error-container rounded text-sm text-center">{error}</div>}
+                  <div ref={messagesEndRef} />
                 </div>
               </div>
-            </div>
 
-            <div className={styles.feed}>
-              <div className={styles.feedInner}>
-                {messages.length === 0 && (
-                  <div className={styles.emptyState}>
-                    <h3>Trợ lý Luật Hình sự</h3>
-                    <p>Dán nội dung hồ sơ vụ án để nhận phân tích pháp luật chi tiết.</p>
-                    <div className={styles.hintRow}>
-                      <span>Phân tích tội danh</span>
-                      <span>Điều luật áp dụng</span>
-                      <span>Tình tiết giảm nhẹ</span>
-                    </div>
-                  </div>
-                )}
-
-                {messages.map((msg, i) => (
-                  <div key={msg.id || i} className="animate-fade-in">
-                    <MessageBubble
-                      message={msg}
-                      role={activeRole}
-                      sessionId={currentSession?.id}
-                      onLawClick={handleLawClick}
-                    />
-                  </div>
-                ))}
-
-                {loading && (
-                  <div className={styles.typingIndicator}>
-                    <span className={styles.typingDot} />
-                    <span className={styles.typingDot} />
-                    <span className={styles.typingDot} />
-                    <span>AI đang phân tích...</span>
-                  </div>
-                )}
-
-                {error && <div className={styles.errorBanner}>{error}</div>}
-                <div ref={messagesEndRef} />
-              </div>
-            </div>
-
-            <div className={styles.composer}>
-              <div className={styles.composerInner}>
-                <textarea
-                  ref={textareaRef}
-                  className={styles.composerTextarea}
-                  placeholder="Đặt câu hỏi tiếp theo hoặc yêu cầu trích xuất điều khoản..."
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  rows={3}
-                  disabled={loading}
-                />
-                <div className={styles.composerActions}>
-                  <button className={styles.attachBtn} type="button" title="Đính kèm">
-                    <span className="material-symbols-outlined">attach_file</span>
+              <div className="p-3 bg-surface-container-lowest border-t border-surface-variant flex-shrink-0">
+                <div className="max-w-3xl mx-auto relative flex items-center bg-surface border border-surface-variant rounded-full pr-12 pl-4 focus-within:ring-1 focus-within:border-primary-container shadow-sm">
+                  <button className="text-outline hover:text-primary-container transition-colors mr-2">
+                    <span className="material-symbols-outlined text-[20px]">attach_file</span>
                   </button>
-                  <span className={styles.charCount}>{charCount} ký tự</span>
-                  <button
-                    className={styles.sendBtn}
+                  <textarea
+                    ref={textareaRef}
+                    className="flex-1 bg-transparent resize-none py-3 font-body-md text-on-surface outline-none transition-all max-h-32"
+                    placeholder="Đặt câu hỏi tiếp theo..."
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    disabled={loading}
+                    rows={1}
+                    style={{ overflow: 'hidden' }}
+                  />
+                  <button 
                     onClick={handleSend}
                     disabled={loading || !input.trim()}
-                    type="button"
-                  >
-                    <span className="material-symbols-outlined">send</span>
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-primary-container text-on-primary rounded-full flex items-center justify-center hover:bg-primary transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span className="material-symbols-outlined text-[16px]">send</span>
                   </button>
                 </div>
+                <div className="max-w-3xl mx-auto mt-1 flex justify-center">
+                  <span className="text-[10px] text-outline">{charCount} ký tự</span>
+                </div>
+              </div>
+            </section>
+
+            {lawSidebar.open && (
+              <aside className="w-80 border-l border-surface-variant bg-surface-container-lowest flex flex-col z-20">
+                <div className="p-4 border-b border-surface-variant flex justify-between items-center bg-surface-bright">
+                  <h3 className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[16px]">menu_book</span> Văn bản Tham chiếu
+                  </h3>
+                  <button onClick={closeLawSidebar} className="text-outline hover:text-on-surface">
+                    <span className="material-symbols-outlined text-[18px]">close</span>
+                  </button>
+                </div>
+                <div className="p-0 overflow-y-auto flex-1 relative">
+                  <LawSidebar lawData={lawSidebar.data} loading={lawSidebar.loading} error={lawSidebar.error} onClose={closeLawSidebar} isEmbedded={true} />
+                </div>
+              </aside>
+            )}
+          </div>
+        </main>
+
+        {showRoleModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center" onClick={() => setShowRoleModal(false)}>
+            <div className="bg-surface-container-lowest p-6 rounded-lg max-w-md w-full shadow-lg" onClick={e => e.stopPropagation()}>
+              <h3 className="font-h3 text-xl mb-2 text-on-surface">Chọn vai trò phân tích</h3>
+              <p className="text-sm text-on-surface-variant mb-6">
+                {pendingContent ? 'Chọn vai trò trước khi bắt đầu. Vai trò sẽ không thể thay đổi sau khi phiên bắt đầu.' : 'Vai trò sẽ được khóa cho toàn bộ phiên hội thoại này.'}
+              </p>
+              <div className="mb-6">
+                 <RoleSelector selected={role} onChange={handleRoleConfirmed} />
+              </div>
+              <div className="flex justify-end">
+                <button className="px-4 py-2 text-sm font-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded transition-colors" onClick={() => { setShowRoleModal(false); setPendingContent(''); }}>Hủy</button>
               </div>
             </div>
-          </section>
-
-          <aside className={`${styles.lawPanel} ${lawSidebar.open ? styles.lawPanelOpen : ''}`}>
-            {lawSidebar.open && (
-              <LawSidebar
-                lawData={lawSidebar.data}
-                loading={lawSidebar.loading}
-                error={lawSidebar.error}
-                onClose={closeLawSidebar}
-              />
-            )}
-          </aside>
-        </div>
-      </main>
-
-      {showRoleModal && (
-        <div className={styles.modalOverlay} onClick={() => setShowRoleModal(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <h3 className={styles.modalTitle}>Chọn vai trò phân tích</h3>
-            <p className={styles.modalDesc}>
-              {pendingContent
-                ? 'Chọn vai trò trước khi bắt đầu. Vai trò sẽ không thể thay đổi sau khi phiên bắt đầu.'
-                : 'Vai trò sẽ được khóa cho toàn bộ phiên hội thoại này.'}
-            </p>
-            <RoleSelector selected={role} onChange={handleRoleConfirmed} />
-            <button
-              className="btn btn-ghost"
-              type="button"
-              onClick={() => { setShowRoleModal(false); setPendingContent(''); }}
-            >
-              Hủy
-            </button>
           </div>
-        </div>
-      )}
-    </div>
-  );
+        )}
+      </div>
+    );
 }
