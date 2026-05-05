@@ -402,28 +402,31 @@ export default function ChatPage() {
                 </div>
               </div>
 
-              <div className="p-6 bg-surface-container-lowest border-t border-surface-variant">
-                <div className="max-w-3xl mx-auto relative">
+              <div className="p-3 bg-surface-container-lowest border-t border-surface-variant flex-shrink-0">
+                <div className="max-w-3xl mx-auto relative flex items-center bg-surface border border-surface-variant rounded-full pr-12 pl-4 focus-within:ring-1 focus-within:border-primary-container shadow-sm">
+                  <button className="text-outline hover:text-primary-container transition-colors mr-2">
+                    <span className="material-symbols-outlined text-[20px]">attach_file</span>
+                  </button>
                   <textarea
                     ref={textareaRef}
-                    className="w-full bg-surface resize-none border border-surface-variant rounded-lg p-4 pr-16 pb-12 font-body-md text-on-surface focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none transition-all shadow-sm"
-                    placeholder="Đặt câu hỏi tiếp theo hoặc yêu cầu trích xuất điều khoản..."
+                    className="flex-1 bg-transparent resize-none py-3 font-body-md text-on-surface outline-none transition-all max-h-32"
+                    placeholder="Đặt câu hỏi tiếp theo..."
                     value={input}
                     onChange={e => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     disabled={loading}
-                    rows={3}
+                    rows={1}
+                    style={{ overflow: 'hidden' }}
                   />
                   <button 
                     onClick={handleSend}
                     disabled={loading || !input.trim()}
-                    className="absolute right-4 bottom-4 w-10 h-10 bg-primary-container text-on-primary rounded-full flex items-center justify-center hover:bg-primary transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
-                    <span className="material-symbols-outlined">send</span>
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-primary-container text-on-primary rounded-full flex items-center justify-center hover:bg-primary transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span className="material-symbols-outlined text-[16px]">send</span>
                   </button>
-                  <div className="absolute left-4 bottom-4 flex gap-2">
-                    <button className="text-outline hover:text-primary-container transition-colors p-1"><span className="material-symbols-outlined text-[20px]">attach_file</span></button>
-                    <span className="text-xs text-outline absolute left-8 top-1.5 whitespace-nowrap">{charCount} ký tự</span>
-                  </div>
+                </div>
+                <div className="max-w-3xl mx-auto mt-1 flex justify-center">
+                  <span className="text-[10px] text-outline">{charCount}/5000 ký tự</span>
                 </div>
               </div>
             </section>

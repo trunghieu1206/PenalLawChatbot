@@ -181,11 +181,7 @@ export default function TrainingPage() {
 
         <div className={styles.pageHeader}>
           <div>
-            <nav className={styles.breadcrumb}>
-              <span>Trang chủ</span>
-              <span className="material-symbols-outlined">chevron_right</span>
-              <span>Practice Mode</span>
-            </nav>
+            
             <h1>Chế độ Luyện tập</h1>
             <p>Cải thiện lập luận pháp lý và phân tích vụ án bằng cách đóng các vai trò khác nhau trong các kịch bản tình huống giả định.</p>
           </div>
