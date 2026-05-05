@@ -496,7 +496,7 @@ nohup java \
     --spring.datasource.password="$SPRING_DATASOURCE_PASSWORD" \
     --jwt.secret="$JWT_SECRET" \
     --ai-service.base-url="$AI_SERVICE_URL" \
-    --ai-service.timeout-seconds=120 \
+    --ai-service.timeout-seconds=600 \
     > "$LOG_DIR/backend.log" 2>&1 &
 BACKEND_PID=$!
 info "Backend started (PID $BACKEND_PID). Log: $LOG_DIR/backend.log"
@@ -538,8 +538,8 @@ server {
     # Proxy /ai-api → FastAPI (AI service, port 8000)
     location /ai-api/ {
         proxy_pass http://127.0.0.1:8000/;
-        proxy_read_timeout 180s;
-        proxy_send_timeout 180s;
+        proxy_read_timeout 660s;
+        proxy_send_timeout 660s;
         proxy_connect_timeout 10s;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -549,8 +549,8 @@ server {
     # Proxy /api → Spring Boot backend (port 8080)
     location /api/ {
         proxy_pass http://127.0.0.1:8080;
-        proxy_read_timeout 180s;
-        proxy_send_timeout 180s;
+        proxy_read_timeout 660s;
+        proxy_send_timeout 660s;
         proxy_connect_timeout 10s;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -574,9 +574,9 @@ info "nginx started."
 
 # ── 8. Health checks ──────────────────────────────────────────
 echo ""
-info "Waiting for AI service to be ready (up to 180s — first run downloads ~1.1 GB model)..."
+info "Waiting for AI service to be ready (up to 300s — first run downloads/loads models; CPU is slower)..."
 _ai_ready=false
-for _i in $(seq 1 36); do   # 36 × 5s = 180s
+for _i in $(seq 1 60); do   # 60 × 5s = 300s
     if curl -sf --max-time 5 "http://localhost:8000/health" > /dev/null 2>&1; then
         info "  ✅ AI Service is up (after $((_i * 5))s)"
         _ai_ready=true
