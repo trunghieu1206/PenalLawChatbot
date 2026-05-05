@@ -137,6 +137,43 @@ export const adminApi = {
     }).then(r => r.data),
 };
 
+// ---- VISITOR TRACKING API ----
+// Generates a persistent visitorId (UUID in localStorage) and pings
+// /api/home/track-visit once per calendar day. This prevents the same user
+// navigating between pages from being counted multiple times.
+const _getOrCreateVisitorId = () => {
+  let id = localStorage.getItem('visitorId');
+  if (!id) {
+    // Use crypto.randomUUID() if available (modern browsers), otherwise fallback
+    id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : 'v-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    localStorage.setItem('visitorId', id);
+  }
+  return id;
+};
+
+export const trackVisitApi = {
+  /**
+   * Record a unique daily visit. Safe to call on every page load —
+   * will only send a request if this visitor hasn't been tracked today.
+   */
+  track: () => {
+    const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+    const lastTracked = localStorage.getItem('lastVisitDate');
+    if (lastTracked === today) return; // Already counted today — skip
+
+    const visitorId = _getOrCreateVisitorId();
+    apiClient.post('/home/track-visit', { visitor_id: visitorId })
+      .then(() => {
+        localStorage.setItem('lastVisitDate', today);
+      })
+      .catch(() => {
+        // Silently ignore — tracking failure should never affect UX
+      });
+  },
+};
+
 export default apiClient;
 
 // ---- AI SERVICE DIRECT CLIENT (proxied via /ai-api/) ----

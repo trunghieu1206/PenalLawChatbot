@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import Footer from '../components/Footer.jsx';
 import Topbar from '../components/Topbar.jsx';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
@@ -401,22 +400,16 @@ export default function ChatPage() {
             </section>
 
             {lawSidebar.open && (
-              <aside className="w-80 border-l border-surface-variant bg-surface-container-lowest flex flex-col z-20">
-                <div className="p-4 border-b border-surface-variant flex justify-between items-center bg-surface-bright">
-                  <h3 className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[16px]">menu_book</span> Văn bản Tham chiếu
-                  </h3>
-                  <button onClick={closeLawSidebar} className="text-outline hover:text-on-surface">
-                    <span className="material-symbols-outlined text-[18px]">close</span>
-                  </button>
-                </div>
-                <div className="p-0 overflow-y-auto flex-1 relative">
-                  <LawSidebar lawData={lawSidebar.data} loading={lawSidebar.loading} error={lawSidebar.error} onClose={closeLawSidebar} isEmbedded={true} />
-                </div>
+              <aside className="w-80 border-l border-surface-variant bg-surface-container-lowest flex flex-col overflow-hidden flex-shrink-0">
+                <LawSidebar
+                  lawData={lawSidebar.data}
+                  loading={lawSidebar.loading}
+                  error={lawSidebar.error}
+                  onClose={closeLawSidebar}
+                />
               </aside>
             )}
           </div>
-          <Footer />
       </main>
 
         {showRoleModal && (

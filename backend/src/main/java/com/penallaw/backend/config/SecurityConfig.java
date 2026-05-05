@@ -50,6 +50,7 @@ public class SecurityConfig {
                                 "/api/chat/sessions/*",         // delete session
                                 "/api/laws/**",                 // law reference sidebar — public read
                                 "/api/home",                    // public system statistics
+                                "/api/home/track-visit",        // unique daily visitor tracking (public)
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()

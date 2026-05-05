@@ -1,35 +1,31 @@
 package com.penallaw.backend.security;
 
-import com.penallaw.backend.service.VisitorTrackingService;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 
 /**
- * Intercepts every incoming HTTP request and increments the visitor counter.
- * Fast, low-memory middleware approach.
+ * VisitorTrackingFilter — DISABLED.
+ *
+ * The old implementation counted every HTTP request, which caused one user
+ * navigating between pages to be counted multiple times.
+ *
+ * Visitor tracking is now handled by a dedicated endpoint:
+ *   POST /api/track-visit  { visitor_id: "<browser-uuid>" }
+ *
+ * The browser sends this once per day (checked via localStorage date).
+ * The backend stores one row per (visitor_id, date) in the daily_visits table,
+ * enforced by a DB unique constraint — so the count is always accurate.
+ *
+ * This class is intentionally NOT annotated with @Component and will NOT
+ * be registered as a servlet filter.
  */
-@Component
-@RequiredArgsConstructor
 public class VisitorTrackingFilter implements Filter {
-
-    private final VisitorTrackingService trackingService;
 
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
             throws IOException, ServletException {
-        
-        if (request instanceof HttpServletRequest httpRequest) {
-            String path = httpRequest.getRequestURI();
-            // Optional: Skip tracking for health checks or specific internal endpoints
-            if (!path.startsWith("/actuator") && !path.contains("favicon")) {
-                trackingService.increment();
-            }
-        }
-        
-        chain.doFilter(request, response);
+        chain.doFilter(request, response); // pass through — no tracking here
     }
 }
