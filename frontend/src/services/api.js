@@ -121,6 +121,10 @@ export const adminApi = {
   getFeedback: () =>
     apiClient.get('/admin/feedback').then(r => r.data),
 
+  /** Per-user session (case) counts for the admin user-stats tab. */
+  getUserCaseStats: () =>
+    apiClient.get('/admin/user-stats').then(r => r.data),
+
   /**
    * Submit feedback on an AI response.
    * @param {string} sessionId - UUID of the chat session

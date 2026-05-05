@@ -35,6 +35,12 @@ public class AdminController {
         return ResponseEntity.ok(adminService.getAllFeedback());
     }
 
+    /** Per-user session (case) counts for the admin user-stats tab. */
+    @GetMapping("/user-stats")
+    public ResponseEntity<List<AdminDTOs.UserCaseStat>> getUserCaseStats() {
+        return ResponseEntity.ok(adminService.getUserCaseStats());
+    }
+
     /**
      * Submit feedback on an AI response.
      * Called by ordinary users — POST /api/admin/feedback

@@ -57,11 +57,11 @@ public class ChatService {
 
     @Transactional
     public ChatDTOs.SessionResponse createGuestSession(String guestId, ChatDTOs.CreateSessionRequest request) {
-        // Limit check: 5 sessions per day for guest users
+        // Limit check: 3 sessions per day for guest users
         LocalDateTime startOfToday = LocalDateTime.of(LocalDate.now(), LocalTime.MIDNIGHT);
         long sessionsToday = sessionRepository.countByGuestIdAndCreatedAtAfter(guestId, startOfToday);
-        if (sessionsToday >= 5) {
-            throw new RateLimitException("Khách truy cập được giới hạn 5 vụ án mỗi ngày. Vui lòng đăng nhập để có giới hạn cao hơn.");
+        if (sessionsToday >= 3) {
+            throw new RateLimitException("Khách truy cập được giới hạn 3 vụ án mỗi ngày. Vui lòng đăng nhập để có giới hạn cao hơn.");
         }
 
         String mode = (request != null && request.mode() != null) ? request.mode() : "neutral";
@@ -88,12 +88,12 @@ public class ChatService {
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + userEmail));
 
-        // Limit check: 10 sessions per day for regular users
+        // Limit check: 5 sessions per day for regular users
         if (!"admin".equalsIgnoreCase(user.getRole())) {
             LocalDateTime startOfToday = LocalDateTime.of(LocalDate.now(), LocalTime.MIDNIGHT);
             long sessionsToday = sessionRepository.countByUserIdAndCreatedAtAfter(user.getId(), startOfToday);
-            if (sessionsToday >= 10) {
-                throw new RateLimitException("Bạn đã đạt giới hạn 10 vụ án mỗi ngày. Vui lòng quay lại vào ngày mai.");
+            if (sessionsToday >= 5) {
+                throw new RateLimitException("Bạn đã đạt giới hạn 5 vụ án mỗi ngày. Vui lòng quay lại vào ngày mai.");
             }
         }
 

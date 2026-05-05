@@ -56,4 +56,14 @@ public class AdminDTOs {
             @JsonProperty("is_correct") boolean isCorrect,
             String comment
     ) {}
+
+    /** Per-user case (session) statistics for the admin panel. */
+    public record UserCaseStat(
+            @JsonProperty("user_id")     UUID   userId,
+            String                              email,
+            @JsonProperty("full_name")   String fullName,
+            String                              role,
+            @JsonProperty("total_cases") long   totalCases,
+            @JsonProperty("cases_today") long   casesToday
+    ) {}
 }

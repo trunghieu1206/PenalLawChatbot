@@ -14,6 +14,11 @@ export default function AdminPage() {
   const [selectedId, setSelectedId] = useState(null);
   const [showConversation, setShowConversation] = useState(false);
 
+  // Tab state
+  const [activeTab, setActiveTab] = useState('feedback'); // 'feedback' | 'users'
+  const [userStats, setUserStats] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
   // Summary numbers
   const total     = feedback.length;
   const correct   = feedback.filter(f => f.is_correct).length;
@@ -25,6 +30,16 @@ export default function AdminPage() {
       .then(data => { setFeedback(data); setLoading(false); })
       .catch(e => { setError('Không thể tải phản hồi. ' + (e.message || '')); setLoading(false); });
   }, []);
+
+  // Lazy-load user stats when that tab is first opened
+  useEffect(() => {
+    if (activeTab === 'users' && userStats.length === 0 && !loadingUsers) {
+      setLoadingUsers(true);
+      adminApi.getUserCaseStats()
+        .then(data => { setUserStats(data); setLoadingUsers(false); })
+        .catch(() => setLoadingUsers(false));
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (!selectedId && feedback.length > 0) {
@@ -55,6 +70,27 @@ export default function AdminPage() {
 
           {error && <div className={styles.errorBanner}>{error}</div>}
 
+          {/* ── Tab bar ─────────────────────────────────────────── */}
+          <div className={styles.tabBar}>
+            <button
+              type="button"
+              className={`${styles.tabBtn} ${activeTab === 'feedback' ? styles.tabBtnActive : ''}`}
+              onClick={() => setActiveTab('feedback')}
+            >
+              <span className="material-symbols-outlined">reviews</span>
+              Phản hồi
+            </button>
+            <button
+              type="button"
+              className={`${styles.tabBtn} ${activeTab === 'users' ? styles.tabBtnActive : ''}`}
+              onClick={() => setActiveTab('users')}
+            >
+              <span className="material-symbols-outlined">manage_accounts</span>
+              Thống kê vụ án
+            </button>
+          </div>
+
+          {activeTab === 'feedback' && (
           <div className={styles.grid}>
             <section className={styles.listPanel}>
               <div className={styles.toolbar}>
@@ -158,6 +194,77 @@ export default function AdminPage() {
               )}
             </section>
           </div>
+          )} {/* end activeTab === 'feedback' */}
+
+          {/* ── User stats tab ──────────────────────────────────── */}
+          {activeTab === 'users' && (
+            <div className={styles.userStatsPanel}>
+              <div className={styles.userStatsHeader}>
+                <h2>Thống kê vụ án theo người dùng</h2>
+                <p>Giới hạn: Khách <strong>3 vụ/ngày</strong> • Đăng nhập <strong>5 vụ/ngày</strong> • Admin <strong>không giới hạn</strong></p>
+              </div>
+              {loadingUsers ? (
+                <div className={styles.loadingState}><span className="loader" /> Đang tải...</div>
+              ) : userStats.length === 0 ? (
+                <div className={styles.emptyPanel}>Chưa có dữ liệu.</div>
+              ) : (
+                <div className={styles.tableWrap}>
+                  <table className={styles.statsTable}>
+                    <thead>
+                      <tr>
+                        <th>Người dùng</th>
+                        <th>Email</th>
+                        <th>Vai trò</th>
+                        <th>Hôm nay</th>
+                        <th>Tổng vụ án</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {userStats.map(u => {
+                        const limit = u.role === 'admin' ? null : 5;
+                        const pct   = limit ? Math.min((u.cases_today / limit) * 100, 100) : 0;
+                        const atLimit = limit && u.cases_today >= limit;
+                        return (
+                          <tr key={u.user_id}>
+                            <td>
+                              <div className={styles.userCellRow}>
+                                <div className={styles.userAvatar}>{(u.full_name || u.email || 'U')[0].toUpperCase()}</div>
+                                <span>{u.full_name || '—'}</span>
+                              </div>
+                            </td>
+                            <td className={styles.emailCell}>{u.email}</td>
+                            <td>
+                              <span className={`${styles.rolePill} ${u.role === 'admin' ? styles.rolePillAdmin : styles.rolePillUser}`}>
+                                {u.role === 'admin' ? 'Quản trị viên' : 'Người dùng'}
+                              </span>
+                            </td>
+                            <td>
+                              {limit ? (
+                                <div className={styles.usageWrap}>
+                                  <div className={styles.usageBar}>
+                                    <div
+                                      className={`${styles.usageFill} ${atLimit ? styles.usageFillFull : ''}`}
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                  <span className={atLimit ? styles.usageLimitReached : ''}>
+                                    {u.cases_today}&nbsp;/&nbsp;{limit}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className={styles.unlimitedBadge}>{u.cases_today} ∞</span>
+                              )}
+                            </td>
+                            <td className={styles.totalCell}>{u.total_cases}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </main>
 
