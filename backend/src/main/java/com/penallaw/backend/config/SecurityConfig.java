@@ -49,7 +49,7 @@ public class SecurityConfig {
                                 "/api/chat/sessions/*/messages", // send & get messages (session-id gated)
                                 "/api/chat/sessions/*",         // delete session
                                 "/api/laws/**",                 // law reference sidebar — public read
-                                "/api/stats",                   // public system statistics
+                                "/api/home",                    // public system statistics
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()

@@ -85,33 +85,31 @@ export default function StatsPage() {
               <div className={styles.descriptionCard}>
                 <div className={styles.descriptionHeader}>
                   <span className="material-symbols-outlined text-primary">gavel</span>
-                  <h3>Về Hệ thống VNPLaw Intelligence</h3>
+                  <h3>Về Hệ thống VNPLaw</h3>
                 </div>
                 <p>
-                  VNPLaw là nền tảng trí tuệ nhân tạo chuyên sâu trong lĩnh vực <strong>Pháp luật Hình sự Việt Nam</strong>. 
-                  Hệ thống hỗ trợ tự động phân tích tình tiết vụ án, trích xuất dữ liệu pháp lý và đề xuất áp dụng các điều khoản 
-                  của Bộ luật Hình sự một cách chính xác theo từng vai trò tố tụng.
+                  VNPLaw là hệ thống được phát triển để giải quyết một vụ án hình sự, tích hợp chức năng điều chỉnh góc nhìn (thẩm phán, luật sư bảo vệ bị hại, luật sư bảo vệ bị cáo). Hệ thống hỗ trợ phân tích tình tiết vụ án, trích dẫn điều luật tương ứng trong Bộ luật Hình sự và đưa ra câu trả lời theo từng vai trò.
                 </p>
                 <div className={styles.featureGrid}>
                   <div className={styles.featureItem}>
                     <span className="material-symbols-outlined">analytics</span>
                     <div>
                       <strong>Giải quyết vụ án</strong>
-                      <span>Phân tích kịch bản tội phạm và định tội danh tự động.</span>
+                      <span>Xử lý vụ án hình sự, trích dẫn điều luật tương ứng theo văn bản pháp luật.</span>
                     </div>
                   </div>
                   <div className={styles.featureItem}>
-                    <span className="material-symbols-outlined">history_edu</span>
+                    <span className="material-symbols-outlined">diversity_3</span>
                     <div>
-                      <strong>Tra cứu án lệ</strong>
-                      <span>Kết nối thông tin với hệ thống văn bản pháp luật hiện hành.</span>
+                      <strong>Điều chỉnh góc nhìn</strong>
+                      <span>Xử lý vụ án theo 3 góc nhìn: thẩm phán, luật sư bảo vệ bị hại, luật sư bảo vệ bị cáo.</span>
                     </div>
                   </div>
                   <div className={styles.featureItem}>
                     <span className="material-symbols-outlined">psychology</span>
                     <div>
                       <strong>Luyện tập kỹ năng</strong>
-                      <span>Đóng vai Thẩm phán, Luật sư để rèn luyện tư duy lập luận.</span>
+                      <span>Đóng vai là thẩm phán/luật sư để rèn luyện khả năng giải quyết vụ án hình sự.</span>
                     </div>
                   </div>
                 </div>

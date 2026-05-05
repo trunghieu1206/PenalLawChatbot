@@ -379,7 +379,7 @@ export default function ChatPage() {
                   <textarea
                     ref={textareaRef}
                     className="flex-1 bg-transparent resize-none py-3 font-body-md text-on-surface outline-none transition-all max-h-32"
-                    placeholder="Đặt câu hỏi tiếp theo..."
+                    placeholder="Nhập nội dung mô tả vụ án"
                     value={input}
                     onChange={e => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}

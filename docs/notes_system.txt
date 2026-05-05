@@ -2,5 +2,6 @@ backend:
 - should see the statistical analysis of correct and incorrect response for each crime type (and also for every crime type, which already exists)
 - for casual question, remove the user feedback functionality
 
-frontend:
-- for this part in the dashboard:Độ chính xác phản hồi: 100% (1 chính xác / 0 sai). Replace with ”Độ chính xác phản hồi: x% (y / z) where x is percentage of y/z, y is total of cases that are marked correct by user, z is total of cases that are marked (correct or incorrect), note that we only count for cases that user feedback, cases that arent fedback are not accounted for
+SYSTEM:
+- increase memory 
+- upgrade to https, fix URL name

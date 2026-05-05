@@ -8,7 +8,7 @@ scp -P 10000 .env.example root@74.81.39.6:/root/.env.example
 
 # Create backup dir and upload DB backup (mkdir needed before clone runs)
 ssh -p 10000 root@74.81.39.6 "mkdir -p ~/PenalLawChatbot/database/backups"
-scp -P 10000 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_combined_backup.sql \
+scp -P 10000 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260505_103232.sql \
     root@74.81.39.6:~/PenalLawChatbot/database/backups/
 
 # run the installer 
