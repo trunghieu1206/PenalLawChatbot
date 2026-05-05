@@ -172,37 +172,44 @@ function MessageBubble({ message, role, sessionId, onLawClick }) {
     });
 
   const crimeDate = parseCrimeDate(message.extractedFacts?.ngay_pham_toi);
-  const avatarLabel = isUser ? 'Bạn' : 'Trợ lý';
+  
+  if (isUser) {
+    return (
+      <div className="flex gap-4 items-start mb-6">
+        <div className="w-8 h-8 rounded-full bg-surface-container-high border border-surface-variant flex-shrink-0 flex items-center justify-center font-bold text-on-surface">
+          U
+        </div>
+        <div className="bg-surface-container-lowest border border-surface-variant p-4 rounded-lg rounded-tl-none shadow-sm max-w-2xl relative">
+          <p className="font-body-md text-on-surface">{message.content}</p>
+          <time className="text-[10px] text-on-surface-variant absolute -bottom-5 left-0">{message.createdAt ? formatTimeGMT7(message.createdAt) : 'Vừa xong'}</time>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className={`${styles.wrapper} ${isUser ? styles.user : styles.assistant}`}>
-      <div className={styles.avatar} title={avatarLabel}>
-        {isUser ? 'U' : 'A'}
-      </div>
-
-      <div className={styles.bubble}>
-        {!isUser && role && ROLE_LABELS[role] && (
-          <span className={`badge badge-${ROLE_LABELS[role].cls} ${styles.roleBadge}`}>
+    <div className="flex gap-4 items-start mb-8">
+      <div className="w-8 h-8 rounded-full bg-primary text-on-primary flex-shrink-0 flex items-center justify-center font-h3 text-sm">V</div>
+      <div className="bg-surface-container-lowest border border-surface-variant p-6 rounded-lg rounded-tr-none shadow-[0px_4px_20px_rgba(26,43,60,0.05)] w-full max-w-3xl relative">
+        {role && ROLE_LABELS[role] && (
+          <span className={`badge badge-${ROLE_LABELS[role].cls} mb-4`}>
             {ROLE_LABELS[role].label}
           </span>
         )}
 
-        <div className={`${styles.content} ${isUser ? '' : 'prose'}`}>
-          {isUser
-            ? <p>{message.content}</p>
-            : <MarkdownWithCitations content={message.content} onLawClick={onLawClick} crimeDate={crimeDate} />
-          }
+        <div className="prose prose-slate max-w-none text-on-surface">
+          <MarkdownWithCitations content={message.content} onLawClick={onLawClick} crimeDate={crimeDate} />
         </div>
 
         {/* Mapped-laws edition pills */}
-        {!isUser && message.mappedLaws && message.mappedLaws.length > 0 && (
-          <div className={styles.lawPills}>
+        {message.mappedLaws && message.mappedLaws.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-surface-variant">
             {message.mappedLaws
               .filter(l => !l._mapping_error && l.article && l.article !== 'N/A')
               .map((law, i) => (
                 <button
                   key={i}
-                  className={styles.lawPill}
+                  className="bg-surface-container text-xs px-2 py-1 rounded border border-surface-variant hover:bg-surface-container-high transition-colors"
                   title={`${law.offense_name || ''} — ${law.edition_reason || ''}`}
                   type="button"
                   onClick={() => onLawClick && onLawClick(
@@ -211,9 +218,9 @@ function MessageBubble({ message, role, sessionId, onLawClick }) {
                     law.edition_applied || null
                   )}
                 >
-                  <span className={styles.lawPillArticle}>{law.article} {law.clause}</span>
+                  <span className="font-semibold text-primary">{law.article} {law.clause}</span>
                   {law.edition_applied && (
-                    <span className={styles.lawPillEdition}>{law.edition_applied}</span>
+                    <span className="text-on-surface-variant ml-1 opacity-80">({law.edition_applied})</span>
                   )}
                 </button>
               ))
@@ -221,12 +228,14 @@ function MessageBubble({ message, role, sessionId, onLawClick }) {
           </div>
         )}
 
-        {/* Feedback bar — only for AI messages with a persisted (string) UUID id */}
-        {!isUser && typeof message.id === 'string' && sessionId && (
-          <FeedbackBar sessionId={sessionId} messageId={message.id} />
+        {/* Feedback bar */}
+        {typeof message.id === 'string' && sessionId && (
+          <div className="mt-4 pt-4 border-t border-surface-variant">
+            <FeedbackBar sessionId={sessionId} messageId={message.id} />
+          </div>
         )}
 
-        <time className={styles.time}>
+        <time className="text-[10px] text-on-surface-variant absolute -bottom-5 right-0">
           {message.createdAt ? formatTimeGMT7(message.createdAt) : 'Vừa xong'}
         </time>
       </div>
