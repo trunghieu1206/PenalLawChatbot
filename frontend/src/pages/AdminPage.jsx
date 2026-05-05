@@ -12,6 +12,7 @@ export default function AdminPage() {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
   const [selectedId, setSelectedId] = useState(null);
+  const [showConversation, setShowConversation] = useState(false);
 
   // Summary numbers
   const total     = feedback.length;
@@ -138,21 +139,18 @@ export default function AdminPage() {
                       </div>
                     </div>
 
-                    <div className={styles.detailMetaGrid}>
-                      <div>
-                        <span>Loại Prompt</span>
-                        <strong>{selected.prompt_type || 'Phân tích vụ án'}</strong>
-                      </div>
-                      <div>
-                        <span>Phiên bản mô hình</span>
-                        <strong>{selected.model_version || 'v2.4.1-legal'}</strong>
-                      </div>
-                    </div>
-
                     <div className={styles.detailActions}>
-                      <button className="btn btn-primary" type="button">Giải quyết</button>
-                      <button className="btn btn-outline" type="button">Bỏ qua</button>
-                    </div>
+                       <button className="btn btn-primary" type="button">Giải quyết</button>
+                       <button className="btn btn-outline" type="button">Bỏ qua</button>
+                       <button
+                         className={styles.viewChatBtn}
+                         type="button"
+                         onClick={() => setShowConversation(true)}
+                       >
+                         <span className="material-symbols-outlined">forum</span>
+                         Xem phiên chat
+                       </button>
+                     </div>
                   </div>
                 </>
               ) : (
@@ -162,6 +160,55 @@ export default function AdminPage() {
           </div>
         </div>
       </main>
+
+      {/* ── Conversation Modal ───────────────────────────────────── */}
+      {showConversation && selected && (
+        <div className={styles.modalOverlay} onClick={() => setShowConversation(false)}>
+          <div className={styles.modalPanel} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div>
+                <h3>Phiên chat {shortCaseId(selected.session_id || selected.id)}</h3>
+                <p>{ROLE_LABEL[selected.session_mode] || selected.session_mode} • {formatDate(selected.created_at)}</p>
+              </div>
+              <button type="button" className={styles.iconBtn} onClick={() => setShowConversation(false)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className={styles.conversationBody}>
+              {(!selected.conversation || selected.conversation.length === 0) ? (
+                <div className={styles.emptyConversation}>Không có tin nhắn trong phiên này.</div>
+              ) : (
+                selected.conversation.map(msg => (
+                  <div key={msg.id} className={styles.messageRow}>
+                    <div
+                      className={`${
+                        msg.role === 'user' ? styles.messageBubbleUser : styles.messageBubbleAssistant
+                      }${msg.id === selected.message_id ? ` ${styles.messageBubbleRated}` : ''}`}
+                    >
+                      <div className={styles.messageRoleLabel}>
+                        {msg.role === 'user'
+                          ? (ROLE_LABEL[selected.session_mode] || 'Người dùng')
+                          : '🤖 AI'}
+                      </div>
+                      <div className={styles.messageContent}>{msg.content}</div>
+                      <div className={styles.messageTime}>{formatDate(msg.createdAt)}</div>
+                    </div>
+                    {msg.id === selected.message_id && (
+                      <div className={`${styles.ratedBadge} ${selected.is_correct ? styles.ratedGood : styles.ratedBad}`}>
+                        <span className="material-symbols-outlined">
+                          {selected.is_correct ? 'thumb_up' : 'thumb_down'}
+                        </span>
+                        Tin nhắn được đánh giá
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
