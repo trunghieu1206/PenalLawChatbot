@@ -292,15 +292,30 @@ if command -v nvidia-smi &>/dev/null; then
     if [ "$_TORCH_CU" != "$_NEED_CU" ] && [ "$_TORCH_CU" != "cpu" ]; then
         info "  torch $_TORCH_CU is incompatible with R${_DRV_MAJOR} driver — reinstalling with $_NEED_CU..."
         _TORCH_BASE=$("$AI_PYTHON" -c "import torch; print(torch.__version__.split('+')[0])" 2>/dev/null || echo "2.5.1")
-        # Derive matching torchvision: torch 2.5.x → torchvision 0.20.x, torch 2.6.x → 0.21.x
-        _TV_VER=$("$AI_PYTHON" -c "
-import torch; p=torch.__version__.split('+')[0].split('.')[:2]
-print(f'0.{int(p[0])*10+int(p[1])-5}.{0}')" 2>/dev/null || echo "0.20.0")
-        "$AI_PYTHON" -m pip install \
-            "torch==${_TORCH_BASE}+${_NEED_CU}" \
-            "torchvision==${_TV_VER}+${_NEED_CU}" \
-            --index-url "https://download.pytorch.org/whl/${_NEED_CU}" --quiet 2>&1 | tail -3 || \
-            warn "  torch cu-tag reinstall failed — CUDA may not work."
+
+        # torchvision version formula: torch 2.5.x → 0.20.x, torch 2.4.x → 0.19.x
+        _calc_tv() {
+            python3 -c "p='$1'.split('.')[:2]; print(f'0.{int(p[0])*10+int(p[1])-5}.0')" 2>/dev/null || echo "0.20.0"
+        }
+
+        # Try the exact torch version first; if that fails (e.g. 2.5.x has no cu118 wheel),
+        # fall back to 2.4.1+cu118 which is the last cu118-compatible release.
+        _REINSTALL_OK=false
+        for _TBASE in "$_TORCH_BASE" "2.4.1"; do
+            _TVBASE=$(_calc_tv "$_TBASE")
+            info "  Trying torch==${_TBASE}+${_NEED_CU} torchvision==${_TVBASE}+${_NEED_CU}..."
+            if "$AI_PYTHON" -m pip install \
+                    "torch==${_TBASE}+${_NEED_CU}" \
+                    "torchvision==${_TVBASE}+${_NEED_CU}" \
+                    --index-url "https://download.pytorch.org/whl/${_NEED_CU}" \
+                    --quiet 2>&1 | tail -3; then
+                _REINSTALL_OK=true
+                info "  ✅ Reinstalled torch ${_TBASE}+${_NEED_CU}"
+                break
+            fi
+            warn "  torch ${_TBASE}+${_NEED_CU} unavailable — trying fallback..."
+        done
+        [ "$_REINSTALL_OK" = false ] && warn "  torch cu-tag reinstall failed — CUDA may not work (will run on CPU)."
         TORCH_VER=$("$AI_PYTHON" -c "import torch; print(torch.__version__)" 2>/dev/null)
         info "  torch after fix: $TORCH_VER"
     fi
@@ -354,6 +369,10 @@ fi
 
 # Install AI service deps (excluding torch to avoid downgrading conda's GPU torch)
 info "Installing AI service requirements..."
+
+# Record CUDA state BEFORE pip install — needed to detect if pip downgraded torch.
+_TORCH_CUDA_BEFORE=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
+
 "$AI_PYTHON" -m pip install "setuptools>=70.0" --quiet 2>&1 | tail -2 || true
 grep -v "^torch" "$PROJECT_DIR/ai-service/requirements.txt" > /tmp/requirements_notorch.txt
 "$AI_PYTHON" -m pip install --quiet -r /tmp/requirements_notorch.txt 2>&1 | tail -5 || \
@@ -366,10 +385,16 @@ grep -v "^torch" "$PROJECT_DIR/ai-service/requirements.txt" > /tmp/requirements_
 # Install FlagEmbedding (required by bge-reranker-v2-m3)
 "$AI_PYTHON" -m pip install "FlagEmbedding>=1.2.0" --quiet 2>&1 | tail -2 || true
 
-# Verify torch still has CUDA after all installs (safety net)
+# Verify torch CUDA state AFTER all installs.
+# Only fail if CUDA was working BEFORE pip but is now broken (pip downgraded torch).
+# If CUDA was already False before pip (e.g. driver/container issue), that is NOT pip's fault.
 _TORCH_CUDA_AFTER=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
-if command -v nvidia-smi &>/dev/null && [ "$_TORCH_CUDA_AFTER" = "False" ]; then
-    error "pip install broke CUDA torch! Check if sentence-transformers or another package downgraded torch."
+if command -v nvidia-smi &>/dev/null; then
+    if [ "$_TORCH_CUDA_BEFORE" = "True" ] && [ "$_TORCH_CUDA_AFTER" = "False" ]; then
+        error "pip install downgraded CUDA torch! A package (e.g. sentence-transformers) pulled in a CPU torch. Fix: reinstall torch with the correct cu-tag after all other deps."
+    elif [ "$_TORCH_CUDA_AFTER" = "False" ]; then
+        warn "CUDA still unavailable after pip install (was also unavailable before — driver/container issue, not caused by pip). Continuing with CPU."
+    fi
 fi
 
 info "AI service requirements installed."
