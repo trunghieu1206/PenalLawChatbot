@@ -19,6 +19,12 @@ export default function AdminPage() {
   const [userStats, setUserStats] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
 
+  // Status filter
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'can_xem_xet' | 'da_xem_xet'
+  const filteredFeedback = statusFilter === 'all'
+    ? feedback
+    : feedback.filter(f => (f.status || 'can_xem_xet') === statusFilter);
+
   // Summary numbers
   const total     = feedback.length;
   const correct   = feedback.filter(f => f.is_correct).length;
@@ -50,6 +56,34 @@ export default function AdminPage() {
   const selected = feedback.find(item => item.id === selectedId) || null;
   const formatDate = (dateStr) => new Date(dateStr).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
   const shortCaseId = (value) => value ? `#${String(value).slice(0, 6)}` : '—';
+
+  /** Mark the currently selected feedback as \"reviewed\". */
+  const handleResolve = async () => {
+    if (!selected) return;
+    try {
+      await adminApi.updateFeedbackStatus(selected.id, 'da_xem_xet');
+      setFeedback(prev => prev.map(f =>
+        f.id === selected.id ? { ...f, status: 'da_xem_xet' } : f
+      ));
+    } catch (err) {
+      console.error('Failed to update feedback status:', err);
+    }
+  };
+
+  /** Mark the currently selected feedback back to \"needs review\". */
+  const handleUnresolve = async () => {
+    if (!selected) return;
+    try {
+      await adminApi.updateFeedbackStatus(selected.id, 'can_xem_xet');
+      setFeedback(prev => prev.map(f =>
+        f.id === selected.id ? { ...f, status: 'can_xem_xet' } : f
+      ));
+    } catch (err) {
+      console.error('Failed to update feedback status:', err);
+    }
+  };
+
+  const isResolved = selected?.status === 'da_xem_xet';
 
   return (
     <div className="bg-background text-on-background font-body-md text-body-md h-full min-h-screen flex overflow-hidden">
@@ -103,15 +137,43 @@ export default function AdminPage() {
                   </select>
                 </div>
                 <div className={styles.toolbarActions}>
-                  <button type="button"><span className="material-symbols-outlined">filter_list</span></button>
                   <button type="button"><span className="material-symbols-outlined">download</span></button>
                 </div>
+              </div>
+
+              {/* Filter pills */}
+              <div className={styles.filterPills}>
+                <button
+                  type="button"
+                  className={`${styles.filterPill} ${statusFilter === 'all' ? styles.filterPillActive : ''}`}
+                  onClick={() => setStatusFilter('all')}
+                >
+                  Tất cả
+                  <span className={styles.filterCount}>{feedback.length}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.filterPill} ${styles.filterPillReview} ${statusFilter === 'can_xem_xet' ? styles.filterPillReviewActive : ''}`}
+                  onClick={() => setStatusFilter('can_xem_xet')}
+                >
+                  Cần xem xét
+                  <span className={styles.filterCount}>{feedback.filter(f => (f.status || 'can_xem_xet') === 'can_xem_xet').length}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.filterPill} ${styles.filterPillDone} ${statusFilter === 'da_xem_xet' ? styles.filterPillDoneActive : ''}`}
+                  onClick={() => setStatusFilter('da_xem_xet')}
+                >
+                  Đã xem xét
+                  <span className={styles.filterCount}>{feedback.filter(f => f.status === 'da_xem_xet').length}</span>
+                </button>
               </div>
 
               <div className={styles.listHeader}>
                 <span>Mã vụ án</span>
                 <span>Vai trò / Người dùng</span>
                 <span className={styles.centered}>Phản hồi</span>
+                <span>Trạng thái</span>
                 <span>Đoạn bình luận</span>
               </div>
 
@@ -119,7 +181,11 @@ export default function AdminPage() {
                 <div className={styles.loadingState}><span className="loader" /> Đang tải phản hồi...</div>
               ) : (
                 <div className={styles.listBody}>
-                  {feedback.map(item => (
+                  {filteredFeedback.length === 0 ? (
+                    <div className={styles.emptyPanel} style={{padding:'24px',textAlign:'center'}}>
+                      Không có phản hồi nào.
+                    </div>
+                  ) : filteredFeedback.map(item => (
                     <button
                       key={item.id}
                       className={`${styles.listItem} ${selectedId === item.id ? styles.listItemActive : ''}`}
@@ -136,6 +202,13 @@ export default function AdminPage() {
                           <span className="material-symbols-outlined">{item.is_correct ? 'thumb_up' : 'thumb_down'}</span>
                         </span>
                       </span>
+                      <span>
+                        {(item.status || 'can_xem_xet') === 'da_xem_xet' ? (
+                          <span className={styles.statusDone}>Đã xem xét</span>
+                        ) : (
+                          <span className={styles.statusReview}>Cần xem xét</span>
+                        )}
+                      </span>
                       <span className={styles.commentCell}>
                         {item.comment || 'Không có bình luận.'}
                       </span>
@@ -150,7 +223,9 @@ export default function AdminPage() {
                 <>
                   <div className={styles.detailHeader}>
                     <div>
-                      <span className={styles.flagBadge}>Cần xem xét</span>
+                      <span className={isResolved ? styles.flagBadgeDone : styles.flagBadge}>
+                        {isResolved ? 'Đã xem xét' : 'Cần xem xét'}
+                      </span>
                       <h3>Chi tiết phản hồi</h3>
                       <p>{shortCaseId(selected.session_id || selected.id)} • {formatDate(selected.created_at)}</p>
                     </div>
@@ -176,7 +251,15 @@ export default function AdminPage() {
                     </div>
 
                     <div className={styles.detailActions}>
-                       <button className="btn btn-primary" type="button">Giải quyết</button>
+                       {isResolved ? (
+                         <button className="btn btn-outline" type="button" onClick={handleUnresolve}>
+                           Đánh dấu cần xem lại
+                         </button>
+                       ) : (
+                         <button className="btn btn-primary" type="button" onClick={handleResolve}>
+                           Giải quyết
+                         </button>
+                       )}
                        <button className="btn btn-outline" type="button">Bỏ qua</button>
                        <button
                          className={styles.viewChatBtn}

@@ -115,7 +115,7 @@ public class AdminService {
 
             return new AdminDTOs.FeedbackDetail(
                     f.getId(), sid, f.getMessageId(),
-                    f.getIsCorrect(), f.getComment(), f.getCreatedAt(),
+                    f.getIsCorrect(), f.getComment(), f.getStatus(), f.getCreatedAt(),
                     sessionMode, conversation
             );
         }).collect(Collectors.toList());
@@ -163,6 +163,20 @@ public class AdminService {
         feedback.setComment(comment);
         feedback = feedbackRepository.save(feedback);
         return new AdminDTOs.FeedbackResponse(feedback.getId(), "Đã ghi nhận phản hồi. Cảm ơn bạn!");
+    }
+
+    // ── UPDATE FEEDBACK STATUS ────────────────────────────────────
+
+    @Transactional
+    public AdminDTOs.FeedbackResponse updateFeedbackStatus(UUID feedbackId, String newStatus) {
+        if (!"can_xem_xet".equals(newStatus) && !"da_xem_xet".equals(newStatus)) {
+            throw new IllegalArgumentException("Trạng thái không hợp lệ: " + newStatus);
+        }
+        Feedback feedback = feedbackRepository.findById(feedbackId)
+                .orElseThrow(() -> new RuntimeException("Feedback not found: " + feedbackId));
+        feedback.setStatus(newStatus);
+        feedbackRepository.save(feedback);
+        return new AdminDTOs.FeedbackResponse(feedbackId, "Đã cập nhật trạng thái.");
     }
 
     // ── HELPERS ───────────────────────────────────────────────────

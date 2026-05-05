@@ -12,15 +12,15 @@ public class AdminDTOs {
 
     /** Aggregate dashboard statistics. */
     public record DashboardStats(
-            @JsonProperty("total_sessions")  long totalSessions,
-            @JsonProperty("total_users")     long totalUsers,
-            @JsonProperty("cases_processed") long casesProcessed,
-            @JsonProperty("visitor_count")   long visitorCount,
-            @JsonProperty("by_role")         Map<String, Long> byRole,
-            @JsonProperty("by_province")     Map<String, Long> byProvince,
-            @JsonProperty("by_crime_type")   Map<String, Long> byCrimeType,
-            @JsonProperty("feedback_total")    long feedbackTotal,
-            @JsonProperty("feedback_correct")  long feedbackCorrect,
+            @JsonProperty("total_sessions")     long totalSessions,
+            @JsonProperty("total_users")        long totalUsers,
+            @JsonProperty("cases_processed")    long casesProcessed,
+            @JsonProperty("visitor_count")      long visitorCount,
+            @JsonProperty("by_role")            Map<String, Long> byRole,
+            @JsonProperty("by_province")        Map<String, Long> byProvince,
+            @JsonProperty("by_crime_type")      Map<String, Long> byCrimeType,
+            @JsonProperty("feedback_total")     long feedbackTotal,
+            @JsonProperty("feedback_correct")   long feedbackCorrect,
             @JsonProperty("feedback_incorrect") long feedbackIncorrect
     ) {}
 
@@ -33,15 +33,20 @@ public class AdminDTOs {
             LocalDateTime createdAt
     ) {}
 
-    /** Full feedback record, including the conversation context for admin review. */
+    /**
+     * Full feedback record returned to the admin panel.
+     * Includes the full conversation context and review status.
+     */
     public record FeedbackDetail(
             UUID id,
-            @JsonProperty("session_id")  UUID sessionId,
-            @JsonProperty("message_id")  UUID messageId,
-            @JsonProperty("is_correct")  Boolean isCorrect,
+            @JsonProperty("session_id")   UUID    sessionId,
+            @JsonProperty("message_id")   UUID    messageId,
+            @JsonProperty("is_correct")   Boolean isCorrect,
             String comment,
+            /** "can_xem_xet" | "da_xem_xet" */
+            String status,
             @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSS]'Z'", timezone = "UTC")
-            @JsonProperty("created_at") LocalDateTime createdAt,
+            @JsonProperty("created_at")   LocalDateTime createdAt,
             @JsonProperty("session_mode") String sessionMode,
             List<MessageSummary> conversation
     ) {}
@@ -51,13 +56,16 @@ public class AdminDTOs {
 
     /** Request body for feedback submission. */
     public record FeedbackRequest(
-            @JsonProperty("session_id") UUID sessionId,
-            @JsonProperty("message_id") UUID messageId,
+            @JsonProperty("session_id") UUID    sessionId,
+            @JsonProperty("message_id") UUID    messageId,
             @JsonProperty("is_correct") boolean isCorrect,
             String comment
     ) {}
 
-    /** Per-user case (session) statistics for the admin panel. */
+    /** Request body for PATCH /admin/feedback/{id}/status */
+    public record StatusUpdateRequest(String status) {}
+
+    /** Per-user case (session) statistics for the admin user-stats tab. */
     public record UserCaseStat(
             @JsonProperty("user_id")     UUID   userId,
             String                              email,

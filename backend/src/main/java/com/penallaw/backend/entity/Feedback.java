@@ -36,6 +36,14 @@ public class Feedback {
     @Column(columnDefinition = "TEXT")
     private String comment;
 
+    /**
+     * Review status: "can_xem_xet" (needs review) or "da_xem_xet" (reviewed).
+     * Defaults to "can_xem_xet" both in Java and at the database level.
+     */
+    @Builder.Default
+    @Column(length = 30, nullable = false, columnDefinition = "VARCHAR(30) DEFAULT 'can_xem_xet'")
+    private String status = "can_xem_xet";
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, nullable = false)
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSS]'Z'", timezone = "UTC")

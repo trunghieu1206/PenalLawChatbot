@@ -125,6 +125,10 @@ export const adminApi = {
   getUserCaseStats: () =>
     apiClient.get('/admin/user-stats').then(r => r.data),
 
+  /** Update the review status of a feedback record (admin only). */
+  updateFeedbackStatus: (id, status) =>
+    apiClient.patch(`/admin/feedback/${id}/status`, { status }).then(r => r.data),
+
   /**
    * Submit feedback on an AI response.
    * @param {string} sessionId - UUID of the chat session

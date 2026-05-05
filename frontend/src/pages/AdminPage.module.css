@@ -235,7 +235,7 @@
 
 .listHeader {
   display: grid;
-  grid-template-columns: 1fr 2fr 1fr 3fr;
+  grid-template-columns: 1fr 2fr 1fr 1.2fr 2.5fr;
   gap: 12px;
   padding: 8px 4px;
   border-bottom: 1px solid var(--surface-variant);
@@ -254,7 +254,7 @@
 
 .listItem {
   display: grid;
-  grid-template-columns: 1fr 2fr 1fr 3fr;
+  grid-template-columns: 1fr 2fr 1fr 1.2fr 2.5fr;
   gap: 12px;
   padding: 12px;
   border-radius: var(--radius-sm);
@@ -358,6 +358,104 @@
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
+}
+
+.flagBadgeDone {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  background: color-mix(in srgb, var(--primary) 15%, white);
+  color: var(--primary);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* ── Filter pills ──────────────────────────────────────────────── */
+.filterPills {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.filterPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius-full, 999px);
+  border: 1px solid var(--surface-variant);
+  background: var(--surface-container-low);
+  color: var(--on-surface-variant);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.filterPill:hover { background: var(--surface-container-high); color: var(--on-surface); }
+.filterPillActive {
+  background: var(--surface-container-high);
+  border-color: var(--on-surface-variant);
+  color: var(--on-surface);
+  font-weight: 600;
+}
+
+.filterPillReview { border-color: color-mix(in srgb, var(--error) 40%, transparent); }
+.filterPillReviewActive {
+  background: var(--error-container);
+  color: var(--on-error-container);
+  border-color: var(--error-container);
+  font-weight: 600;
+}
+
+.filterPillDone { border-color: color-mix(in srgb, var(--primary) 40%, transparent); }
+.filterPillDoneActive {
+  background: color-mix(in srgb, var(--primary) 15%, white);
+  color: var(--primary);
+  border-color: var(--primary);
+  font-weight: 600;
+}
+
+.filterCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--surface-container-high);
+  font-size: 10px;
+  padding: 0 4px;
+}
+
+/* ── Inline status badges in list rows ─────────────────────────── */
+.statusReview {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-full, 999px);
+  background: var(--error-container);
+  color: var(--on-error-container);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  white-space: nowrap;
+}
+
+.statusDone {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-full, 999px);
+  background: color-mix(in srgb, var(--primary) 15%, white);
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  white-space: nowrap;
 }
 
 .iconBtn {

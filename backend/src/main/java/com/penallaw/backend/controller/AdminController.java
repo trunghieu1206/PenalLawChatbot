@@ -61,4 +61,17 @@ public class AdminController {
         );
         return ResponseEntity.ok(resp);
     }
+
+    /**
+     * Update the review status of a feedback record.
+     * PATCH /api/admin/feedback/{id}/status
+     * Body: { "status": "da_xem_xet" | "can_xem_xet" }
+     */
+    @PatchMapping("/feedback/{id}/status")
+    public ResponseEntity<AdminDTOs.FeedbackResponse> updateFeedbackStatus(
+            @PathVariable UUID id,
+            @RequestBody AdminDTOs.StatusUpdateRequest request
+    ) {
+        return ResponseEntity.ok(adminService.updateFeedbackStatus(id, request.status()));
+    }
 }
