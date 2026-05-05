@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+
+<html class="h-full antialiased bg-surface" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>VNPLaw Intelligence - Chat Phân tích Vụ án</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container": "#edeeef",
+                        "outline": "#74777d",
+                        "surface-bright": "#f8f9fa",
+                        "secondary-fixed": "#ffdea5",
+                        "inverse-surface": "#2e3132",
+                        "primary-container": "#1a2b3c",
+                        "surface-container-highest": "#e1e3e4",
+                        "surface-variant": "#e1e3e4",
+                        "surface-container-high": "#e7e8e9",
+                        "primary": "#041627",
+                        "secondary": "#775a19",
+                        "surface": "#f8f9fa",
+                        "error-container": "#ffdad6",
+                        "primary-fixed-dim": "#b7c8de",
+                        "background": "#f8f9fa",
+                        "tertiary": "#001628",
+                        "primary-fixed": "#d2e4fb",
+                        "surface-dim": "#d9dadb",
+                        "on-tertiary-fixed": "#041d30",
+                        "on-secondary-fixed-variant": "#5d4201",
+                        "surface-container-low": "#f3f4f5",
+                        "tertiary-fixed": "#cee5ff",
+                        "inverse-on-surface": "#f0f1f2",
+                        "on-secondary-fixed": "#261900",
+                        "on-primary-fixed-variant": "#38485a",
+                        "on-tertiary-fixed-variant": "#33495e",
+                        "error": "#ba1a1a",
+                        "on-error-container": "#93000a",
+                        "secondary-fixed-dim": "#e9c176",
+                        "on-tertiary-container": "#7c93ab",
+                        "on-error": "#ffffff",
+                        "on-surface-variant": "#44474c",
+                        "on-primary-fixed": "#0b1d2d",
+                        "surface-tint": "#4f6073",
+                        "tertiary-container": "#142b3f",
+                        "on-primary-container": "#8192a7",
+                        "on-secondary-container": "#785a1a",
+                        "inverse-primary": "#b7c8de",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary-fixed-dim": "#b2c9e2",
+                        "on-background": "#191c1d",
+                        "on-secondary": "#ffffff",
+                        "outline-variant": "#c4c6cd",
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#191c1d",
+                        "secondary-container": "#fed488",
+                        "on-primary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "xl": "80px",
+                        "gutter": "24px",
+                        "base": "8px",
+                        "lg": "48px",
+                        "container-max": "1280px",
+                        "md": "24px",
+                        "sm": "12px",
+                        "xs": "4px"
+                    },
+                    "fontFamily": {
+                        "h1": [
+                            "Newsreader"
+                        ],
+                        "body-md": [
+                            "Inter"
+                        ],
+                        "label-sm": [
+                            "Inter"
+                        ],
+                        "h2": [
+                            "Newsreader"
+                        ],
+                        "h3": [
+                            "Newsreader"
+                        ],
+                        "body-lg": [
+                            "Inter"
+                        ]
+                    },
+                    "fontSize": {
+                        "h1": [
+                            "48px",
+                            {
+                                "lineHeight": "1.2",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "600"
+                            }
+                        ],
+                        "body-md": [
+                            "16px",
+                            {
+                                "lineHeight": "1.6",
+                                "fontWeight": "400"
+                            }
+                        ],
+                        "label-sm": [
+                            "14px",
+                            {
+                                "lineHeight": "1",
+                                "letterSpacing": "0.05em",
+                                "fontWeight": "600"
+                            }
+                        ],
+                        "h2": [
+                            "36px",
+                            {
+                                "lineHeight": "1.2",
+                                "fontWeight": "600"
+                            }
+                        ],
+                        "h3": [
+                            "28px",
+                            {
+                                "lineHeight": "1.3",
+                                "fontWeight": "500"
+                            }
+                        ],
+                        "body-lg": [
+                            "18px",
+                            {
+                                "lineHeight": "1.6",
+                                "fontWeight": "400"
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md text-body-md h-full flex overflow-hidden">
+<!-- SideNavBar -->
+<nav class="h-screen w-64 border-r fixed left-0 top-0 border-r border-slate-200 dark:border-slate-800 shadow-sm bg-slate-50 dark:bg-slate-900 flex flex-col h-full py-6 px-4 z-50">
+<div class="mb-8 px-2 flex items-center gap-3">
+<div class="w-8 h-8 rounded-DEFAULT bg-primary text-on-primary flex items-center justify-center font-h3 text-h3">V</div>
+<div>
+<h1 class="text-xl font-bold text-slate-900 dark:text-white tracking-tight font-h3">VNPLaw</h1>
+<p class="text-xs text-on-surface-variant font-label-sm">Legal Intelligence</p>
+</div>
+</div>
+<div class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded-DEFAULT text-slate-900 dark:text-white font-semibold border-r-4 border-slate-900 dark:border-slate-400 bg-slate-100 dark:bg-slate-800 duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">chat</span>
+<span class="font-label-sm text-label-sm">Chat</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-DEFAULT text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">gavel</span>
+<span class="font-label-sm text-label-sm">Chế độ Luyện tập</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-DEFAULT text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-sm text-label-sm">Bảng điều khiển Admin</span>
+</a>
+</div>
+<div class="mt-auto space-y-1 pt-4 border-t border-slate-200">
+<a class="flex items-center gap-3 px-3 py-2 rounded-DEFAULT text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-sm text-label-sm">Cài đặt</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-DEFAULT text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="font-label-sm text-label-sm">Hỗ trợ</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="ml-64 flex-1 flex flex-col h-full bg-surface">
+<!-- TopAppBar -->
+<header class="bg-white/80 dark:bg-slate-950/80 backdrop-blur-md fixed top-0 right-0 w-[calc(100%-16rem)] z-40 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center h-16 px-8 transition-all duration-300">
+<div class="flex items-center gap-6">
+<span class="text-lg font-black text-slate-900 dark:text-slate-100 font-h3">VNPLaw Intelligence</span>
+<nav class="hidden md:flex gap-4">
+<a class="font-newsreader text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all duration-300" href="#">Tài liệu</a>
+<a class="font-newsreader text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all duration-300" href="#">Lưu trữ</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden lg:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm">search</span>
+<input class="pl-9 pr-4 py-1.5 bg-surface-container-low border border-surface-variant rounded-full text-sm font-body-md focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none w-64 transition-all" placeholder="Tìm kiếm án lệ..." type="text"/>
+</div>
+<button class="bg-primary-container text-on-primary font-label-sm text-label-sm px-4 py-2 rounded-DEFAULT hover:bg-primary transition-colors flex items-center gap-2"><span class="material-symbols-outlined text-sm">add</span> Vụ án Mới</button>
+<div class="flex items-center gap-3 border-l border-surface-variant pl-4 ml-2">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<img alt="User Profile" class="w-8 h-8 rounded-full object-cover border border-surface-variant" data-alt="A professional headshot of a lawyer in a dark navy suit against a clean, bright, white background. The lighting is soft but distinct, emphasizing a modern, trustworthy corporate aesthetic. The image exudes quiet authority and professional minimalism." src="https://lh3.googleusercontent.com/aida/ADBb0uixGIz11gBbyrJxN-3AsckbwprojfzWygrWBWiSBO2U2yb3uMveAv7QBfqMNL3E4KQ-uNFWqFNCY07iFnY6k05vqPN7-lWz7WhGGCgVUWyIzuXfPLUu7W_kEpS4rU0qyM3w2MufnHyboUKyNl5LU9QFzVGXDElaZgYbsHr1Pgw4c34e4-NmvQ5awt6ajWFqxoy468HdrUQvX1eLZv9Hm4tDtWGB2ktRbGOKhu8VYiOhJR2cPWn1dF2AHDSv_t_mIktXXVms-IsH8Q"/>
+</button>
+</div>
+</div>
+</header>
+<!-- Canvas -->
+<div class="flex-1 mt-16 flex overflow-hidden">
+<!-- History List (Left Panel) -->
+<aside class="w-72 border-r border-surface-variant bg-surface-bright flex flex-col overflow-y-auto">
+<div class="p-4 border-b border-surface-variant sticky top-0 bg-surface-bright/95 backdrop-blur z-10">
+<h3 class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Tư vấn Gần đây</h3>
+</div>
+<div class="flex-1 p-2 space-y-1">
+<!-- Active Item -->
+<button class="w-full text-left p-3 rounded-DEFAULT bg-surface-container-high border border-surface-variant shadow-sm transition-all text-left group">
+<div class="flex justify-between items-start mb-1">
+<span class="font-label-sm text-[12px] text-primary">Hôm nay</span>
+<span class="material-symbols-outlined text-[14px] text-outline">more_horiz</span>
+</div>
+<h4 class="font-body-md text-sm font-medium text-on-surface line-clamp-2 leading-snug">Criminal Determination: Khưu Văn D. Property Theft</h4>
+<p class="font-body-md text-xs text-on-surface-variant mt-2 truncate">People's Court • 03/12/2025</p>
+</button>
+<!-- Inactive Items -->
+<button class="w-full text-left p-3 rounded-DEFAULT hover:bg-surface-container-low transition-colors group">
+<div class="flex justify-between items-start mb-1">
+<span class="font-label-sm text-[12px] text-on-surface-variant">Hôm qua</span>
+</div>
+<h4 class="font-body-md text-sm font-medium text-on-surface line-clamp-2 leading-snug opacity-80 group-hover:opacity-100">Contract Dispute Review: A vs B Logistics</h4>
+</button>
+<button class="w-full text-left p-3 rounded-DEFAULT hover:bg-surface-container-low transition-colors group">
+<div class="flex justify-between items-start mb-1">
+<span class="font-label-sm text-[12px] text-on-surface-variant">Mar 10</span>
+</div>
+<h4 class="font-body-md text-sm font-medium text-on-surface line-clamp-2 leading-snug opacity-80 group-hover:opacity-100">Intellectual Property Infringement Analysis</h4>
+</button>
+</div>
+</aside>
+<!-- Main Chat Area -->
+<section class="flex-1 flex flex-col bg-surface relative min-w-0">
+<!-- Chat Header / Case Metadata -->
+<div class="px-8 py-6 border-b border-surface-variant bg-surface-container-lowest flex-shrink-0">
+<div class="max-w-3xl mx-auto flex items-start justify-between">
+<div>
+<div class="flex items-center gap-2 mb-2">
+<span class="bg-surface-container text-on-surface-variant px-2 py-0.5 rounded font-label-sm text-xs border border-surface-variant">Luật Hình sự</span>
+<span class="bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded font-label-sm text-xs border border-secondary-fixed-dim">Đang Xem xét</span>
+</div>
+<h2 class="font-h2 text-h2 text-on-surface mb-2">Analysis: Khưu Văn D. Matter</h2>
+<div class="flex gap-4 font-body-md text-sm text-on-surface-variant">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">calendar_today</span>
+<span>Ngày: 03/12/2025</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">account_balance</span>
+<span>Địa điểm: People's Court</span>
+</div>
+</div>
+</div>
+<button class="text-primary hover:bg-surface-container p-2 rounded-DEFAULT transition-colors border border-transparent hover:border-surface-variant">
+<span class="material-symbols-outlined">download</span>
+</button>
+</div>
+</div>
+<!-- Chat Feed -->
+<div class="flex-1 overflow-y-auto px-8 py-8">
+<div class="max-w-3xl mx-auto space-y-lg pb-12">
+<!-- User Prompt -->
+<div class="flex gap-4 items-start">
+<div class="w-8 h-8 rounded-full bg-surface-container-high border border-surface-variant flex-shrink-0 flex items-center justify-center overflow-hidden">
+<img alt="User" class="w-full h-full object-cover" data-alt="A professional headshot of a lawyer in a dark navy suit against a clean, bright, white background. The lighting is soft but distinct, emphasizing a modern, trustworthy corporate aesthetic. The image exudes quiet authority and professional minimalism." src="https://lh3.googleusercontent.com/aida/ADBb0uixGIz11gBbyrJxN-3AsckbwprojfzWygrWBWiSBO2U2yb3uMveAv7QBfqMNL3E4KQ-uNFWqFNCY07iFnY6k05vqPN7-lWz7WhGGCgVUWyIzuXfPLUu7W_kEpS4rU0qyM3w2MufnHyboUKyNl5LU9QFzVGXDElaZgYbsHr1Pgw4c34e4-NmvQ5awt6ajWFqxoy468HdrUQvX1eLZv9Hm4tDtWGB2ktRbGOKhu8VYiOhJR2cPWn1dF2AHDSv_t_mIktXXVms-IsH8Q"/>
+</div>
+<div class="bg-surface-container-lowest border border-surface-variant p-4 rounded-lg rounded-tl-none shadow-sm max-w-2xl">
+<p class="font-body-md text-on-surface">Provide a structural assessment of the criminal determination for Khưu Văn D. regarding the property theft incident. Focus on the court's reasoning and relevant penal code articles.</p>
+</div>
+</div>
+<!-- AI Response -->
+<div class="flex gap-4 items-start">
+<div class="w-8 h-8 rounded-full bg-primary text-on-primary flex-shrink-0 flex items-center justify-center font-h3 text-sm">V</div>
+<div class="bg-surface-container-lowest border border-surface-variant p-8 rounded-lg rounded-tr-none shadow-[0px_4px_20px_rgba(26,43,60,0.05)] w-full max-w-3xl">
+<div class="prose prose-slate max-w-none text-on-surface">
+<h3 class="font-h3 text-h3 text-primary-container border-b border-surface-variant pb-2 mb-6">Section I. Court Assessment</h3>
+<div class="mb-8">
+<h4 class="font-body-md font-semibold text-lg mb-3">Section 1. Criminal Determination</h4>
+<p class="font-body-md text-on-surface-variant mb-4 leading-relaxed">
+                                            Hành vi của Khưu Văn D. cấu thành tội phạm theo quy định của pháp luật hình sự hiện hành. Dựa trên hồ sơ vụ án và quá trình xét hỏi tại tòa, Hội đồng xét xử nhận định hành vi lén lút chiếm đoạt tài sản của người khác có đủ các yếu tố cấu thành tội trộm cắp tài sản.
+                                        </p>
+<div class="bg-surface-container-low border border-surface-variant p-4 rounded-DEFAULT my-4 font-body-md text-sm text-on-surface-variant border-l-4 border-l-secondary">
+                                            "Bị cáo đã lợi dụng sơ hở của bị hại để thực hiện hành vi chiếm đoạt chiếc xe máy trị giá 25.000.000 VNĐ."
+                                        </div>
+<p class="font-body-md text-on-surface-variant leading-relaxed">
+                                            Hành vi này trực tiếp xâm phạm đến quyền sở hữu tài sản hợp pháp của công dân được pháp luật bảo vệ. Do đó, việc áp dụng <span class="bg-[#fef0d4] text-secondary-container-on font-semibold px-1 py-0.5 rounded cursor-pointer border-b border-secondary hover:bg-secondary-fixed transition-colors" title="Click to view reference">Điều 173 Bộ luật Hình sự</span> là có căn cứ và đúng pháp luật.
+                                        </p>
+</div>
+<div class="flex gap-2 mt-6 pt-4 border-t border-surface-variant">
+<button class="flex items-center gap-1 text-xs font-label-sm text-outline hover:text-primary transition-colors bg-surface-container px-2 py-1 rounded"><span class="material-symbols-outlined text-[14px]">content_copy</span> Sao chép</button>
+<button class="flex items-center gap-1 text-xs font-label-sm text-outline hover:text-primary transition-colors bg-surface-container px-2 py-1 rounded"><span class="material-symbols-outlined text-[14px]">thumb_up</span> Hữu ích</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Input Area -->
+<div class="p-6 bg-surface-container-lowest border-t border-surface-variant">
+<div class="max-w-3xl mx-auto relative">
+<textarea class="w-full bg-surface resize-none border border-surface-variant rounded-lg p-4 pr-16 font-body-md text-on-surface focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none transition-all shadow-sm" placeholder="Đặt câu hỏi tiếp theo hoặc yêu cầu trích xuất điều khoản..." rows="3"></textarea>
+<button class="absolute right-4 bottom-4 w-10 h-10 bg-primary-container text-on-primary rounded-full flex items-center justify-center hover:bg-primary transition-colors shadow-sm">
+<span class="material-symbols-outlined">send</span>
+</button>
+<div class="absolute left-4 bottom-4 flex gap-2">
+<button class="text-outline hover:text-primary-container transition-colors p-1"><span class="material-symbols-outlined text-[20px]">attach_file</span></button>
+</div>
+</div>
+</div>
+</section>
+<!-- Reference Panel (Right Sidebar) -->
+<aside class="w-80 border-l border-surface-variant bg-surface-container-lowest flex flex-col hidden xl:flex">
+<div class="p-4 border-b border-surface-variant flex justify-between items-center bg-surface-bright">
+<h3 class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider flex items-center gap-2"><span class="material-symbols-outlined text-[16px]">menu_book</span> Văn bản Tham chiếu</h3>
+<button class="text-outline hover:text-on-surface"><span class="material-symbols-outlined text-[18px]">close</span></button>
+</div>
+<div class="p-6 overflow-y-auto flex-1">
+<div class="mb-2">
+<span class="text-xs font-label-sm text-secondary bg-secondary-fixed-dim/20 px-2 py-1 rounded border border-secondary-fixed-dim/50 mb-2 inline-block">Penal Code No. 100/2015/QH13</span>
+<h4 class="font-h3 text-xl text-primary mt-1 mb-4">Điều 173. Tội trộm cắp tài sản</h4>
+</div>
+<div class="prose prose-sm text-on-surface-variant font-body-md space-y-4">
+<p>
+                            1. Người nào trộm cắp tài sản của người khác trị giá từ 2.000.000 đồng đến dưới 50.000.000 đồng hoặc dưới 2.000.000 đồng nhưng thuộc một trong các trường hợp sau đây, thì bị phạt cải tạo không giam giữ đến 03 năm hoặc phạt tù từ 06 tháng đến 03 năm:
+                        </p>
+<ul class="list-disc pl-4 space-y-2 text-sm">
+<li>a) Đã bị xử phạt vi phạm hành chính về hành vi chiếm đoạt tài sản mà còn vi phạm;</li>
+<li>b) Đã bị kết án về tội này hoặc về một trong các tội quy định tại các điều 168, 169, 170, 171, 172, 174, 175 và 290 của Bộ luật này, chưa được xóa án tích mà còn vi phạm;</li>
+<li>c) Gây ảnh hưởng xấu đến an ninh, trật tự, an toàn xã hội;</li>
+<li>d) Tài sản là phương tiện kiếm sống chính của người bị hại và gia đình họ.</li>
+</ul>
+<p class="pt-4 border-t border-surface-variant text-xs opacity-70">
+                            Effective Date: January 1, 2018. Amended by Law No. 12/2017/QH14.
+                        </p>
+</div>
+</div>
+</aside>
+</div>
+</main>
+</body></html>

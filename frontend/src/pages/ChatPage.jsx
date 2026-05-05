@@ -79,7 +79,8 @@ export default function ChatPage() {
       setMessages([]);
     } catch (err) {
       console.error('Create session failed:', err);
-      setError('Không thể tạo phiên mới.');
+      const msg = err.response?.data?.message || err.message || 'Không thể tạo phiên mới.';
+      setError(msg);
       return;
     }
 

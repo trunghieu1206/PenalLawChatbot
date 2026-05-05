@@ -1,0 +1,347 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Thống kê hệ thống - Admin Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;family=Newsreader:wght@500;600&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container": "#edeeef",
+                        "outline": "#74777d",
+                        "surface-bright": "#f8f9fa",
+                        "secondary-fixed": "#ffdea5",
+                        "inverse-surface": "#2e3132",
+                        "primary-container": "#1a2b3c",
+                        "surface-container-highest": "#e1e3e4",
+                        "surface-variant": "#e1e3e4",
+                        "surface-container-high": "#e7e8e9",
+                        "primary": "#041627",
+                        "secondary": "#775a19",
+                        "surface": "#f8f9fa",
+                        "error-container": "#ffdad6",
+                        "primary-fixed-dim": "#b7c8de",
+                        "background": "#f8f9fa",
+                        "tertiary": "#001628",
+                        "primary-fixed": "#d2e4fb",
+                        "surface-dim": "#d9dadb",
+                        "on-tertiary-fixed": "#041d30",
+                        "on-secondary-fixed-variant": "#5d4201",
+                        "surface-container-low": "#f3f4f5",
+                        "tertiary-fixed": "#cee5ff",
+                        "inverse-on-surface": "#f0f1f2",
+                        "on-secondary-fixed": "#261900",
+                        "on-primary-fixed-variant": "#38485a",
+                        "on-tertiary-fixed-variant": "#33495e",
+                        "error": "#ba1a1a",
+                        "on-error-container": "#93000a",
+                        "secondary-fixed-dim": "#e9c176",
+                        "on-tertiary-container": "#7c93ab",
+                        "on-error": "#ffffff",
+                        "on-surface-variant": "#44474c",
+                        "on-primary-fixed": "#0b1d2d",
+                        "surface-tint": "#4f6073",
+                        "tertiary-container": "#142b3f",
+                        "on-primary-container": "#8192a7",
+                        "on-secondary-container": "#785a1a",
+                        "inverse-primary": "#b7c8de",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary-fixed-dim": "#b2c9e2",
+                        "on-background": "#191c1d",
+                        "on-secondary": "#ffffff",
+                        "outline-variant": "#c4c6cd",
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#191c1d",
+                        "secondary-container": "#fed488",
+                        "on-primary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "xl": "80px",
+                        "gutter": "24px",
+                        "base": "8px",
+                        "lg": "48px",
+                        "container-max": "1280px",
+                        "md": "24px",
+                        "sm": "12px",
+                        "xs": "4px"
+                    },
+                    "fontFamily": {
+                        "h1": ["Newsreader"],
+                        "body-md": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "h2": ["Newsreader"],
+                        "h3": ["Newsreader"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "h1": ["48px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "label-sm": ["14px", { "lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "h2": ["36px", { "lineHeight": "1.2", "fontWeight": "600" }],
+                        "h3": ["28px", { "lineHeight": "1.3", "fontWeight": "500" }],
+                        "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background min-h-screen font-body-md text-body-md antialiased flex flex-col md:flex-row">
+<!-- SideNavBar -->
+<nav class="bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-50 font-newsreader antialiased h-screen w-64 border-r fixed left-0 top-0 border-r border-slate-200 dark:border-slate-800 shadow-sm flex flex-col h-full py-6 px-4 z-50 hidden md:flex">
+<div class="mb-8 px-4">
+<h1 class="text-xl font-bold text-slate-900 dark:text-white tracking-tight font-h3 text-h3 mb-2">VNPLaw</h1>
+<p class="text-sm text-outline font-body-md text-body-md">Legal Intelligence</p>
+</div>
+<div class="flex-1 space-y-2">
+<a class="flex items-center space-x-3 px-4 py-3 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">chat</span>
+<span class="font-label-sm text-label-sm">Chat</span>
+</a>
+<a class="flex items-center space-x-3 px-4 py-3 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">gavel</span>
+<span class="font-label-sm text-label-sm">Practice Mode</span>
+</a>
+<a class="flex items-center space-x-3 px-4 py-3 rounded-lg text-slate-900 dark:text-white font-semibold border-r-4 border-slate-900 dark:border-slate-400 bg-slate-100 dark:bg-slate-800 transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-sm text-label-sm">Dashboard/Thống kê</span>
+</a>
+</div>
+<div class="mt-auto space-y-2 pt-6 border-t border-slate-200 dark:border-slate-800">
+<a class="flex items-center space-x-3 px-4 py-3 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-sm text-label-sm">Settings</span>
+</a>
+<a class="flex items-center space-x-3 px-4 py-3 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="font-label-sm text-label-sm">Support</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 md:ml-64 relative min-h-screen pb-24 md:pb-0">
+<!-- TopAppBar -->
+<header class="bg-white/80 dark:bg-slate-950/80 backdrop-blur-md text-slate-900 dark:text-slate-50 font-newsreader text-sm font-medium fixed top-0 right-0 w-[calc(100%-16rem)] z-40 border-b border-slate-200 dark:border-slate-800 flat no shadows flex justify-between items-center h-16 px-8 transition-all duration-300 hidden md:flex">
+<div class="flex items-center space-x-6">
+<span class="text-lg font-black text-slate-900 dark:text-slate-100 font-h3 text-h3">VNPLaw Intelligence</span>
+<nav class="hidden lg:flex space-x-6 ml-8">
+<a class="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white py-4 transition-all duration-300 font-label-sm text-label-sm" href="#">Documents</a>
+<a class="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white py-4 transition-all duration-300 font-label-sm text-label-sm" href="#">Archive</a>
+</nav>
+</div>
+<div class="flex items-center space-x-4">
+<button class="bg-primary-container text-on-primary font-label-sm text-label-sm px-6 py-2 rounded-lg hover:opacity-90 transition-opacity">
+                    New Case
+                </button>
+<button class="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all duration-300">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all duration-300">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Page Content -->
+<div class="pt-24 px-gutter md:px-lg max-w-container-max mx-auto w-full">
+<div class="flex justify-between items-end mb-lg">
+<div>
+<h2 class="font-h1 text-h1 text-primary">Dashboard/Thống kê</h2>
+<p class="font-body-lg text-body-lg text-outline mt-xs">System metrics and operational overview.</p>
+</div>
+<div class="hidden md:flex space-x-sm">
+<button class="px-4 py-2 border border-outline rounded-lg text-primary font-label-sm text-label-sm hover:bg-surface-container transition-colors">Export Report</button>
+<button class="px-4 py-2 bg-primary-container text-on-primary rounded-lg font-label-sm text-label-sm hover:opacity-90 transition-opacity">Manage Feedback</button>
+</div>
+</div>
+<!-- Top Row: Metric Cards -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-md mb-xl">
+<!-- Metric 1 -->
+<div class="bg-surface-container-lowest border border-surface-variant rounded-xl p-md shadow-sm relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-sm opacity-20 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-4xl text-primary-container">monitoring</span>
+</div>
+<p class="font-label-sm text-label-sm text-outline mb-xs">Phiên hoạt động</p>
+<h3 class="font-h2 text-h2 text-primary">1,248</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mt-sm flex items-center"><span class="material-symbols-outlined text-sm text-secondary mr-xs" style="font-variation-settings: 'FILL' 1;">arrow_upward</span> +12% so với tuần trước</p>
+</div>
+<!-- Metric 2 -->
+<div class="bg-surface-container-lowest border border-surface-variant rounded-xl p-md shadow-sm relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-sm opacity-20 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-4xl text-primary-container">group</span>
+</div>
+<p class="font-label-sm text-label-sm text-outline mb-xs">Tổng số Người dùng</p>
+<h3 class="font-h2 text-h2 text-primary">8,902</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mt-sm flex items-center"><span class="material-symbols-outlined text-sm text-secondary mr-xs" style="font-variation-settings: 'FILL' 1;">arrow_upward</span> +5% so với tuần trước</p>
+</div>
+<!-- Metric 3 -->
+<div class="bg-surface-container-lowest border border-surface-variant rounded-xl p-md shadow-sm relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-sm opacity-20 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-4xl text-primary-container">folder_open</span>
+</div>
+<p class="font-label-sm text-label-sm text-outline mb-xs">Vụ án Hoạt động</p>
+<h3 class="font-h2 text-h2 text-primary">456</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mt-sm flex items-center"><span class="material-symbols-outlined text-sm text-secondary mr-xs" style="font-variation-settings: 'FILL' 1;">arrow_downward</span> -2% so với tuần trước</p>
+</div>
+<!-- Metric 4 -->
+<div class="bg-surface-container-lowest border border-surface-variant rounded-xl p-md shadow-sm relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-sm opacity-20 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-4xl text-primary-container">feedback</span>
+</div>
+<p class="font-label-sm text-label-sm text-outline mb-xs">Phản hồi Chờ xử lý</p>
+<h3 class="font-h2 text-h2 text-primary">89</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mt-sm flex items-center"><span class="material-symbols-outlined text-sm text-secondary mr-xs" style="font-variation-settings: 'FILL' 1;">arrow_upward</span> Cần chú ý</p>
+</div>
+</div>
+<!-- Middle Row: Role Distribution (Bento Grid) -->
+<div class="mb-xl">
+<h3 class="font-h3 text-h3 text-primary mb-md">Phân bổ Vai trò</h3>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-md">
+<div class="bg-surface-container-lowest border border-surface-variant rounded-xl overflow-hidden shadow-sm flex flex-col">
+<div class="h-32 bg-primary-container/10 flex items-center justify-center">
+<img alt="Judge Role Abstract" class="w-full h-full object-cover opacity-80 mix-blend-multiply" data-alt="A minimalist abstract architectural rendering representing a judge's bench or courtroom podium. The composition uses strict geometric planes in deep navy blues and pristine whites, creating a sense of authority and structure. Soft, ambient lighting casts subtle shadows, reinforcing depth and a modern corporate legal aesthetic without being literal." src="https://lh3.googleusercontent.com/aida/ADBb0uhNvdqH07mY8DPve_94lVaMXEWhLpMVEiEZAI3l5gkAeU4ncmp8rFyPvJHW2uxC7NltzDFjrNekQHvXCxIQv4zBo7k9gitE3713U1pEALeZ5Fian3qbE2DGDspZH28SsHwh6Jz4y4WZOOzoFnjKYdWaNfbz3ToGtUU7JUoQjA4RELAfGiAXAUsI7LQp069U7aTyy1pP0HxPtlp8PdIiySuuDt5Oo3_FlYkv9qTc88ZYf8TcMLEAm-N9WsNK0WF8vhbWiDmXk0XnaQ">
+</div>
+<div class="p-md flex-1 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-sm">
+<h4 class="font-label-sm text-label-sm text-primary uppercase tracking-wider">Thẩm phán</h4>
+<span class="material-symbols-outlined text-outline">gavel</span>
+</div>
+<div class="w-full bg-surface-container-high h-2 rounded-full mb-xs overflow-hidden">
+<div class="bg-primary-container h-full rounded-full" style="width: 15%"></div>
+</div>
+<p class="font-body-md text-body-md text-outline">15% người dùng đã đăng ký</p>
+</div>
+<div class="mt-md">
+<span class="font-h3 text-h3 text-primary">1,335</span>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-surface-variant rounded-xl overflow-hidden shadow-sm flex flex-col">
+<div class="h-32 bg-surface-tint/10 flex items-center justify-center">
+<img alt="Defense Role Abstract" class="w-full h-full object-cover opacity-80 mix-blend-multiply" data-alt="A sleek, modern abstract visualization representing defense and protection. Interlocking geometric lines and shields rendered in subtle slate blues and cool greys against a stark white background. The lighting is crisp and high-key, conveying clarity, logic, and a professional legal defense environment in a minimalist style." src="https://lh3.googleusercontent.com/aida/ADBb0uiWEyfQw35NgTBX-_Xmc9TiIYoNqCDT2DsIGi9PI1HFF4IbXcrojfFdAVJkAue2iB8FADnqw2BIG9j50_lvivo1ZAqKx0KpaBzMwovRZ64eNAQQP_7dlYsDsfsSkQTOB0w7b8foRdHcHqf7JcHY10LJJ6cRP33jVOmUrcUOiBsBHdyphyVvHU5eG2tI6XSlv3syXaVHR7TkB9Yq2nNp3QmytO8I3JU75xrZligNWdEeP8x1Nq2sczNoTTEpOvz76ozdaJeWWcMNyg">
+</div>
+<div class="p-md flex-1 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-sm">
+<h4 class="font-label-sm text-label-sm text-primary uppercase tracking-wider">Luật sư Bào chữa</h4>
+<span class="material-symbols-outlined text-outline">shield</span>
+</div>
+<div class="w-full bg-surface-container-high h-2 rounded-full mb-xs overflow-hidden">
+<div class="bg-surface-tint h-full rounded-full" style="width: 45%"></div>
+</div>
+<p class="font-body-md text-body-md text-outline">45% ngời dùng đã đăng ký</p>
+</div>
+<div class="mt-md">
+<span class="font-h3 text-h3 text-primary">4,005</span>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-surface-variant rounded-xl overflow-hidden shadow-sm flex flex-col">
+<div class="h-32 bg-secondary/10 flex items-center justify-center">
+<img alt="Victim Role Abstract" class="w-full h-full object-cover opacity-80 mix-blend-multiply" data-alt="A serene, minimalist digital art piece representing balance and resolution. Soft overlapping circles and subtle gradients in pale golds and muted whites. The lighting is warm and diffused, creating an atmosphere of support, clarity, and institutional trust suitable for representing victims or plaintiffs in a modern legal application." src="https://lh3.googleusercontent.com/aida/ADBb0uh4RnN0BCGx2JGuB9vGpW7vVsfjgLdLoNzs9H0ngpBsH7TpvvXwu5xjrs9LHFajP_giv_PnlwkGCeYAyGdRXSrJB7Zz-AnHGBpb4NaiZFAVMjfynbzHaWtMzGBJEPrCgIWiYEMbYOkIGelgbOMq9bFQRlMvgY16pBh3GfShQQiRiMCw87fHsFwYcPW2B6y-ushxmkQkW3jMd08ZVVbqp78MI1YxvJcxAjjwTPiWZkTlEfFORkIhtxhDMSHrmye0cCXyXnr0z3fJwQ">
+</div>
+<div class="p-md flex-1 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-sm">
+<h4 class="font-label-sm text-label-sm text-primary uppercase tracking-wider">Luật sư Bị hại</h4>
+<span class="material-symbols-outlined text-outline">person</span>
+</div>
+<div class="w-full bg-surface-container-high h-2 rounded-full mb-xs overflow-hidden">
+<div class="bg-secondary h-full rounded-full" style="width: 40%"></div>
+</div>
+<p class="font-body-md text-body-md text-outline">40% người dùng đã đăng ký</p>
+</div>
+<div class="mt-md">
+<span class="font-h3 text-h3 text-primary">3,562</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Row: Case Analysis -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-lg mb-xl">
+<!-- Left Column: Map/Location View -->
+<div class="bg-surface-container-lowest border border-surface-variant rounded-xl p-md shadow-sm flex flex-col min-h-[400px]">
+<div class="flex justify-between items-center mb-md">
+<h3 class="font-h3 text-h3 text-primary">Vụ án theo Địa danh</h3>
+<div class="flex space-x-2">
+<button class="p-2 bg-surface-container rounded hover:bg-surface-variant transition-colors"><span class="material-symbols-outlined text-sm">map</span></button>
+<button class="p-2 hover:bg-surface-container rounded transition-colors"><span class="material-symbols-outlined text-sm">list</span></button>
+</div>
+</div>
+<div class="flex-1 bg-surface-container-low rounded-lg border border-surface-variant relative overflow-hidden">
+<!-- Abstract Map Representation -->
+<img alt="Map Visualization" class="absolute inset-0 w-full h-full object-cover opacity-60" data-alt="A highly stylized, minimalist topographical map of a region, rendered in a strict corporate palette of deep navy, slate grey, and legal white. The map features precise, thin contour lines and subtle glowing plot points indicating data density. The aesthetic is clean, analytical, and authoritative, suitable for a professional data dashboard." data-location="Vietnam" src="https://lh3.googleusercontent.com/aida/ADBb0uixGIz11gBbyrJxN-3AsckbwprojfzWygrWBWiSBO2U2yb3uMveAv7QBfqMNL3E4KQ-uNFWqFNCY07iFnY6k05vqPN7-lWz7WhGGCgVUWyIzuXfPLUu7W_kEpS4rU0qyM3w2MufnHyboUKyNl5LU9QFzVGXDElaZgYbsHr1Pgw4c34e4-NmvQ5awt6ajWFqxoy468HdrUQvX1eLZv9Hm4tDtWGB2ktRbGOKhu8VYiOhJR2cPWn1dF2AHDSv_t_mIktXXVms-IsH8Q">
+<!-- Overlay UI -->
+<div class="absolute bottom-4 left-4 bg-surface-container-lowest/90 backdrop-blur border border-surface-variant p-sm rounded-lg shadow-sm">
+<p class="font-label-sm text-label-sm text-primary mb-1">Khu vực Thủ đô Hà Nội</p>
+<p class="font-body-md text-body-md text-outline">142 Vụ án Hoạt động</p>
+</div>
+</div>
+</div>
+<!-- Right Column: Horizontal Bar Chart -->
+<div class="bg-surface-container-lowest border border-surface-variant rounded-xl p-md shadow-sm flex flex-col min-h-[400px]">
+<div class="mb-md">
+<h3 class="font-h3 text-h3 text-primary">Vụ án theo loại tội danh</h3>
+<p class="font-body-md text-body-md text-outline">Cases distributed by primary crime type.</p>
+</div>
+<div class="flex-1 flex flex-col justify-center space-y-md">
+<!-- Bar 1 -->
+<div>
+<div class="flex justify-between font-label-sm text-label-sm mb-xs">
+<span class="text-primary">Trộm cắp tài sản</span>
+<span class="text-outline">120 vụ án</span>
+</div>
+<div class="w-full bg-surface-container-high h-3 rounded-full overflow-hidden">
+<div class="bg-primary-container h-full rounded-full" style="width: 85%"></div>
+</div>
+</div>
+<!-- Bar 2 -->
+<div>
+<div class="flex justify-between font-label-sm text-label-sm mb-xs">
+<span class="text-primary">Tàng trữ trái phép chất ma túy</span>
+<span class="text-outline">85 vụ án</span>
+</div>
+<div class="w-full bg-surface-container-high h-3 rounded-full overflow-hidden">
+<div class="bg-surface-tint h-full rounded-full" style="width: 60%"></div>
+</div>
+</div>
+<!-- Bar 3 -->
+<div>
+<div class="flex justify-between font-label-sm text-label-sm mb-xs">
+<span class="text-primary">Lừa đảo chiếm đoạt tài sản</span>
+<span class="text-outline">64 vụ án</span>
+</div>
+<div class="w-full bg-surface-container-high h-3 rounded-full overflow-hidden">
+<div class="bg-secondary h-full rounded-full" style="width: 45%"></div>
+</div>
+</div>
+<!-- Bar 4 -->
+<div>
+<div class="flex justify-between font-label-sm text-label-sm mb-xs">
+<span class="text-primary">Cố ý gây thương tích</span>
+<span class="text-outline">32 vụ án</span>
+</div>
+<div class="w-full bg-surface-container-high h-3 rounded-full overflow-hidden">
+<div class="bg-outline h-full rounded-full" style="width: 25%"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+
+
+</body></html>

@@ -4,6 +4,7 @@ import com.penallaw.backend.entity.ChatSession;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -11,4 +12,5 @@ import java.util.UUID;
 public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> {
     List<ChatSession> findByUserIdOrderByCreatedAtDesc(UUID userId);
     List<ChatSession> findByGuestIdOrderByCreatedAtDesc(String guestId);
+    long countByUserIdAndCreatedAtAfter(UUID userId, LocalDateTime after);
 }

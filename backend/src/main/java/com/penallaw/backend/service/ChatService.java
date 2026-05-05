@@ -8,13 +8,16 @@ import com.penallaw.backend.entity.User;
 import com.penallaw.backend.repository.ChatMessageRepository;
 import com.penallaw.backend.repository.ChatSessionRepository;
 import com.penallaw.backend.repository.UserRepository;
+import com.penallaw.backend.exception.RateLimitException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -54,17 +57,9 @@ public class ChatService {
 
     @Transactional
     public ChatDTOs.SessionResponse createGuestSession(String guestId, ChatDTOs.CreateSessionRequest request) {
-        String mode = (request != null && request.mode() != null) ? request.mode() : "neutral";
-        LocalDateTime now = LocalDateTime.now();
-        ChatSession session = ChatSession.builder()
-                .guestId(guestId)
-                .mode(mode)
-                .title("Phiên mới")
-                .createdAt(now)
-                .updatedAt(now)
-                .build();
-        session = sessionRepository.save(session);
-        return toSessionResponse(session);
+        // Guests are also limited or blocked if needed. For now, let's block guest session creation 
+        // to encourage registration and consistent limit tracking.
+        throw new RateLimitException("Vui lòng đăng nhập để sử dụng tính năng phân tích vụ án.");
     }
 
     @Transactional(readOnly = true)
@@ -79,6 +74,16 @@ public class ChatService {
     public ChatDTOs.SessionResponse createSession(String userEmail, ChatDTOs.CreateSessionRequest request) {
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + userEmail));
+
+        // Limit check: 5 sessions per day for regular users
+        if (!"admin".equalsIgnoreCase(user.getRole())) {
+            LocalDateTime startOfToday = LocalDateTime.of(LocalDate.now(), LocalTime.MIDNIGHT);
+            long sessionsToday = sessionRepository.countByUserIdAndCreatedAtAfter(user.getId(), startOfToday);
+            if (sessionsToday >= 5) {
+                throw new RateLimitException("Bạn đã đạt giới hạn 5 vụ án mỗi ngày. Vui lòng quay lại vào ngày mai.");
+            }
+        }
+
         String mode = (request != null && request.mode() != null) ? request.mode() : "neutral";
         LocalDateTime now = LocalDateTime.now();
         ChatSession session = ChatSession.builder()
