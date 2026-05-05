@@ -39,7 +39,7 @@ public class ChatService {
     private ChatDTOs.MessageResponse toMessageResponse(ChatMessage m) {
         return new ChatDTOs.MessageResponse(
                 m.getId(), m.getRole(), m.getContent(),
-                m.getExtractedFacts(), m.getMappedLaws(), m.getCreatedAt()
+                m.getExtractedFacts(), m.getMappedLaws(), m.getSentencingData(), m.getCreatedAt()
         );
     }
 
@@ -146,6 +146,7 @@ public class ChatService {
                     .content(aiResponse.result())
                     .extractedFacts(aiResponse.extractedFacts())
                     .mappedLaws(aiResponse.mappedLaws())
+                    .sentencingData(aiResponse.sentencingData())
                     .createdAt(LocalDateTime.now())
                     .build();
             aiMessage = messageRepository.save(aiMessage);
@@ -154,13 +155,13 @@ public class ChatService {
             // Return a response anyway so the user can still see the AI result
             return new ChatDTOs.MessageResponse(
                     null, "assistant", aiResponse.result(),
-                    aiResponse.extractedFacts(), aiResponse.mappedLaws(), null
+                    aiResponse.extractedFacts(), aiResponse.mappedLaws(), aiResponse.sentencingData(), null
             );
         }
 
         return new ChatDTOs.MessageResponse(
                 aiMessage.getId(), "assistant", aiResponse.result(),
-                aiResponse.extractedFacts(), aiResponse.mappedLaws(), aiMessage.getCreatedAt()
+                aiResponse.extractedFacts(), aiResponse.mappedLaws(), aiResponse.sentencingData(), aiMessage.getCreatedAt()
         );
     }
 

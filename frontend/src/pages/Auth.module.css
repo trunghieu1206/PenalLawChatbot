@@ -1,128 +1,154 @@
-/* Auth pages shared module CSS */
 .page {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 24px;
   position: relative;
   overflow: hidden;
-  background: var(--bg-base);
+  background: var(--surface);
+}
+
+.bg {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at top, rgba(26, 43, 60, 0.06), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 249, 250, 0.9));
+  z-index: 0;
 }
 
 .backBtn {
   position: absolute;
   top: 20px;
   left: 20px;
-  z-index: 10;
+  z-index: 2;
   padding: 8px 12px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  border-radius: var(--radius-md);
-  font-size: 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--surface-variant);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface-variant);
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: var(--transition);
-  text-decoration: none;
 }
 
 .backBtn:hover {
-  background: var(--bg-hover);
-  border-color: var(--border-accent);
-  color: var(--text-primary);
-  transform: translateX(-2px);
-}
-
-.bg {
-  position: fixed;
-  inset: 0;
-  background: var(--bg-base);
-  z-index: 0;
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border);
+  background: var(--surface-container-low);
+  color: var(--on-surface);
 }
 
 .container {
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 400px;
-  padding: 48px 40px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  max-width: 420px;
+  padding: 40px 36px;
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--surface-variant);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
 }
 
 .logo {
   text-align: center;
-  margin-bottom: 40px;
-  border-bottom: 2px solid var(--border);
-  padding-bottom: 24px;
-}
-
-.logoIcon {
-  display: none;
+  margin-bottom: 24px;
 }
 
 .logoText {
-  font-family: var(--font-display);
+  font-family: var(--font-serif);
   font-size: 32px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--primary);
-  margin-bottom: 8px;
-  letter-spacing: -0.5px;
+  margin-bottom: 6px;
 }
 
 .logoSub {
-  font-size: 13px;
-  color: var(--text-muted);
-  font-weight: 500;
-  letter-spacing: 0.3px;
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.form { 
-  display: flex; 
-  flex-direction: column; 
-  gap: 20px; 
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.field { 
-  display: flex; 
-  flex-direction: column; 
+.field {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
 }
 
+.inputWrap {
+  position: relative;
+}
+
+.inputIcon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--outline);
+  font-size: 18px;
+}
+
+.input {
+  padding-left: 40px;
+}
+
+.optionsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--on-surface-variant);
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkbox input {
+  width: 14px;
+  height: 14px;
+}
+
 .error {
-  padding: 12px 14px;
-  background: rgba(125, 23, 23, 0.08);
-  border: 1px solid rgba(125, 23, 23, 0.2);
-  border-radius: var(--radius-md);
-  color: var(--error);
-  font-size: 13px;
-  font-weight: 500;
+  padding: 10px 12px;
+  background: var(--error-container);
+  border: 1px solid rgba(186, 26, 26, 0.2);
+  border-radius: var(--radius-sm);
+  color: var(--on-error-container);
+  font-size: 12px;
 }
 
 .submitBtn {
   width: 100%;
   justify-content: center;
-  padding: 13px;
-  font-size: 15px;
-  margin-top: 4px;
+  padding: 12px;
+  font-size: 14px;
 }
 
 .footer {
   text-align: center;
-  margin-top: 24px;
-  font-size: 14px;
-  color: var(--text-muted);
+  margin-top: 20px;
+  font-size: 13px;
+  color: var(--on-surface-variant);
 }
 
 .link {
   color: var(--primary);
-  text-decoration: none;
   font-weight: 600;
-  transition: var(--transition);
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
 }
-.link:hover { color: var(--primary-dark); text-decoration: underline; }
+
+.link:hover { text-decoration: underline; }

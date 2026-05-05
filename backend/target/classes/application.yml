@@ -39,7 +39,7 @@ jwt:
 # AI Service
 ai-service:
   base-url: ${AI_SERVICE_URL:http://localhost:8000}
-  timeout-seconds: 120
+  timeout-seconds: 600   # 10 min — CPU inference (embedding + reranker) can take 2-5 min
 
 # Actuator
 management:

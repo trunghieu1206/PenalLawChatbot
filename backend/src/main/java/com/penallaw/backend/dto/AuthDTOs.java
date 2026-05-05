@@ -13,7 +13,7 @@ public class AuthDTOs {
         }
 
         public record LoginRequest(
-                        @NotBlank @Email String email,
+                        @NotBlank String email,   // accepts bare identifiers like "admin" as well
                         @NotBlank String password) {
         }
 

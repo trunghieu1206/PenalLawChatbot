@@ -3,9 +3,9 @@
   position: relative;
   height: 100%;
   width: 100%;
-  background: var(--bg-card);
-  border-left: 1px solid var(--border);
-  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.12);
+  background: var(--surface-container-lowest);
+  border-left: 1px solid var(--surface-variant);
+  box-shadow: -4px 0 20px rgba(26, 43, 60, 0.08);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -18,8 +18,8 @@
   justify-content: space-between;
   gap: 12px;
   padding: 20px 20px 16px;
-  border-bottom: 1px solid var(--border);
-  background: linear-gradient(135deg, rgba(45, 95, 122, 0.06), rgba(45, 95, 122, 0.02));
+  border-bottom: 1px solid var(--surface-variant);
+  background: linear-gradient(135deg, rgba(79, 96, 115, 0.08), rgba(79, 96, 115, 0.02));
   flex-shrink: 0;
 }
 
@@ -32,22 +32,22 @@
 .headerTitle {
   font-size: 17px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--on-surface);
   letter-spacing: -0.01em;
 }
 
 .headerSub {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--on-surface-variant);
   margin-top: 3px;
   font-style: italic;
 }
 
 .closeBtn {
   background: none;
-  border: 1px solid var(--border);
+  border: 1px solid var(--surface-variant);
   border-radius: 6px;
-  color: var(--text-muted);
+  color: var(--on-surface-variant);
   cursor: pointer;
   font-size: 14px;
   padding: 4px 9px;
@@ -56,9 +56,9 @@
 }
 
 .closeBtn:hover {
-  background: rgba(45, 95, 122, 0.1);
-  color: var(--text-primary);
-  border-color: var(--primary);
+  background: rgba(79, 96, 115, 0.15);
+  color: var(--on-surface);
+  border-color: var(--primary-container);
 }
 
 /* ── Body (scrollable) ────────────────────────────────────── */
@@ -77,14 +77,14 @@
   align-items: center;
   gap: 12px;
   padding: 32px 16px;
-  color: var(--text-muted);
+  color: var(--on-surface-variant);
   font-size: 14px;
 }
 
 .spinner {
   width: 20px;
   height: 20px;
-  border: 2px solid var(--border);
+  border: 2px solid var(--surface-variant);
   border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
@@ -99,8 +99,8 @@
   display: flex;
   gap: 12px;
   padding: 24px 16px;
-  background: rgba(239, 68, 68, 0.05);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: var(--error-container);
+  border: 1px solid rgba(186, 26, 26, 0.2);
   border-radius: var(--radius-sm);
 }
 
@@ -108,14 +108,14 @@
 
 .errorTitle {
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--on-error-container);
   font-size: 14px;
   margin-bottom: 4px;
 }
 
 .errorMsg {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--on-error-container);
 }
 
 /* ── Version tabs ─────────────────────────────────────────── */
@@ -131,22 +131,22 @@
   font-size: 12px;
   font-weight: 600;
   border-radius: 20px;
-  border: 1px solid var(--border);
-  background: var(--bg-secondary);
-  color: var(--text-muted);
+  border: 1px solid var(--surface-variant);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface-variant);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .tab:hover {
-  border-color: var(--primary);
+  border-color: var(--primary-container);
   color: var(--primary);
 }
 
 .tabActive {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: #fff;
+  background: var(--primary-container);
+  border-color: var(--primary-container);
+  color: var(--on-primary);
 }
 
 /* ── Version card ─────────────────────────────────────────── */
@@ -166,56 +166,56 @@
 
 .sourceBadge {
   padding: 3px 10px;
-  background: rgba(45, 95, 122, 0.12);
-  border: 1px solid rgba(45, 95, 122, 0.25);
+  background: rgba(79, 96, 115, 0.12);
+  border: 1px solid rgba(79, 96, 115, 0.3);
   border-radius: 4px;
   font-size: 11px;
   font-weight: 700;
-  color: var(--primary);
+  color: var(--primary-container);
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
 
 .metaItem {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--on-surface-variant);
   padding: 2px 8px;
-  background: var(--bg-secondary);
+  background: var(--surface-container-low);
   border-radius: 4px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--surface-variant);
 }
 
 .metaExpired {
-  color: #f59e0b;
-  border-color: rgba(245, 158, 11, 0.3);
-  background: rgba(245, 158, 11, 0.05);
+  color: var(--secondary);
+  border-color: rgba(119, 90, 25, 0.3);
+  background: rgba(119, 90, 25, 0.08);
 }
 
 .inactiveBadge {
   padding: 2px 8px;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: var(--error-container);
+  border: 1px solid rgba(186, 26, 26, 0.2);
   border-radius: 4px;
   font-size: 11px;
   font-weight: 600;
-  color: #ef4444;
+  color: var(--on-error-container);
 }
 
 /* Article title */
 .articleTitle {
   font-size: 15px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--on-surface);
   margin: 0;
   line-height: 1.4;
   padding-bottom: 10px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--surface-variant);
 }
 
 /* Article content */
 .articleContent {
   font-size: 14px;
-  color: var(--text-secondary);
+  color: var(--on-surface-variant);
   line-height: 1.75;
   display: flex;
   flex-direction: column;

@@ -45,6 +45,10 @@ public class ChatMessage {
     @Column(name = "mapped_laws", columnDefinition = "TEXT")
     private List<Map<String, Object>> mappedLaws;
 
+    @Convert(converter = JsonMapConverter.class)
+    @Column(name = "sentencing_data", columnDefinition = "TEXT")
+    private Map<String, Object> sentencingData;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, nullable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSS]'Z'", timezone = "UTC")

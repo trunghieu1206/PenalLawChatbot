@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
 # =============================================================
 # deploy_nodocker.sh
-# Deploys all services DIRECTLY (no Docker) on a containerized
+# Deploys ALL services DIRECTLY (no Docker) on a containerized
 # GPU server (Ubuntu 22.04, root, no systemd, no iptables).
 #
 # OPTIMIZED:
 #   - Skips npm install / mvn build if nothing changed
-#   - Maven offline flag after first run (no re-download)
-#   - PostgreSQL installed once with skip guard
-#   - Only restores DB backup if DB is empty (idempotent)
+#   - Maven offline flag after first run
+#   - PostgreSQL skipped if already running
+#   - DB restore only if DB is empty
+#   - Validates AI imports before launching
 #
-# Services started:
-#   - PostgreSQL (via apt, direct)
-#   - AI Service (uvicorn, port 8000)
-#   - Spring Boot backend (java -jar, port 8080)
-#   - Frontend (nginx static, port 80)
+# Services:
+#   - PostgreSQL         (port 5432, via pg_ctlcluster)
+#   - AI Service         (port 8000, uvicorn)
+#   - Spring Boot        (port 8080, java -jar)
+#   - Frontend           (port 80,   nginx static)
 #
 # Usage:
 #   bash deploy_nodocker.sh
@@ -30,23 +31,30 @@ error() { echo -e "${RED}[ERR]${NC}   $*"; exit 1; }
 REPO_URL="https://github.com/trunghieu1206/PenalLawChatbot"
 PROJECT_DIR="/root/PenalLawChatbot"
 LOG_DIR="/var/log/penallaw"
-BRANCH="dev"  # ← CHANGE THIS to deploy a different branch (e.g., "master", "feature/xyz")
+BRANCH="dev"
 mkdir -p "$LOG_DIR"
 chmod 777 "$LOG_DIR"
 
-# ── 0. Self-install missing build tools ──────────────────────
-# deploy_nodocker.sh can be run standalone (without setup_server.sh).
-# Ensure Java, Maven, and Node are present before doing any build work.
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🚀  PenalLawChatbot — Bare-Metal Deploy (no Docker)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
 
-if ! command -v java &>/dev/null || ! java -version 2>&1 | grep -q '21\|17'; then
-    info "Java 21 not found — installing (this may take a few minutes)..."
+# ── 0. Self-install build tools (in case setup_server.sh was skipped) ──
+if ! command -v java &>/dev/null || ! java -version 2>&1 | grep -q '21\.'; then
+    info "Java 21 not found — installing..."
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-21-jdk
-    export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))
-    echo "export JAVA_HOME=$JAVA_HOME" >> /root/.bashrc
+    _JAVA_BIN=$(readlink -f "$(which java)")
+    export JAVA_HOME
+    JAVA_HOME=$(dirname "$(dirname "$_JAVA_BIN")")
+    grep -qxF "export JAVA_HOME=$JAVA_HOME" /root/.bashrc 2>/dev/null || \
+        echo "export JAVA_HOME=$JAVA_HOME" >> /root/.bashrc
     info "Java: $(java --version 2>&1 | head -1)"
 else
-    # Ensure JAVA_HOME is exported even if Java was pre-installed
-    export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))) 2>/dev/null || echo "")
+    _JAVA_BIN=$(readlink -f "$(which java)")
+    export JAVA_HOME
+    JAVA_HOME=$(dirname "$(dirname "$_JAVA_BIN")")
     skip "Java: $(java --version 2>&1 | head -1)"
 fi
 
@@ -58,7 +66,7 @@ else
     skip "Maven: $(mvn --version | head -1)"
 fi
 
-if ! command -v node &>/dev/null || ! node --version | grep -q '^v2[0-9]'; then
+if ! command -v node &>/dev/null || ! node --version | grep -qP 'v2[0-9]'; then
     info "Node.js 20 not found — installing..."
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs
@@ -67,92 +75,147 @@ else
     skip "Node: $(node --version)"
 fi
 
-# ── 1. Clone / pull repo (using BRANCH variable defined above) ─
-if [ -d "$PROJECT_DIR/.git" ]; then
-    warn "Repo exists — pulling latest from $BRANCH..."
-    git -C "$PROJECT_DIR" checkout $BRANCH
-    git -C "$PROJECT_DIR" pull origin $BRANCH
-elif [ -d "$PROJECT_DIR" ]; then
-    warn "Directory exists but is NOT a git repo (uploaded via scp)."
-    warn "Backing up to ${PROJECT_DIR}.bak and cloning fresh..."
-    mv "$PROJECT_DIR" "${PROJECT_DIR}.bak"
-    git clone --branch $BRANCH "$REPO_URL" "$PROJECT_DIR"
-    # Restore database and Milvus DB from backup dir
-    [ -d "${PROJECT_DIR}.bak/database" ] && cp -r "${PROJECT_DIR}.bak/database" "$PROJECT_DIR/"
-    [ -f "${PROJECT_DIR}.bak/ai-service/VN_law_lora.db" ] && \
-        cp "${PROJECT_DIR}.bak/ai-service/VN_law_lora.db" "$PROJECT_DIR/ai-service/"
-else
-    info "Cloning repo ($BRANCH branch)..."
-    git clone --branch $BRANCH "$REPO_URL" "$PROJECT_DIR"
-fi
-cd "$PROJECT_DIR"
-info "Currently on branch: $(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD)"
-info "Latest commit: $(git -C "$PROJECT_DIR" log -1 --oneline)"
+# ── 1. Clone / pull repo ──────────────────────────────────────
+# ── 1. Clone / pull repo ──────────────────────────────────────
+# Strategy:
+#   - .git exists            → pull latest
+#   - ai-service/ exists     → full project present (uploaded via scp) → use as-is
+#   - dir exists but empty   → created only for database/backups/ → clone fresh
+#   - dir doesn't exist      → clone fresh
+#
+# In all clone cases: preserve database/backups/ and .env before wiping.
 
-# ── 2. Setup .env ────────────────────────────────────────────
-if [ ! -f ".env" ]; then
-    cp .env.example .env
-    warn ">>> Fill in .env before continuing <<<"
-    warn "    nano /root/PenalLawChatbot/.env"
-    warn "Required: OPENROUTER_API_KEY, HF_TOKEN, JWT_SECRET"
-    read -p "Press ENTER after editing .env..." _
+_clone_fresh() {
+    local target="$1"
+    # Preserve precious files before removing partial directory
+    local _bk_db="" _bk_env=""
+    if [ -d "$target/database/backups" ]; then
+        _bk_db=$(mktemp -d)
+        cp -r "$target/database/backups/." "$_bk_db/"
+        info "  Preserved database/backups/ (will restore after clone)"
+    fi
+    if [ -f "$target/.env" ]; then
+        _bk_env=$(mktemp)
+        cp "$target/.env" "$_bk_env"
+        info "  Preserved .env (will restore after clone)"
+    fi
+
+    rm -rf "$target"
+    info "Cloning $REPO_URL ($BRANCH) → $target ..."
+    git clone --branch "$BRANCH" "$REPO_URL" "$target"
+
+    # Restore preserved files
+    if [ -n "$_bk_db" ] && [ -d "$_bk_db" ]; then
+        mkdir -p "$target/database/backups"
+        cp -r "$_bk_db/." "$target/database/backups/"
+        rm -rf "$_bk_db"
+        info "  Restored database/backups/"
+    fi
+    if [ -n "$_bk_env" ] && [ -f "$_bk_env" ]; then
+        cp "$_bk_env" "$target/.env"
+        rm -f "$_bk_env"
+        info "  Restored .env"
+    fi
+}
+
+if [ -d "$PROJECT_DIR/.git" ]; then
+    info "Git repo found — pulling latest ($BRANCH)..."
+    git -C "$PROJECT_DIR" checkout "$BRANCH"
+    git -C "$PROJECT_DIR" pull origin "$BRANCH"
+elif [ -d "$PROJECT_DIR/ai-service" ]; then
+    # Full project present (uploaded via scp) — use as-is, no clone needed
+    warn "Project directory found (non-git, uploaded via scp). Using as-is."
+else
+    # Directory missing OR exists but is incomplete (e.g. only database/backups/ was created)
+    warn "Project incomplete or missing — cloning fresh (preserving any backups and .env)..."
+    _clone_fresh "$PROJECT_DIR"
 fi
+
+cd "$PROJECT_DIR"
+GIT_BRANCH=$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "non-git")
+GIT_COMMIT=$(git -C "$PROJECT_DIR" log -1 --oneline 2>/dev/null || echo "local")
+info "Branch: $GIT_BRANCH  |  Commit: $GIT_COMMIT"
+
+# ── 2. Setup .env ─────────────────────────────────────────────
+if [ ! -f ".env" ]; then
+    if [ -f ".env.example" ]; then
+        cp .env.example .env
+        info "Copied .env.example → .env"
+    else
+        # .env.example not on server — generate with all defaults pre-filled.
+        # JWT_SECRET is pre-filled (same value as .env.example in the repo).
+        # User only needs to fill in OPENROUTER_API_KEY and HF_TOKEN.
+        # AI service vars (model names, TOP_K, etc.) are NOT here — they live in main.py.
+        cat > .env <<'ENVEOF'
+# Fill in ONLY these two values:
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+HF_TOKEN=your_huggingface_token_here
+
+# Pre-filled — do not change:
+JWT_SECRET=j1WQjbYqkjImzp0etlJQRgI4alxtRxGTgAJalevJKKDAuuHFm2gbPNXcRxMzYNQ1nUJd6hYNVPkScjrEZr0aGA==
+POSTGRES_DB=penallaw
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+ENVEOF
+    fi
+    warn ">>> Edit .env — fill in OPENROUTER_API_KEY and HF_TOKEN <<<"
+    warn "    nano /root/PenalLawChatbot/.env"
+    echo ""
+    read -rp "Press ENTER after editing .env..." _
+fi
+
+set -o allexport
+# shellcheck disable=SC1091
 source .env
+set +o allexport
+
 [ -z "${OPENROUTER_API_KEY:-}" ] && error "OPENROUTER_API_KEY not set in .env"
 [ -z "${JWT_SECRET:-}" ]         && error "JWT_SECRET not set in .env"
 info ".env loaded."
 
 # ── 3. PostgreSQL ─────────────────────────────────────────────
-# Only install if not already present (avoid ~100MB re-download)
 if ! command -v psql &>/dev/null; then
     info "Installing PostgreSQL..."
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         postgresql postgresql-contrib libpq-dev
     info "PostgreSQL installed."
 else
-    skip "PostgreSQL already installed: $(psql --version)"
+    skip "PostgreSQL: $(psql --version)"
 fi
 
-# Start postgres (no systemctl)
-PG_VERSION=$(ls /etc/postgresql/ 2>/dev/null | sort -V | tail -1)
-if [ -z "$PG_VERSION" ]; then
-    error "PostgreSQL version directory not found in /etc/postgresql/"
-fi
+PG_VERSION=$(ls /etc/postgresql/ 2>/dev/null | sort -V | tail -1 || echo "")
+[ -z "$PG_VERSION" ] && error "PostgreSQL config not found in /etc/postgresql/"
+
+PG_LOG="$LOG_DIR/postgres.log"
+touch "$PG_LOG" && chmod 666 "$PG_LOG" 2>/dev/null || true
 
 if ! pg_isready -q 2>/dev/null; then
+    info "Starting PostgreSQL $PG_VERSION..."
     pg_dropcluster --stop "$PG_VERSION" main 2>/dev/null || true
     pg_createcluster "$PG_VERSION" main 2>/dev/null || true
-
-    PG_LOG="$LOG_DIR/postgres.log"
-    touch "$PG_LOG" && chmod 666 "$PG_LOG"
-
-    info "Starting PostgreSQL $PG_VERSION..."
     pg_ctlcluster "$PG_VERSION" main start -- -l "$PG_LOG"
     sleep 3
 else
     skip "PostgreSQL already running"
 fi
-pg_isready || error "PostgreSQL failed to start. Check $LOG_DIR/postgres.log"
+pg_isready || error "PostgreSQL failed to start. Check: $PG_LOG"
 
-# Create database and user
+# Create DB/user
 DB_NAME="${POSTGRES_DB:-penallaw}"
 DB_USER="${POSTGRES_USER:-postgres}"
 DB_PASS="${POSTGRES_PASSWORD:-postgres}"
 
 su -c "cd /tmp && psql -c \"ALTER USER $DB_USER WITH PASSWORD '$DB_PASS';\"" postgres 2>/dev/null || true
-su -c "cd /tmp && createdb $DB_NAME" postgres 2>/dev/null || warn "Database '$DB_NAME' already exists."
+su -c "cd /tmp && createdb $DB_NAME" postgres 2>/dev/null || true   # silently fails if exists
 info "Database '$DB_NAME' ready."
 
-# ── Auto-restore latest backup (only if DB is empty) ─────────
+# Auto-restore backup if DB is empty
 BACKUP_DIR="$PROJECT_DIR/database/backups"
 TABLE_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM information_schema.tables WHERE table_schema='public';\"" postgres 2>/dev/null || echo "0")
 
 if [ "${TABLE_COUNT:-0}" -eq 0 ] && [ -d "$BACKUP_DIR" ]; then
-    # Prefer penallaw_combined_backup.sql (has laws + users/sessions).
-    # Fall back to latest penallaw_backup_*.sql if combined not present.
     if [ -f "$BACKUP_DIR/penallaw_combined_backup.sql" ]; then
         LATEST_BACKUP="$BACKUP_DIR/penallaw_combined_backup.sql"
-        info "Using combined backup (laws + chat data): penallaw_combined_backup.sql"
     else
         LATEST_BACKUP=$(ls -t "$BACKUP_DIR"/penallaw_backup_*.sql 2>/dev/null | head -1 || echo "")
     fi
@@ -161,103 +224,207 @@ if [ "${TABLE_COUNT:-0}" -eq 0 ] && [ -d "$BACKUP_DIR" ]; then
         info "DB is empty — restoring from: $(basename "$LATEST_BACKUP")..."
         su -c "cd /tmp && dropdb --if-exists $DB_NAME" postgres 2>/dev/null || true
         su -c "cd /tmp && createdb $DB_NAME" postgres 2>/dev/null || true
-
-        # Copy to /tmp so the postgres user can read it
         TEMP_BACKUP="/tmp/penallaw_restore_$$.sql"
         cp "$LATEST_BACKUP" "$TEMP_BACKUP"
         chmod 644 "$TEMP_BACKUP"
-
-        if su - postgres -c "psql $DB_NAME < \"$TEMP_BACKUP\" 2>&1" \
-            >> "$LOG_DIR/postgres.log" 2>&1; then
+        if su - postgres -c "psql $DB_NAME < \"$TEMP_BACKUP\" 2>&1" >> "$PG_LOG" 2>&1; then
             LAWS_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM laws;\"" postgres 2>/dev/null || echo "0")
-            info "✅ Database restored. Laws in DB: ${LAWS_COUNT:-0} articles"
+            info "✅ Database restored — laws: ${LAWS_COUNT:-0} articles"
         else
-            warn "⚠️  Restore had warnings — check $LOG_DIR/postgres.log"
+            warn "⚠️  Restore had warnings — check $PG_LOG"
         fi
         rm -f "$TEMP_BACKUP"
     else
-        info "No backup files found — starting with empty database."
+        info "No backup found — starting with empty database (Spring Boot will auto-create tables)."
     fi
 elif [ "${TABLE_COUNT:-0}" -gt 0 ]; then
     LAWS_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM laws;\"" postgres 2>/dev/null || echo "0")
     skip "DB already has $TABLE_COUNT tables (laws: ${LAWS_COUNT:-0}) — skipping restore."
 fi
 
-# ── 4. Check Milvus DB ───────�info "Starting AI service on port 8000..."
-cd "$PROJECT_DIR/ai-service"
+# Idempotent schema migration for sentencing_data column
+su - postgres -c "psql $DB_NAME -c \"ALTER TABLE IF EXISTS chat_messages ADD COLUMN IF NOT EXISTS sentencing_data TEXT;\"" 2>/dev/null || true
 
-# ── Find system Python (torch already pre-installed on this server) ──────────────
-# Skip venv and torch install since both are already available
-info "Detecting system Python with torch pre-installed..."
-
-AI_PYTHON=""
-# Try conda first (has torch pre-configured), then system Python
-for py in /opt/conda/bin/python3 /usr/bin/python3.11 /usr/bin/python3.10 /usr/bin/python3; do
-    if [ -x "$py" ]; then
-        if "$py" -c "import torch; import torch.cuda" 2>/dev/null; then
-            AI_PYTHON="$py"
-            TORCH_VER=$("$py" -c "import torch; print(torch.__version__)" 2>/dev/null)
-            CUDA_AVAIL=$("$py" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null)
-            info "✅ Python: $("$py" --version)  |  torch: $TORCH_VER  |  CUDA: $CUDA_AVAIL"
-            break
-        fi
-    fi
-done
-
-[ -z "$AI_PYTHON" ] && { echo "[ERR] No Python with torch found. Verify torch is installed on this server."; exit 1; }
-
-# ── Verify GPU is available ─────────────────────────────────────────────────────
-if ! "$AI_PYTHON" -c "import torch; assert torch.cuda.is_available(), 'CUDA not available'; print(f'GPU OK: {torch.cuda.get_device_name(0)}')" 2>/dev/null; then
-    error "ERROR: GPU/CUDA not available. Check: nvidia-smi and torch installation."
+# ── 4. Check Milvus DB (VN_law_lora.db) ──────────────────────
+MILVUS_DB="$PROJECT_DIR/ai-service/VN_law_lora.db"
+if [ -f "$MILVUS_DB" ]; then
+    MILVUS_SIZE=$(du -h "$MILVUS_DB" | cut -f1)
+    info "Milvus DB found: $MILVUS_DB ($MILVUS_SIZE)"
+else
+    warn "⚠️  Milvus DB not found at $MILVUS_DB"
+    warn "    Upload it with: scp VN_law_lora.db root@SERVER:$PROJECT_DIR/ai-service/"
+    warn "    AI service will start but retrieval will return no results."
 fi
 
-# ── Install missing AI service dependencies (except torch) ──────────────────────
-info "Installing AI service requirements (excluding torch)..."
-# milvus-lite's __init__.py imports pkg_resources (from setuptools) at module load
-# time. Install setuptools first to guarantee pkg_resources exists in the pip
-# environment before milvus-lite is imported.
+# ── 5. AI Service (FastAPI / uvicorn) ────────────────────────
+info "Preparing AI service..."
+cd "$PROJECT_DIR/ai-service"
+
+# Find Python with torch (prefer conda env which has GPU torch pre-installed)
+AI_PYTHON=""
+for py in /opt/conda/bin/python3 /usr/bin/python3.11 /usr/bin/python3.10 /usr/bin/python3; do
+    if [ -x "$py" ] && "$py" -c "import torch" 2>/dev/null; then
+        AI_PYTHON="$py"
+        TORCH_VER=$("$py" -c "import torch; print(torch.__version__)" 2>/dev/null)
+        CUDA_AVAIL=$("$py" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null)
+        info "Python: $("$py" --version)  |  torch: $TORCH_VER  |  CUDA: $CUDA_AVAIL"
+        break
+    fi
+done
+[ -z "$AI_PYTHON" ] && error "No Python with torch found. Ensure torch is installed (setup_server.sh)."
+
+# Ensure torch cu-tag matches the installed NVIDIA driver version.
+# cu124 requires driver ≥R550; cu121 requires R530; cu118 works from R520.
+# Using a cu tag NEWER than what the driver supports → CUDA unknown error (999).
+if command -v nvidia-smi &>/dev/null; then
+    _DRIVER_CUDA=$(nvidia-smi 2>/dev/null | grep -oP "CUDA Version:\s*\K[0-9]+" | head -1 || echo "0")
+    _TORCH_CU=$("$AI_PYTHON" -c "import torch; v=torch.__version__; print(v.split('+')[1] if '+' in v else 'cpu')" 2>/dev/null || echo "cpu")
+    info "  Driver CUDA cap: ${_DRIVER_CUDA}.x  |  torch cu-tag: $_TORCH_CU"
+
+    # Select the highest compatible cu tag for this driver.
+    # Use the driver *major version number* (e.g. 525, 550, 535) directly.
+    _DRV_MAJOR=$(nvidia-smi 2>/dev/null | grep -oP 'Driver Version: \K[0-9]+' | head -1 || echo "0")
+    if   [ "$_DRV_MAJOR" -ge 550 ]; then _NEED_CU="cu124"   # CUDA 12.4+ (RTX 40xx, A100 new)
+    elif [ "$_DRV_MAJOR" -ge 530 ]; then _NEED_CU="cu121"   # CUDA 12.1
+    else                                  _NEED_CU="cu118"; fi # CUDA 11.8 — works from R520
+    info "  Driver major: R${_DRV_MAJOR} → selecting $_NEED_CU"
+
+    if [ "$_TORCH_CU" != "$_NEED_CU" ] && [ "$_TORCH_CU" != "cpu" ]; then
+        info "  torch $_TORCH_CU is incompatible with R${_DRV_MAJOR} driver — reinstalling with $_NEED_CU..."
+        _TORCH_BASE=$("$AI_PYTHON" -c "import torch; print(torch.__version__.split('+')[0])" 2>/dev/null || echo "2.5.1")
+
+        # torchvision version formula: torch 2.5.x → 0.20.x, torch 2.4.x → 0.19.x
+        _calc_tv() {
+            python3 -c "p='$1'.split('.')[:2]; print(f'0.{int(p[0])*10+int(p[1])-5}.0')" 2>/dev/null || echo "0.20.0"
+        }
+
+        # Try the exact torch version first; if that fails (e.g. 2.5.x has no cu118 wheel),
+        # fall back to 2.4.1+cu118 which is the last cu118-compatible release.
+        _REINSTALL_OK=false
+        for _TBASE in "$_TORCH_BASE" "2.4.1"; do
+            _TVBASE=$(_calc_tv "$_TBASE")
+            info "  Trying torch==${_TBASE}+${_NEED_CU} torchvision==${_TVBASE}+${_NEED_CU}..."
+            if "$AI_PYTHON" -m pip install \
+                    "torch==${_TBASE}+${_NEED_CU}" \
+                    "torchvision==${_TVBASE}+${_NEED_CU}" \
+                    --index-url "https://download.pytorch.org/whl/${_NEED_CU}" \
+                    --quiet 2>&1 | tail -3; then
+                _REINSTALL_OK=true
+                info "  ✅ Reinstalled torch ${_TBASE}+${_NEED_CU}"
+                break
+            fi
+            warn "  torch ${_TBASE}+${_NEED_CU} unavailable — trying fallback..."
+        done
+        [ "$_REINSTALL_OK" = false ] && warn "  torch cu-tag reinstall failed — CUDA may not work (will run on CPU)."
+        TORCH_VER=$("$AI_PYTHON" -c "import torch; print(torch.__version__)" 2>/dev/null)
+        info "  torch after fix: $TORCH_VER"
+    fi
+fi
+
+# NEVER pip-upgrade torch here. Upgrading torch breaks torchvision (version coupling).
+if command -v nvidia-smi &>/dev/null; then
+    # Auto-fix: ensure /dev/nvidia-uvm exists.
+    # Without it, torch.cuda.is_available() = False (CUDA error 999) even when
+    # nvidia-smi and /dev/nvidia0 are present.
+    if [ ! -e /dev/nvidia-uvm ]; then
+        info "  /dev/nvidia-uvm missing — attempting fix..."
+
+        # Strategy 1: modprobe (works on bare metal, fails in containers)
+        if modprobe nvidia-uvm 2>/dev/null; then
+            info "  ✅ nvidia-uvm loaded via modprobe."
+            grep -qxF "nvidia-uvm" /etc/modules 2>/dev/null || echo "nvidia-uvm" >> /etc/modules
+
+        # Strategy 2: mknod (works in containers/LXC where modprobe is blocked,
+        # as long as the host kernel already has the nvidia-uvm module loaded)
+        elif _UVM_MAJOR=$(awk '/nvidia-uvm/{print $1}' /proc/devices 2>/dev/null) && [ -n "$_UVM_MAJOR" ]; then
+            info "  modprobe blocked (container) — creating device nodes via mknod (major=$_UVM_MAJOR)..."
+            mknod /dev/nvidia-uvm       c "$_UVM_MAJOR" 0 2>/dev/null && \
+            mknod /dev/nvidia-uvm-tools c "$_UVM_MAJOR" 1 2>/dev/null || true
+            chmod 666 /dev/nvidia-uvm /dev/nvidia-uvm-tools 2>/dev/null || true
+            [ -e /dev/nvidia-uvm ] && info "  ✅ /dev/nvidia-uvm created via mknod." || \
+                warn "  mknod failed — CUDA may not work."
+
+        else
+            warn "  Both modprobe and mknod failed. nvidia-uvm not in /proc/devices."
+            warn "  The host kernel may not have the GPU driver loaded."
+        fi
+    fi
+
+    _TORCH_CUDA=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
+    if [ "$_TORCH_CUDA" = "True" ]; then
+        _GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || echo "unknown")
+        info "✅ GPU ready: $_GPU_NAME | torch CUDA: True"
+    else
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        warn "GPU detected but CUDA unavailable — falling back to CPU."
+        warn "This is likely a cloud provider issue (nvidia-uvm not in /proc/devices)."
+        warn "Contact your provider to enable CUDA compute access on this instance."
+        warn "The AI service will run on CPU (slower but fully functional)."
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    fi
+else
+    warn "nvidia-smi not found — deploying in CPU-only mode."
+fi
+
+# Install AI service deps (excluding torch to avoid downgrading conda's GPU torch)
+info "Installing AI service requirements..."
+
+# Record CUDA state BEFORE pip install — needed to detect if pip downgraded torch.
+_TORCH_CUDA_BEFORE=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
+
 "$AI_PYTHON" -m pip install "setuptools>=70.0" --quiet 2>&1 | tail -2 || true
-# Filter out torch from requirements to avoid reinstall/downgrade of the
-# conda GPU torch (2.2.1 with CUDA). Without --upgrade, pip will only
-# install/upgrade packages that don't already satisfy the pinned constraints,
-# so torch is never touched.
 grep -v "^torch" "$PROJECT_DIR/ai-service/requirements.txt" > /tmp/requirements_notorch.txt
 "$AI_PYTHON" -m pip install --quiet -r /tmp/requirements_notorch.txt 2>&1 | tail -5 || \
-    { echo "[ERR] Failed to install AI dependencies"; exit 1; }
-# Force-upgrade milvus-lite + pymilvus to ensure we get a version that uses
-# importlib.metadata instead of pkg_resources (fixed in milvus-lite>=2.4.9).
-# This targeted upgrade is safe — neither package declares torch as a dependency.
-"$AI_PYTHON" -m pip install "milvus-lite>=2.4.9" "pymilvus>=2.4.0" --upgrade --quiet 2>&1 | tail -2 || true
-info "AI service dependencies ready."
+    error "Failed to install AI dependencies. Check pip output above."
 
-# ── Verify critical imports BEFORE launching (fail fast) ──────────────────────
+# Upgrade milvus-lite + pymilvus (pkg_resources fix)
+"$AI_PYTHON" -m pip install "milvus-lite>=2.4.9" "pymilvus>=2.4.0" \
+    --upgrade --quiet 2>&1 | tail -2 || true
+
+# Install FlagEmbedding (required by bge-reranker-v2-m3)
+"$AI_PYTHON" -m pip install "FlagEmbedding>=1.2.0" --quiet 2>&1 | tail -2 || true
+
+# Verify torch CUDA state AFTER all installs.
+# Only fail if CUDA was working BEFORE pip but is now broken (pip downgraded torch).
+# If CUDA was already False before pip (e.g. driver/container issue), that is NOT pip's fault.
+_TORCH_CUDA_AFTER=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
+if command -v nvidia-smi &>/dev/null; then
+    if [ "$_TORCH_CUDA_BEFORE" = "True" ] && [ "$_TORCH_CUDA_AFTER" = "False" ]; then
+        error "pip install downgraded CUDA torch! A package (e.g. sentence-transformers) pulled in a CPU torch. Fix: reinstall torch with the correct cu-tag after all other deps."
+    elif [ "$_TORCH_CUDA_AFTER" = "False" ]; then
+        warn "CUDA still unavailable after pip install (was also unavailable before — driver/container issue, not caused by pip). Continuing with CPU."
+    fi
+fi
+
+info "AI service requirements installed."
+
+# Verify critical imports before launching (fail fast, not at first request)
 info "Verifying critical imports..."
 "$AI_PYTHON" -c "
 import torch
-assert torch.version.cuda, 'torch has no CUDA build'
 from peft import PeftModel
 from transformers import AutoModel, AutoTokenizer
-import peft, transformers, uvicorn, fastapi
+from sentence_transformers import CrossEncoder
+import peft, transformers, uvicorn, fastapi, langchain_openai, langgraph
 print(f'✅ All imports OK | torch={torch.__version__} | peft={peft.__version__} | transformers={transformers.__version__}')
-" || { echo "[ERR] Import verification FAILED"; exit 1; }
+" || error "Import verification FAILED — check pip installation above."
 
-# Write .env for ai-service
+# Write .env for ai-service (credentials + infrastructure only)
+# AI service config (model names, TOP_K, FORCE_CPU, etc.) are set as
+# defaults in ai-service/app/main.py — no need to pass them via .env.
 cat > .env <<EOF
 OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
 HF_TOKEN=${HF_TOKEN:-}
 POSTGRES_HOST=127.0.0.1
 POSTGRES_PORT=5432
-POSTGRES_DB=${POSTGRES_DB:-penallaw}
-POSTGRES_USER=${POSTGRES_USER:-postgres}
-POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+POSTGRES_DB=${DB_NAME}
+POSTGRES_USER=${DB_USER}
+POSTGRES_PASSWORD=${DB_PASS}
 MILVUS_DB_PATH=${PROJECT_DIR}/ai-service/VN_law_lora.db
-COLLECTION_NAME=legal_rag_lora
-LLM_MODEL=${LLM_MODEL:-google/gemini-2.5-flash}
-TOP_K=15
-EMBEDDING_ADAPTER=trunghieu1206/lawchatbot-40k
-FORCE_CPU=${FORCE_CPU:-0}
 EOF
 
+# Kill any existing AI service process
 pkill -f "uvicorn app.main:app" 2>/dev/null || true
 sleep 1
 unset MILVUS_URI 2>/dev/null || true
@@ -267,76 +434,95 @@ nohup "$AI_PYTHON" -m uvicorn app.main:app \
     --port 8000 \
     --workers 1 \
     > "$LOG_DIR/ai-service.log" 2>&1 &
-info "AI service started (PID $!, Python: $AI_PYTHON). Log: $LOG_DIR/ai-service.log"
+AI_PID=$!
+info "AI service started (PID $AI_PID). Log: $LOG_DIR/ai-service.log"
 
-# ── 6. Backend (Spring Boot) ─────────────────────────────────
+# ── 6. Backend (Spring Boot) ──────────────────────────────────
+info "Building Spring Boot backend..."
 cd "$PROJECT_DIR/backend"
 
-# Check if JAR is already up-to-date (skip rebuild if nothing changed)
-LATEST_JAR=$(ls -t target/*.jar 2>/dev/null | head -1 || true)
-POM_CHANGED=false
+# Only rebuild if source/pom changed since last JAR
+LATEST_JAR=$(ls -t target/*.jar 2>/dev/null | head -1 || echo "")
+NEED_BUILD=true
 if [ -n "$LATEST_JAR" ]; then
-    # Rebuild only if pom.xml or any source file is newer than the JAR
-    if find src -newer "$LATEST_JAR" -name "*.java" 2>/dev/null | grep -q .; then
-        POM_CHANGED=true
-    elif [ pom.xml -nt "$LATEST_JAR" ]; then
-        POM_CHANGED=true
+    if ! find src -newer "$LATEST_JAR" -name "*.java" 2>/dev/null | grep -q . && \
+       ! [ pom.xml -nt "$LATEST_JAR" ]; then
+        NEED_BUILD=false
     fi
 fi
 
-if [ -z "$LATEST_JAR" ] || [ "$POM_CHANGED" = true ]; then
-    info "Building Spring Boot backend (Maven)..."
-    # Use --offline on re-deploys (after first setup_server.sh warm-up)
-    # First build might need repos, but -q suppresses verbose output
-    mvn package -DskipTests -o -q 2>&1 | tail -3 || \
-        mvn package -DskipTests -q 2>&1 | tail -3
-    LATEST_JAR=$(ls -t target/*.jar | head -1)
+if [ "$NEED_BUILD" = true ]; then
+    info "Running Maven build (-DskipTests)..."
+    MVN_LOG="$LOG_DIR/maven_build.log"
+
+    # Pipe to tee so output appears live AND gets saved.
+    # Use PIPESTATUS[0] to capture mvn's exit code (not tee's).
+    mvn package -DskipTests 2>&1 | tee "$MVN_LOG"
+    MVN_EXIT=${PIPESTATUS[0]}
+
+    if [ "$MVN_EXIT" -ne 0 ]; then
+        echo ""
+        echo "━━━ Maven build FAILED — last 30 lines of $MVN_LOG ━━━"
+        tail -30 "$MVN_LOG"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        error "Maven build failed. Full log: $MVN_LOG"
+    fi
+
+    LATEST_JAR=$(ls -t target/*.jar 2>/dev/null | head -1 || echo "")
+    if [ -z "$LATEST_JAR" ]; then
+        tail -20 "$MVN_LOG"
+        error "Maven succeeded but no JAR found in target/. See log above."
+    fi
     info "✅ Build complete: $(basename "$LATEST_JAR")"
 else
-    skip "JAR is up-to-date ($(basename "$LATEST_JAR")) — skipping Maven build"
+    skip "JAR up-to-date ($(basename "$LATEST_JAR")) — skipping Maven build"
 fi
 
-export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))) 2>/dev/null || echo "")
-export SPRING_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:5432/${POSTGRES_DB:-penallaw}"
-export SPRING_DATASOURCE_USERNAME="${POSTGRES_USER:-postgres}"
-export SPRING_DATASOURCE_PASSWORD="${POSTGRES_PASSWORD:-postgres}"
-export JWT_SECRET="${JWT_SECRET:-changeme}"
+export SPRING_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:5432/${DB_NAME}"
+export SPRING_DATASOURCE_USERNAME="${DB_USER}"
+export SPRING_DATASOURCE_PASSWORD="${DB_PASS}"
+export JWT_SECRET="${JWT_SECRET}"
 export AI_SERVICE_URL="http://localhost:8000"
 
 pkill -f "java.*penallaw" 2>/dev/null || pkill -f "java.*backend" 2>/dev/null || true
 sleep 1
 
-nohup java -jar "$LATEST_JAR" \
+nohup java \
+    -Xmx512m \
+    -jar "$LATEST_JAR" \
     --server.port=8080 \
     --spring.datasource.url="$SPRING_DATASOURCE_URL" \
     --spring.datasource.username="$SPRING_DATASOURCE_USERNAME" \
     --spring.datasource.password="$SPRING_DATASOURCE_PASSWORD" \
     --jwt.secret="$JWT_SECRET" \
     --ai-service.base-url="$AI_SERVICE_URL" \
+    --ai-service.timeout-seconds=600 \
     > "$LOG_DIR/backend.log" 2>&1 &
-info "Backend started (PID $!). Log: $LOG_DIR/backend.log"
+BACKEND_PID=$!
+info "Backend started (PID $BACKEND_PID). Log: $LOG_DIR/backend.log"
 
-# ── 7. Frontend (Nginx static) ───────────────────────────────
+# ── 7. Frontend (Nginx static) ────────────────────────────────
+info "Building frontend..."
 cd "$PROJECT_DIR/frontend"
 
-# Skip npm install if node_modules is fresh
-if [ ! -d node_modules ] || [ package.json -nt node_modules/.package-lock.json ]; then
+# npm install only if package.json changed or node_modules missing
+if [ ! -d node_modules ] || [ package.json -nt node_modules/.package-lock.json ] 2>/dev/null; then
     info "Running npm install..."
     npm install --prefer-offline --silent
 else
-    skip "node_modules up-to-date — skipping npm install"
+    skip "node_modules up-to-date"
 fi
 
-# Skip build if dist is already newer than source
+# Rebuild only if src changed since last dist build
 if [ ! -d dist ] || find src -newer dist/index.html 2>/dev/null | grep -q .; then
-    info "Building frontend..."
+    info "Building frontend bundle..."
     npm run build --silent
     info "Frontend built."
 else
-    skip "Frontend dist is up-to-date — skipping rebuild"
+    skip "frontend dist is up-to-date"
 fi
 
-# Configure nginx
+# nginx config
 cat > /etc/nginx/sites-available/penallaw <<'NGINX'
 server {
     listen 80;
@@ -344,65 +530,93 @@ server {
     root /root/PenalLawChatbot/frontend/dist;
     index index.html;
 
+    # SPA fallback
     location / {
         try_files $uri $uri/ /index.html;
     }
 
-    # Proxy /ai-api → FastAPI (AI service)
+    # Proxy /ai-api → FastAPI (AI service, port 8000)
     location /ai-api/ {
         proxy_pass http://127.0.0.1:8000/;
-        proxy_read_timeout 180s;
-        proxy_send_timeout 180s;
+        proxy_read_timeout 660s;
+        proxy_send_timeout 660s;
+        proxy_connect_timeout 10s;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 
-    # Proxy /api → Spring Boot backend
+    # Proxy /api → Spring Boot backend (port 8080)
     location /api/ {
         proxy_pass http://127.0.0.1:8080;
-        proxy_read_timeout 180s;
-        proxy_send_timeout 180s;
+        proxy_read_timeout 660s;
+        proxy_send_timeout 660s;
+        proxy_connect_timeout 10s;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 }
 NGINX
 
-# Fix permissions — nginx (www-data) can't enter /root by default
+# nginx needs read access to /root
 chmod 755 /root
 chmod -R 755 "$PROJECT_DIR/frontend/dist/"
 
 ln -sf /etc/nginx/sites-available/penallaw /etc/nginx/sites-enabled/penallaw
 rm -f /etc/nginx/sites-enabled/default
-nginx -t 2>&1 | tail -3   # validate config first
+nginx -t 2>&1 | tail -3
 
 pkill nginx 2>/dev/null || true
 sleep 1
 nginx
-info "Nginx started."
+info "nginx started."
 
-# ── 8. Health checks ─────────────────────────────────────────
-info "Waiting 15s for services to initialize..."
-sleep 15
-
-check() {
-    local name=$1 url=$2
-    if curl -sf --max-time 5 "$url" > /dev/null 2>&1; then
-        info "  ✅ $name is up"
-    else
-        warn "  ⚠️  $name not responding yet — check logs in $LOG_DIR/"
+# ── 8. Health checks ──────────────────────────────────────────
+echo ""
+info "Waiting for AI service to be ready (up to 300s — first run downloads/loads models; CPU is slower)..."
+_ai_ready=false
+for _i in $(seq 1 60); do   # 60 × 5s = 300s
+    if curl -sf --max-time 5 "http://localhost:8000/health" > /dev/null 2>&1; then
+        info "  ✅ AI Service is up (after $((_i * 5))s)"
+        _ai_ready=true
+        break
     fi
-}
+    sleep 5
+done
+[ "$_ai_ready" = false ] && warn "  ⚠️  AI Service not ready after 180s — check $LOG_DIR/ai-service.log"
 
-check "AI Service"  "http://localhost:8000/health"
-check "Backend"     "http://localhost:8080/actuator/health"
-check "Frontend"    "http://localhost:80"
+info "Waiting for Backend to be ready (up to 60s)..."
+_be_ready=false
+for _i in $(seq 1 12); do   # 12 × 5s = 60s
+    if curl -sf --max-time 5 "http://localhost:8080/actuator/health" > /dev/null 2>&1; then
+        info "  ✅ Backend is up (after $((_i * 5))s)"
+        _be_ready=true
+        break
+    fi
+    sleep 5
+done
+[ "$_be_ready" = false ] && warn "  ⚠️  Backend not ready after 60s — check $LOG_DIR/backend.log"
+
+if curl -sf --max-time 5 "http://localhost:80" > /dev/null 2>&1; then
+    info "  ✅ Frontend (nginx) is up"
+else
+    warn "  ⚠️  Frontend not responding — check nginx logs"
+fi
 
 echo ""
-info "=============================================="
-info "✅  Deployed (bare-metal, no Docker)"
-info "=============================================="
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+info "✅  Deploy complete (bare-metal, no Docker)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
 info "Logs:"
-info "  tail -f $LOG_DIR/ai-service.log"
-info "  tail -f $LOG_DIR/backend.log"
-info "  tail -f $LOG_DIR/postgres.log"
+info "  AI service : tail -f $LOG_DIR/ai-service.log"
+info "  Backend    : tail -f $LOG_DIR/backend.log"
+info "  PostgreSQL : tail -f $LOG_DIR/postgres.log"
+info "  nginx      : tail -f /var/log/nginx/error.log"
+echo ""
+info "Restart tips:"
+info "  AI service : pkill -f uvicorn; cd $PROJECT_DIR/ai-service && nohup $AI_PYTHON -m uvicorn app.main:app --host 0.0.0.0 --port 8000 >> $LOG_DIR/ai-service.log 2>&1 &"
+info "  Backend    : pkill -f java; nohup java -jar $PROJECT_DIR/backend/target/*.jar --server.port=8080 >> $LOG_DIR/backend.log 2>&1 &"
+info "  nginx      : pkill nginx; nginx"
+echo ""

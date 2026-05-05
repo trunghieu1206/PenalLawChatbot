@@ -24,6 +24,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import org.springframework.http.HttpMethod;
 import java.util.List;
 
 @Configuration
@@ -48,9 +49,12 @@ public class SecurityConfig {
                                 "/api/chat/sessions/*/messages", // send & get messages (session-id gated)
                                 "/api/chat/sessions/*",         // delete session
                                 "/api/laws/**",                 // law reference sidebar — public read
+                                "/api/stats",                   // public system statistics
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()
+                        // Users (incl. guests) may POST feedback; admin reads all feedback
+                        .requestMatchers(HttpMethod.POST, "/api/admin/feedback").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )

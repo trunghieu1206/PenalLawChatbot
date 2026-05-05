@@ -1,12 +1,15 @@
 # open following ports on server
 22,80,8000,8080,7681
 
-# upload the setup scripts and DB backup to server
-scp -P 1552 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@n3.ckey.vn:/root/
+# ── Step 1: upload scripts + .env template + DB backup ───────────────────────
+# Run these from your LOCAL machine (inside PenalLawChatbot/ directory):
+scp -P 10000 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@74.81.39.6:/root/
+scp -P 10000 .env.example root@74.81.39.6:/root/.env.example
 
-ssh -p 1552 root@n3.ckey.vn "mkdir -p ~/PenalLawChatbot/database/backups"
-scp -P 1552 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_combined_backup.sql \
-    root@n3.ckey.vn:~/PenalLawChatbot/database/backups/
+# Create backup dir and upload DB backup (mkdir needed before clone runs)
+ssh -p 10000 root@74.81.39.6 "mkdir -p ~/PenalLawChatbot/database/backups"
+scp -P 10000 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_combined_backup.sql \
+    root@74.81.39.6:~/PenalLawChatbot/database/backups/
 
 # run the installer 
 chmod +x setup_server.sh deploy.sh

@@ -1,11 +1,14 @@
-#!/bin/bash
-
-# Database Restore Script (Auto-Latest Backup)
-# Restores PostgreSQL database from the latest .sql backup file.
-# Can be run BEFORE deploy_nodocker.sh for clean fresh deployments,
-# or AFTER for manual database resets.
+#!/usr/bin/env bash
+# =============================================================
+# restore_database.sh
+# Restores PostgreSQL database from the latest .sql backup.
+#
+# Can be run BEFORE or AFTER deploy_nodocker.sh.
 # Works without Docker on containerized/bare-metal deployments.
-
+#
+# Usage:
+#   bash restore_database.sh
+# =============================================================
 set -euo pipefail
 
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
@@ -14,31 +17,42 @@ warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 skip()  { echo -e "${YELLOW}[SKIP]${NC}  $*"; }
 error() { echo -e "${RED}[ERR]${NC}   $*"; exit 1; }
 
-# Configuration
+# ── Configuration ────────────────────────────────────────────
 PROJECT_DIR="${PENALLAW_DIR:-/root/PenalLawChatbot}"
 BACKUP_DIR="$PROJECT_DIR/database/backups"
 DB_NAME="${POSTGRES_DB:-penallaw}"
 DB_USER="${POSTGRES_USER:-postgres}"
 DB_PASS="${POSTGRES_PASSWORD:-postgres}"
+
+# Load .env if available (overrides defaults above)
+if [ -f "$PROJECT_DIR/.env" ]; then
+    set -o allexport
+    # shellcheck disable=SC1090
+    source "$PROJECT_DIR/.env"
+    set +o allexport
+    info "Loaded .env from $PROJECT_DIR"
+fi
+
 LOG_DIR="/var/log/penallaw"
 mkdir -p "$LOG_DIR"
 chmod 777 "$LOG_DIR" 2>/dev/null || true
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🔄  Database Restore (Latest Backup)"
+echo "🔄  Database Restore"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# Find the latest backup file
+# ── Find backup file ─────────────────────────────────────────
 if [ ! -d "$BACKUP_DIR" ]; then
-    error "Backup directory not found: $BACKUP_DIR"
+    error "Backup directory not found: $BACKUP_DIR
+    Upload your backup with:
+      scp ./database/backups/penallaw_combined_backup.sql root@SERVER:$BACKUP_DIR/"
 fi
 
 info "Looking for backups in: $BACKUP_DIR"
 
-# Prefer the combined backup (contains laws + users/sessions data).
-# Fall back to any penallaw_backup_*.sql if combined does not exist.
+# Prefer combined backup (laws + users/sessions), fall back to timestamped backup
 if [ -f "$BACKUP_DIR/penallaw_combined_backup.sql" ]; then
     BACKUP_FILE="$BACKUP_DIR/penallaw_combined_backup.sql"
     info "Found combined backup (laws + chat data): penallaw_combined_backup.sql"
@@ -47,155 +61,125 @@ else
 fi
 
 if [ -z "$BACKUP_FILE" ] || [ ! -f "$BACKUP_FILE" ]; then
-    error "No backup files found in $BACKUP_DIR"
+    error "No backup files found in $BACKUP_DIR
+    Expected: penallaw_combined_backup.sql  or  penallaw_backup_*.sql"
 fi
 
 BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
-# stat syntax differs between macOS (-f) and Linux (-c) — use GNU/Linux form
 BACKUP_TIME=$(stat -c '%y' "$BACKUP_FILE" 2>/dev/null | cut -d. -f1 || echo "unknown")
-
-info "Latest backup: $(basename "$BACKUP_FILE")"
-echo "   Size: $BACKUP_SIZE | Modified: $BACKUP_TIME"
+info "Backup file: $(basename "$BACKUP_FILE")  ($BACKUP_SIZE | $BACKUP_TIME)"
 echo ""
 
-# ── Ensure backup file is readable ─────────────────────────────
-info "Setting permissions on backup file..."
-chmod 644 "$BACKUP_FILE" 2>/dev/null || true
-ls -lh "$BACKUP_FILE" | awk '{print "   Permissions: " $1 " | Owner: " $3 ":" $4 " | Size: " $5}'
-
-# ── Ensure PostgreSQL is installed and started ────────────────
+# ── Ensure PostgreSQL is installed and running ────────────────
 info "Ensuring PostgreSQL is installed..."
 if ! command -v psql &>/dev/null; then
     info "PostgreSQL not found — installing..."
     DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 || true
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         postgresql postgresql-contrib libpq-dev >/dev/null 2>&1 || \
-        { error "Failed to install PostgreSQL"; }
+        error "Failed to install PostgreSQL"
     info "PostgreSQL installed: $(psql --version)"
 else
     skip "PostgreSQL: $(psql --version)"
 fi
 
-info "Starting PostgreSQL (if needed)..."
+info "Starting PostgreSQL if needed..."
 PG_VERSION=$(ls /etc/postgresql/ 2>/dev/null | sort -V | tail -1 || echo "")
 if [ -z "$PG_VERSION" ]; then
-    error "PostgreSQL version directory not found in /etc/postgresql/"
+    error "PostgreSQL config directory not found. Installation may have failed."
 fi
 
 if ! pg_isready -q 2>/dev/null; then
     warn "PostgreSQL not running — starting..."
     pg_dropcluster --stop "$PG_VERSION" main 2>/dev/null || true
     pg_createcluster "$PG_VERSION" main 2>/dev/null || true
-    
-    # Use /tmp for log to avoid permission issues with /var/log/penallaw
-    PG_LOG="/tmp/postgresql_restore_$$.log"
-    
-    pg_ctlcluster "$PG_VERSION" main start -- -l "$PG_LOG" 2>&1 || {
-        warn "pg_ctlcluster reported an error, but PostgreSQL may still be starting..."
-        sleep 5
-    }
-    sleep 3
-    
-    if ! pg_isready -q 2>/dev/null; then
-        warn "PostgreSQL startup returned, but pg_isready not responding yet. Waiting a bit more..."
-        sleep 3
-    fi
+    pg_ctlcluster "$PG_VERSION" main start -- -l "/tmp/pg_restore_$$.log" 2>&1 || true
+    sleep 5
 fi
 
-if pg_isready -q 2>/dev/null; then
-    info "PostgreSQL is running"
-else
-    error "PostgreSQL still not responding after startup. Check logs or try: systemctl status postgresql"
+# Final readiness check
+if ! pg_isready -q 2>/dev/null; then
+    error "PostgreSQL still not responding after startup. Check: pg_ctlcluster $PG_VERSION main status"
 fi
+info "PostgreSQL is running."
 echo ""
 
-# ── Check database status ────────────────────────────────────
-info "Checking if database '$DB_NAME' exists..."
-DB_EXISTS=$(su -c "cd /tmp && psql -tAc \"SELECT 1 FROM pg_database WHERE datname='$DB_NAME';\"" postgres 2>/dev/null || echo "")
-
-if [ -n "$DB_EXISTS" ]; then
-    # Database exists — check if it has tables
-    TABLE_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM information_schema.tables WHERE table_schema='public';\"" postgres 2>/dev/null || echo "0")
-    
-    if [ "${TABLE_COUNT:-0}" -gt 0 ]; then
-        warn "Database '$DB_NAME' already exists with $TABLE_COUNT tables"
-        echo ""
-        echo "⚠️   WARNING: Restoring will DROP and recreate the database!"
-        echo "     All current data in '$DB_NAME' will be LOST."
-        echo ""
-        echo "     Press Ctrl+C to cancel, or enter 'yes' to continue:"
-        read -r -t 30 confirm || confirm="no"
-        
-        if [ "$confirm" != "yes" ]; then
-            warn "Restore cancelled by user"
-            exit 0
-        fi
-        
-        info "Dropping existing database..."
-        su -c "cd /tmp && dropdb --if-exists $DB_NAME" postgres 2>/dev/null || true
-    else
-        warn "Database exists but is empty"
-    fi
-else
-    info "Database does not exist yet"
-fi
-
-echo ""
-
-# Create fresh database
-info "Creating database '$DB_NAME'..."
-su - postgres -c "psql -c \"DROP DATABASE IF EXISTS $DB_NAME;\"" 2>/dev/null || true
-su - postgres -c "psql -c \"CREATE DATABASE $DB_NAME;\"" 2>/dev/null || true
-
-# Set password
-info "Setting password for user '$DB_USER'..."
+# Set password for postgres user
 su - postgres -c "psql -c \"ALTER USER $DB_USER WITH PASSWORD '$DB_PASS';\"" 2>/dev/null || true
 
+# ── Check current database state ─────────────────────────────
+info "Checking if database '$DB_NAME' exists..."
+DB_EXISTS=$(su -c "cd /tmp && psql -tAc \"SELECT 1 FROM pg_database WHERE datname='$DB_NAME';\"" postgres 2>/dev/null || echo "")
+TABLE_COUNT=0
+
+if [ -n "$DB_EXISTS" ]; then
+    TABLE_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM information_schema.tables WHERE table_schema='public';\"" postgres 2>/dev/null || echo "0")
+    if [ "${TABLE_COUNT:-0}" -gt 0 ]; then
+        LAWS_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM laws;\"" postgres 2>/dev/null || echo "0")
+        warn "Database '$DB_NAME' already has $TABLE_COUNT tables (laws: ${LAWS_COUNT:-0})."
+        echo ""
+        echo "⚠️  Restoring will DROP and recreate the entire database!"
+        echo "   All current data in '$DB_NAME' will be LOST."
+        echo ""
+        echo "   Type 'yes' to continue, or Ctrl+C to cancel:"
+        read -r -t 30 confirm || confirm="no"
+        if [ "$confirm" != "yes" ]; then
+            warn "Restore cancelled."
+            exit 0
+        fi
+    fi
+fi
+
+# ── Drop & recreate database ──────────────────────────────────
+info "Dropping and recreating database '$DB_NAME'..."
+su - postgres -c "psql -c \"DROP DATABASE IF EXISTS $DB_NAME;\"" 2>/dev/null || true
+su - postgres -c "psql -c \"CREATE DATABASE $DB_NAME;\"" 2>/dev/null || true
+info "Database '$DB_NAME' created."
 echo ""
-info "Importing backup file (this may take a few moments)..."
+
+# ── Restore from backup ───────────────────────────────────────
+info "Importing $(basename "$BACKUP_FILE") ($BACKUP_SIZE)..."
 START_TIME=$(date +%s)
 
-# Copy backup to postgres temp location and restore from there
-TEMP_BACKUP="/tmp/penallaw_backup_temp_$$.sql"
-cp "$BACKUP_FILE" "$TEMP_BACKUP" 2>/dev/null || true
-chmod 644 "$TEMP_BACKUP" 2>/dev/null || true
+TEMP_BACKUP="/tmp/penallaw_restore_$$.sql"
+cp "$BACKUP_FILE" "$TEMP_BACKUP"
+chmod 644 "$TEMP_BACKUP"
 
-# Perform the restore with proper postgres user context
-if su - postgres -c "psql $DB_NAME < \"$TEMP_BACKUP\" 2>&1" \
-    > "/tmp/restore_$$.log" 2>&1; then
+RESTORE_LOG="/tmp/penallaw_restore_log_$$.txt"
+if su - postgres -c "psql $DB_NAME < \"$TEMP_BACKUP\" 2>&1" > "$RESTORE_LOG" 2>&1; then
     END_TIME=$(date +%s)
     DURATION=$((END_TIME - START_TIME))
 
-    # Verify the restore actually produced tables
-    RESTORED_TABLES=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM information_schema.tables WHERE table_schema='public';\"" postgres 2>/dev/null || echo "0")
+    RESTORED_TABLES=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM information_schema.tables WHERE table_schema='public';\"" postgres 2>/dev/null || echo "?")
     LAWS_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM laws;\"" postgres 2>/dev/null || echo "0")
 
-    info "✅ Restore completed successfully"
+    info "✅ Restore completed in ${DURATION}s"
     echo ""
-    echo "  Database:  $DB_NAME"
-    echo "  Source:    $(basename "$BACKUP_FILE")"
-    echo "  Size:      $BACKUP_SIZE"
-    echo "  Time:      ${DURATION}s"
-    echo "  Tables:    ${RESTORED_TABLES:-?}"
-    echo "  Laws:      ${LAWS_COUNT:-?} articles"
+    echo "  Database : $DB_NAME"
+    echo "  Source   : $(basename "$BACKUP_FILE")"
+    echo "  Size     : $BACKUP_SIZE"
+    echo "  Tables   : ${RESTORED_TABLES:-?}"
+    echo "  Laws     : ${LAWS_COUNT:-?} articles"
 else
-    # Check what went wrong
-    RESTORE_LOG=$(cat "/tmp/restore_$$.log" 2>/dev/null || echo "No log found")
-    if echo "$RESTORE_LOG" | grep -q "error"; then
-        error "Restore failed: $(echo "$RESTORE_LOG" | grep error | head -1)"
-    else
-        warn "Restore completed with warnings or output"
-    fi
+    RESTORE_ERR=$(grep -i "error" "$RESTORE_LOG" 2>/dev/null | head -3 || echo "See $RESTORE_LOG")
+    rm -f "$TEMP_BACKUP" "$RESTORE_LOG"
+    error "Restore failed: $RESTORE_ERR"
 fi
 
-# Cleanup temp backup
-rm -f "$TEMP_BACKUP"
+rm -f "$TEMP_BACKUP" "$RESTORE_LOG"
+
+# ── Apply missing columns from recent migrations ──────────────
+# sentencing_data column added in Tri-Path RAG refactor.
+# Hibernate ddl-auto=update will handle this automatically on backend start,
+# but we run it here too so manual psql checks don't fail.
+info "Ensuring schema is up to date (idempotent ALTER TABLE)..."
+su - postgres -c "psql $DB_NAME -c \"ALTER TABLE IF EXISTS chat_messages ADD COLUMN IF NOT EXISTS sentencing_data TEXT;\"" 2>/dev/null || true
+info "Schema check done."
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "✅  Database Ready!"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "Next steps:"
-echo "  1. Run: bash deploy_nodocker.sh"
+echo "Next step:  bash deploy_nodocker.sh"
 echo ""

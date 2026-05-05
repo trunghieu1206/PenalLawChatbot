@@ -241,3 +241,91 @@ setuptools>=70.0
 3. **Always verify torch CUDA** after any pip install session: `/opt/conda/bin/python3 -c "import torch; print(torch.cuda.is_available())"` — must return `True`.
 4. **The AI service startup takes 3–5 minutes** (loading BGE-M3 + LoRA adapter merge). The 15s health check in deploy will always warn — wait and check the log manually.
 5. **Check versions in the log** — the deploy script now prints: `✅ All imports OK | torch=X | peft=X | transformers=X`. Use this to diagnose version mismatches instantly.
+6. **`/dev/nvidia-uvm` must exist** for CUDA to work. See Error 6 below.
+
+---
+
+## Error 6 — `torch.cuda.is_available()` = False Despite `nvidia-smi` Working
+
+### Symptom
+```
+CUDA initialization: CUDA unknown error - this may be due to an incorrectly set up environment,
+e.g. changing env variable CUDA_VISIBLE_DEVICES after program start.
+Setting the available devices to be zero.
+```
+`torch.cuda.is_available()` returns `False`. The deploy script prints:
+```
+[GPU REQUIRED] nvidia-smi is present but torch.cuda.is_available() = False
+```
+`/dev/nvidia0` and `/dev/nvidiactl` exist, but **`/dev/nvidia-uvm` is missing**.
+
+### Root Cause
+PyTorch's CUDA context initialization requires the **`nvidia-uvm`** kernel module (unified memory). On many cloud/VPS instances, this module is not loaded at boot even though the main `nvidia` module and `nvidia-smi` work fine. Without `/dev/nvidia-uvm`, every `torch.cuda.is_available()` call fails with CUDA error 999 (`cudaErrorUnknown`).
+
+This is **not** a pip/torch version problem. Do NOT reinstall torch — it will create a torchvision conflict (see Error 7).
+
+### Diagnosis
+```bash
+ls -la /dev/nvidia*   # nvidia-uvm will be absent
+```
+
+### Fix — Bare Metal
+```bash
+modprobe nvidia-uvm
+grep -qxF "nvidia-uvm" /etc/modules || echo "nvidia-uvm" >> /etc/modules
+```
+
+### Fix — Containerized / LXC (modprobe blocked)
+In container environments, `modprobe` is blocked. The nvidia-uvm module is already loaded on the HOST — you just need to create the device file using `mknod`:
+```bash
+# Find the major number registered by the host kernel
+awk '/nvidia-uvm/{print $1}' /proc/devices
+
+# Create the device nodes (replace 511 with your actual major number)
+_UVM_MAJOR=$(awk '/nvidia-uvm/{print $1}' /proc/devices)
+mknod /dev/nvidia-uvm       c $_UVM_MAJOR 0
+mknod /dev/nvidia-uvm-tools c $_UVM_MAJOR 1
+chmod 666 /dev/nvidia-uvm /dev/nvidia-uvm-tools
+
+# Test
+/opt/conda/bin/python3 -c "import torch; print(torch.cuda.is_available())"
+```
+
+### Fix — Automated (already in `deploy_nodocker.sh`)
+The deploy script now checks for `/dev/nvidia-uvm` before testing CUDA and automatically runs `modprobe nvidia-uvm` + adds it to `/etc/modules` if absent.
+
+---
+
+## Error 7 — `torchvision` Crashes After `pip install torch --upgrade`
+
+### Symptom
+```
+RuntimeError: operator torchvision::nms does not exist
+```
+Then:
+```
+ModuleNotFoundError: Could not import module 'BloomPreTrainedModel'. Are this object's requirements defined correctly?
+```
+`peft` and `transformers` both fail to import.
+
+### Root Cause
+`torch` and `torchvision` are **tightly version-coupled** — `torchvision 0.20.1+cu124` requires **exactly** `torch==2.5.1`. When torch is upgraded to 2.6.0 (e.g. by a mistaken `pip install torch --upgrade`), torchvision becomes incompatible and crashes at import. Since `transformers` imports `torchvision.transforms.InterpolationMode` at module level, this cascade-breaks `peft` too.
+
+### Fix
+Downgrade torch back to match the installed torchvision:
+```bash
+/opt/conda/bin/pip install torch==2.5.1+cu124 \
+    --index-url https://download.pytorch.org/whl/cu124 --quiet
+
+# Verify
+/opt/conda/bin/python3 -c "
+import torch, torchvision, peft
+print('torch:', torch.__version__)
+print('torchvision:', torchvision.__version__)
+print('CUDA:', torch.cuda.is_available())
+print('peft:', peft.__version__)
+"
+```
+
+### Prevention
+The deploy script **never upgrades torch**. It uses `grep -v "^torch" requirements.txt` to exclude torch from pip installs. If CUDA is unavailable, the script errors with diagnostics — it does **not** attempt to reinstall torch.

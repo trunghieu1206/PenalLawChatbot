@@ -37,6 +37,7 @@ public class ChatDTOs {
             String content,
             @JsonProperty("extracted_facts") Map<String, Object> extractedFacts,
             @JsonProperty("mapped_laws") List<Map<String, Object>> mappedLaws,
+            @JsonProperty("sentencing_data") Map<String, Object> sentencingData,
             LocalDateTime createdAt
     ) {}
 

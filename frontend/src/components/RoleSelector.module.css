@@ -1,7 +1,7 @@
 .wrapper {
   display: flex;
-  gap: 12px;
-  flex-wrap: nowrap;
+  gap: 10px;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: stretch;
 }
@@ -12,15 +12,14 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 20px 16px;
-  background: var(--bg-surface);
-  border: 2px solid var(--border);
-  border-radius: var(--radius-md);
+  gap: 6px;
+  padding: 14px 14px;
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--surface-variant);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: var(--transition);
-  font-family: var(--font-sans);
-  color: var(--text-secondary);
+  color: var(--on-surface-variant);
   text-align: center;
   position: relative;
   overflow: hidden;
@@ -41,30 +40,28 @@
 
 .role:hover, .role.active {
   border-color: var(--role-color);
-  color: var(--text-primary);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  color: var(--on-surface);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 .role.active {
   border-color: var(--role-color);
-  box-shadow: 
-    0 0 0 1px var(--role-color),
-    0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0 0 1px var(--role-color), var(--shadow-sm);
 }
 
 .label { 
-  font-size: 14px; 
+  font-size: 12px; 
   font-weight: 700; 
   position: relative; 
   z-index: 1;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .desc { 
   font-size: 11px; 
-  color: var(--text-muted); 
+  color: var(--on-surface-variant); 
   position: relative; 
   z-index: 1;
   line-height: 1.3;
