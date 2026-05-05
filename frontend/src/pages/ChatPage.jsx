@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import Footer from '../components/Footer.jsx';
 import Topbar from '../components/Topbar.jsx';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
@@ -414,7 +415,8 @@ export default function ChatPage() {
               </aside>
             )}
           </div>
-        </main>
+          <Footer />
+      </main>
 
         {showRoleModal && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center" onClick={() => setShowRoleModal(false)}>

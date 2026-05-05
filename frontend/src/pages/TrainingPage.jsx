@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Footer from '../components/Footer.jsx';
 import Topbar from '../components/Topbar.jsx';
 import { Link, useNavigate } from 'react-router-dom';
 import { practiceApi, lawsApi } from '../services/api.js';
@@ -326,6 +327,7 @@ export default function TrainingPage() {
             )}
           </div>
         </div>
+        <Footer />
       </main>
 
       {lawModal.open && (

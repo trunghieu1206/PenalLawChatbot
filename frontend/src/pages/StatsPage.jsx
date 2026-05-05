@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import Footer from '../components/Footer.jsx';
 import Topbar from '../components/Topbar.jsx';
 import Sidebar from '../components/Sidebar.jsx';
 import { useNavigate } from 'react-router-dom';
@@ -149,6 +150,7 @@ export default function StatsPage() {
             </button>
           </div>
         </div>
+        <Footer />
       </main>
     </div>
   );
