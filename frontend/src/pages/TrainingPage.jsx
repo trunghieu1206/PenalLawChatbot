@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Topbar from '../components/Topbar.jsx';
 import { Link, useNavigate } from 'react-router-dom';
 import { practiceApi, lawsApi } from '../services/api.js';
 import styles from './TrainingPage.module.css';
@@ -173,11 +174,7 @@ export default function TrainingPage() {
       <Sidebar activeTab="training" />
 
       <main className="ml-64 flex-1 flex flex-col h-screen bg-surface overflow-y-auto pt-16">
-        <header className="bg-white/80 backdrop-blur-md fixed top-0 right-0 w-[calc(100%-16rem)] z-40 border-b border-surface-variant flex justify-between items-center h-16 px-8 transition-all duration-300">
-            <div className="flex items-center gap-6">
-              <span className="text-lg font-black text-slate-900 font-h3">VNPLaw</span>
-            </div>
-          </header>
+        <Topbar />
 
         <div className={styles.pageHeader}>
           <div>
@@ -226,7 +223,7 @@ export default function TrainingPage() {
                 />
                 <div className={styles.charRow}>
                   <span>Nhập chi tiết đầy đủ để có kết quả đánh giá chính xác hơn.</span>
-                  <span>{caseDesc.length} / 5000 ký tự</span>
+                  <span>{caseDesc.length} ký tự</span>
                 </div>
               </div>
             </section>
@@ -246,11 +243,9 @@ export default function TrainingPage() {
                 />
                 {error && <div className={styles.error}>{error}</div>}
                 <div className={styles.cardFooter}>
-                  <button className="btn btn-outline" type="button" onClick={() => {}} disabled={loading}>
-                    Lưu nháp
-                  </button>
+                  
                   <button className="btn btn-primary" type="button" onClick={handleSubmit} disabled={loading}>
-                    {loading ? <><span className="loader" /> Đang đánh giá...</> : 'Bắt đầu đánh giá'}
+                    {loading ? <><span className="loader" /> Đang đánh giá...</> : 'Đánh giá'}
                   </button>
                 </div>
               </div>

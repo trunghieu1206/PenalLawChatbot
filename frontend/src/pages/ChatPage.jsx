@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import Topbar from '../components/Topbar.jsx';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { chatApi, lawsApi } from '../services/api.js';
@@ -262,41 +263,7 @@ export default function ChatPage() {
         {/* Main Content Area */}
         <main className="ml-64 flex-1 flex flex-col h-screen bg-surface">
           {/* TopAppBar */}
-          <header className="bg-white/80 backdrop-blur-md fixed top-0 right-0 w-[calc(100%-16rem)] z-40 border-b border-surface-variant flex justify-between items-center h-16 px-8 transition-all duration-300">
-            <div className="flex items-center gap-6">
-              <span className="text-lg font-black text-slate-900 font-h3">VNPLaw</span>
-              <nav className="hidden md:flex gap-4">
-                <button className="font-newsreader text-sm font-medium text-slate-500 hover:text-slate-900 transition-all duration-300">Tài liệu</button>
-                <button className="font-newsreader text-sm font-medium text-slate-500 hover:text-slate-900 transition-all duration-300">Lưu trữ</button>
-              </nav>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="relative hidden lg:block">
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm">search</span>
-                <input className="pl-9 pr-4 py-1.5 bg-surface-container-low border border-surface-variant rounded-full text-sm font-body-md focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none w-64 transition-all" placeholder="Tìm kiếm án lệ..." type="text"/>
-              </div>
-              
-              <div className="flex items-center gap-3 border-l border-surface-variant pl-4 ml-2">
-                {user ? (
-                  <>
-                    <button className="text-on-surface-variant hover:text-primary transition-colors hidden md:block">
-                      <span className="material-symbols-outlined">notifications</span>
-                    </button>
-                    <div className="text-right hidden md:block">
-                      <div className="text-xs font-semibold text-on-surface-variant">{user.email}</div>
-                    </div>
-                    <button className="text-on-surface-variant w-8 h-8 rounded-full bg-surface-container border border-surface-variant flex items-center justify-center font-bold text-sm hover:text-primary transition-colors" title={user.email}>
-                      {userInitials}
-                    </button>
-                  </>
-                ) : (
-                  <button onClick={() => navigate('/login')} className="bg-primary-container text-on-primary font-label-sm text-sm px-4 py-2 rounded hover:bg-primary transition-colors">
-                    Đăng nhập
-                  </button>
-                )}
-              </div>
-            </div>
-          </header>
+          <Topbar />
 
           {/* Canvas */}
           <div className="flex-1 mt-16 flex overflow-hidden">
@@ -426,7 +393,7 @@ export default function ChatPage() {
                   </button>
                 </div>
                 <div className="max-w-3xl mx-auto mt-1 flex justify-center">
-                  <span className="text-[10px] text-outline">{charCount}/5000 ký tự</span>
+                  <span className="text-[10px] text-outline">{charCount} ký tự</span>
                 </div>
               </div>
             </section>
