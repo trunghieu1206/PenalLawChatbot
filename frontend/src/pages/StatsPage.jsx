@@ -71,91 +71,125 @@ export default function StatsPage() {
 
   return (
     <div className={styles.page}>
-      {/* Header */}
-      <header className={styles.header}>
-        <div className={styles.headerInner}>
-          <button className={styles.backBtn} onClick={() => navigate('/chat')} title="Quay lại chat">
-            ← Quay lại
-          </button>
-          <div className={styles.headerTitle}>
-            <span className={styles.headerIcon}>📊</span>
-            Thống kê hệ thống
+      <aside className={styles.nav}>
+        <div className={styles.navHeader}>
+          <div className={styles.brandBadge}>V</div>
+          <div>
+            <div className={styles.brandTitle}>VNPLaw</div>
+            <div className={styles.brandSub}>Legal Intelligence</div>
           </div>
-          {/* Admin shortcut — visible only when logged in as admin */}
-          {user?.role === 'admin' ? (
-            <button
-              className={styles.adminBtn}
-              onClick={() => navigate('/admin')}
-              title="Mở bảng quản lý phản hồi"
-            >
-              🛡 Quản lý phản hồi
-            </button>
-          ) : <div />}
         </div>
-      </header>
+        <div className={styles.navLinks}>
+          <button className={styles.navItem} type="button" onClick={() => navigate('/chat')}>
+            <span className="material-symbols-outlined">chat</span>
+            Chat
+          </button>
+          <button className={styles.navItem} type="button" onClick={() => navigate('/training')}>
+            <span className="material-symbols-outlined">gavel</span>
+            Chế độ Luyện tập
+          </button>
+          <button className={`${styles.navItem} ${styles.navItemActive}`} type="button">
+            <span className="material-symbols-outlined">dashboard</span>
+            Dashboard/Thống kê
+          </button>
+        </div>
+        <div className={styles.navFooter}>
+          <button className={styles.navItem} type="button">
+            <span className="material-symbols-outlined">settings</span>
+            Cài đặt
+          </button>
+          <button className={styles.navItem} type="button">
+            <span className="material-symbols-outlined">help</span>
+            Hỗ trợ
+          </button>
+        </div>
+      </aside>
 
       <main className={styles.main}>
-        {loading && (
-          <div className={styles.loadingState}>
-            <div className={styles.spinner} />
-            <span>Đang tải thống kê...</span>
+        <header className={styles.topbar}>
+          <div className={styles.topbarLeft}>
+            <div className={styles.topbarTitle}>VNPLaw Intelligence</div>
+            <nav className={styles.topbarLinks}>
+              <button type="button">Tài liệu</button>
+              <button type="button">Lưu trữ</button>
+            </nav>
           </div>
-        )}
-        {error && <div className={styles.errorBanner}>{error}</div>}
-
-        {!loading && !error && stats && (
-          <>
-            {/* Stat cards */}
-            <div className={styles.statGrid}>
-              <StatCard icon="💬" label="Tổng phiên làm việc"   value={stats.total_sessions}   accent="blue"   />
-              <StatCard icon="👤" label="Người dùng đã đăng ký" value={stats.total_users}       accent="teal"   />
-              <StatCard icon="⚖️" label="Vụ án đã phân tích"    value={stats.cases_processed}   accent="purple" />
-              <StatCard icon="📝" label="Phản hồi nhận được"     value={stats.feedback_total}    accent="orange" />
-            </div>
-
-            {/* Feedback accuracy bar */}
-            {stats.feedback_total > 0 && (
-              <div className={styles.accuracyRow}>
-                <span className={styles.accuracyLabel}>
-                  Độ chính xác phản hồi: <strong>{accuracy}%</strong>
-                  &ensp;({stats.feedback_correct} chính xác / {stats.feedback_incorrect} sai)
-                </span>
-                <div className={styles.accuracyBar}>
-                  <div className={styles.accuracyFill} style={{ width: `${accuracy}%` }} />
-                </div>
-              </div>
+          <div className={styles.topbarRight}>
+            <button className="btn btn-outline" type="button">Export Report</button>
+            {user?.role === 'admin' && (
+              <button className="btn btn-primary" type="button" onClick={() => navigate('/admin')}>
+                Quản lý phản hồi
+              </button>
             )}
+          </div>
+        </header>
 
-            {/* Role distribution */}
-            <section className={styles.section}>
-              <h2 className={styles.sectionTitle}>Phân bố theo vai trò</h2>
-              <div className={styles.roleGrid}>
-                {['neutral', 'defense', 'victim'].map(r => (
-                  <div key={r} className={styles.roleCard} style={{ borderColor: `${ROLE_COLOR[r]}44` }}>
-                    <div className={styles.roleCount} style={{ color: ROLE_COLOR[r] }}>
-                      {stats.by_role?.[r] ?? 0}
-                    </div>
-                    <div className={styles.roleLabel}>{ROLE_LABEL[r]}</div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* Charts */}
-            <div className={styles.chartsRow}>
-              <BarChart
-                title="Vụ án theo địa danh (tỉnh/thành)"
-                data={stats.by_province}
-                color="linear-gradient(90deg,#4da6c8,#6ec0dc)"
-              />
-              <BarChart
-                title="Vụ án theo loại tội danh"
-                data={stats.by_crime_type}
-                color="linear-gradient(90deg,#a78bfa,#c4b5fd)"
-              />
+        <div className={styles.content}>
+          <div className={styles.pageHeader}>
+            <div>
+              <h1>Dashboard/Thống kê</h1>
+              <p>System metrics and operational overview.</p>
             </div>
-          </>
-        )}
+          </div>
+
+          {loading && (
+            <div className={styles.loadingState}>
+              <div className={styles.spinner} />
+              <span>Đang tải thống kê...</span>
+            </div>
+          )}
+          {error && <div className={styles.errorBanner}>{error}</div>}
+
+          {!loading && !error && stats && (
+            <>
+              <div className={styles.statGrid}>
+                <StatCard icon="💬" label="Tổng phiên làm việc" value={stats.total_sessions} accent="blue" />
+                <StatCard icon="👤" label="Người dùng đã đăng ký" value={stats.total_users} accent="teal" />
+                <StatCard icon="⚖️" label="Vụ án đã phân tích" value={stats.cases_processed} accent="purple" />
+                <StatCard icon="📝" label="Phản hồi nhận được" value={stats.feedback_total} accent="orange" />
+              </div>
+
+              {stats.feedback_total > 0 && (
+                <div className={styles.accuracyRow}>
+                  <span>
+                    Độ chính xác phản hồi: <strong>{accuracy}%</strong>
+                    &ensp;({stats.feedback_correct} chính xác / {stats.feedback_incorrect} sai)
+                  </span>
+                  <div className={styles.accuracyBar}>
+                    <div className={styles.accuracyFill} style={{ width: `${accuracy}%` }} />
+                  </div>
+                </div>
+              )}
+
+              <section className={styles.section}>
+                <h2>Phân bổ Vai trò</h2>
+                <div className={styles.roleGrid}>
+                  {['neutral', 'defense', 'victim'].map(r => (
+                    <div key={r} className={styles.roleCard} style={{ borderColor: `${ROLE_COLOR[r]}44` }}>
+                      <div className={styles.roleCount} style={{ color: ROLE_COLOR[r] }}>
+                        {stats.by_role?.[r] ?? 0}
+                      </div>
+                      <div className={styles.roleLabel}>{ROLE_LABEL[r]}</div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <div className={styles.chartsRow}>
+                <BarChart
+                  title="Vụ án theo địa danh (tỉnh/thành)"
+                  data={stats.by_province}
+                  color="linear-gradient(90deg,#4f6073,#7c93ab)"
+                />
+                <BarChart
+                  title="Vụ án theo loại tội danh"
+                  data={stats.by_crime_type}
+                  color="linear-gradient(90deg,#775a19,#c5a059)"
+                />
+              </div>
+            </>
+          )}
+        </div>
       </main>
     </div>
   );

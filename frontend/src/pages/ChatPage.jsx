@@ -20,7 +20,6 @@ export default function ChatPage() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // Law reference sidebar state
   const [lawSidebar, setLawSidebar] = useState({
@@ -250,275 +249,284 @@ export default function ChatPage() {
     }
   };
 
+  const userInitials = user?.fullName
+    ? user.fullName.split(' ').slice(0, 2).map(part => part[0]).join('')
+    : user?.email?.[0]?.toUpperCase() || 'G';
+
   return (
-    <div className={styles.layout}>
-      {/* SIDEBAR */}
-      <aside className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : styles.sidebarClosed}`}>
-        <div className={styles.sidebarHeader}>
-          <div className={styles.logo}>
-            {sidebarOpen && <span className={styles.logoText}>VNPLaw</span>}
+    <div className={styles.page}>
+      <aside className={styles.nav}>
+        <div className={styles.navHeader}>
+          <div className={styles.brandBadge}>V</div>
+          <div>
+            <div className={styles.brandTitle}>VNPLaw</div>
+            <div className={styles.brandSub}>Legal Intelligence</div>
           </div>
         </div>
-
-        {sidebarOpen && (
-          <>
-            <button className={`btn btn-primary ${styles.newChatBtn}`} onClick={createNewSession}>
-              Cuộc trò chuyện mới
+        <div className={styles.navLinks}>
+          <button className={`${styles.navItem} ${styles.navItemActive}`} type="button">
+            <span className="material-symbols-outlined">chat</span>
+            Chat
+          </button>
+          <button className={styles.navItem} type="button" onClick={() => navigate('/training')}>
+            <span className="material-symbols-outlined">gavel</span>
+            Chế độ Luyện tập
+          </button>
+          <button className={styles.navItem} type="button" onClick={() => navigate('/stats')}>
+            <span className="material-symbols-outlined">dashboard</span>
+            Bảng điều khiển
+          </button>
+          {user?.role === 'admin' && (
+            <button className={styles.navItem} type="button" onClick={() => navigate('/admin')}>
+              <span className="material-symbols-outlined">admin_panel_settings</span>
+              Quản lý phản hồi
             </button>
-
-            <div className={styles.sessionList}>
-              {sessions.length === 0 && (
-                <p className={styles.emptyNote}>Chưa có cuộc hội thoại nào</p>
-              )}
-              {sessions.map(s => (
-                <div key={s.id} className={`${styles.sessionItemWrapper} ${currentSession?.id === s.id ? styles.sessionActive : ''}`}>
-                  <button className={styles.sessionItem} onClick={() => handleSessionClick(s)}>
-                    <div className={styles.sessionItemHeader}>
-                      <span className={styles.sessionDate}>
-                        {new Date(s.createdAt).toLocaleString('vi-VN', {
-                          timeZone: 'Asia/Ho_Chi_Minh',
-                          day: '2-digit', month: '2-digit', year: 'numeric',
-                          hour: '2-digit', minute: '2-digit'
-                        })}
-                      </span>
-                    </div>
-                    <div className={styles.sessionTitle} title={s.title}>
-                      {s.title || (s.id ? `Phiên #${s.id.substring(0, 8)}` : 'Cuộc trò chuyện mới')}
-                    </div>
-                  </button>
-                  <button
-                    className={styles.deleteSessionBtn}
-                    onClick={(e) => handleDeleteSession(e, s.id)}
-                    title="Xóa phiên"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {/* Training Mode Button — prominent */}
-            <button
-              className={styles.trainingBtn}
-              onClick={() => navigate('/training')}
-            >
-              Chế độ Luyện tập
-            </button>
-
-            {/* Stats — accessible to all users */}
-            <button
-              className={styles.statsBtn}
-              onClick={() => navigate('/stats')}
-            >
-              📊 Thống kê hệ thống
-            </button>
-
-            {/* Admin Panel — visible only to admin role */}
-            {user?.role === 'admin' && (
-              <button
-                className={styles.adminBtn}
-                onClick={() => navigate('/admin')}
-              >
-                🛡 Quản lý phản hồi
-              </button>
-            )}
-
-            <div className={styles.userSection}>
-              {user ? (
-                <>
-                  <div className={styles.userInfo}>
-                    <span className={styles.userAvatar}>U</span>
-                    <div>
-                      <div className={styles.userName}>{user.fullName || user.email}</div>
-                      <div className={styles.userEmail}>{user.email}</div>
-                    </div>
-                  </div>
-                  <button
-                    className="btn btn-ghost"
-                    onClick={() => {
-                      logout();
-                      navigate('/login');
-                    }}
-                    style={{ width: '100%', marginTop: '8px' }}
-                  >
-                    Đăng xuất
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div className={styles.userInfo}>
-                    <span className={styles.userAvatar}>G</span>
-                    <div>
-                      <div className={styles.userName}>Khách</div>
-                      <div className={styles.userEmail}>Chưa đăng nhập</div>
-                    </div>
-                  </div>
-                  <div className={styles.userActions}>
-                    <button
-                      className="btn btn-ghost"
-                      onClick={() => navigate('/login')}
-                    >
-                      Đăng nhập
-                    </button>
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => navigate('/register')}
-                    >
-                      Đăng ký
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </>
-        )}
+          )}
+        </div>
+        <div className={styles.navFooter}>
+          <button className={styles.navItem} type="button">
+            <span className="material-symbols-outlined">settings</span>
+            Cài đặt
+          </button>
+          <button className={styles.navItem} type="button">
+            <span className="material-symbols-outlined">help</span>
+            Hỗ trợ
+          </button>
+        </div>
       </aside>
 
-      {/* FLOATING SIDEBAR TOGGLE BUTTON — always on top, never covered */}
-      {!showRoleModal && (
-        <button
-          className={`btn btn-ghost ${styles.floatingToggleBtn}`}
-          style={{ left: sidebarOpen ? '236px' : '32px' }}
-          onClick={() => setSidebarOpen(o => !o)}
-          title={sidebarOpen ? 'Thu gọn thanh bên' : 'Mở rộng thanh bên'}
-        >
-          {sidebarOpen ? '◀' : '▶'}
-        </button>
-      )}
-
-      {/* MAIN CHAT AREA */}
       <main className={styles.main}>
-        <header className={styles.header}>
-          <div className={styles.headerLeft}>
-            <h2 className={styles.headerTitle}>
-              {currentSession ? currentSession.title : 'Phân tích vụ án mới'}
-            </h2>
+        <header className={styles.topbar}>
+          <div className={styles.topbarLeft}>
+            <div className={styles.topbarTitle}>VNPLaw Intelligence</div>
+            <nav className={styles.topbarLinks}>
+              <button type="button">Tài liệu</button>
+              <button type="button">Lưu trữ</button>
+            </nav>
           </div>
-          <div className={styles.headerRight}>
-            {/* Admin badge — visible only to admin users, always in the header */}
-            {user?.role === 'admin' && (
-              <button
-                className={styles.adminHeaderBtn}
-                onClick={() => navigate('/admin')}
-                title="Mở bảng quản lý phản hồi (Admin)"
-              >
-                🛡 Admin
+          <div className={styles.topbarRight}>
+            <div className={styles.searchWrap}>
+              <span className="material-symbols-outlined">search</span>
+              <input className={styles.searchInput} placeholder="Tìm kiếm án lệ..." />
+            </div>
+            <button className="btn btn-primary" type="button" onClick={createNewSession}>
+              <span className="material-symbols-outlined">add</span>
+              Vụ án mới
+            </button>
+            <div className={styles.userActions}>
+              <button className={styles.iconBtn} type="button" title="Thông báo">
+                <span className="material-symbols-outlined">notifications</span>
               </button>
-            )}
-            {/* Role badge — clickable always; shows lock popup when session is active */}
-            <div className={styles.roleBtnWrapper}>
-              <button
-                className={`btn btn-ghost ${styles.roleBtn} ${currentSession ? styles.roleLocked : ''}`}
-                onClick={handleRoleBtnClick}
-                title={currentSession ? 'Vai trò đã được khóa cho phiên này' : 'Chọn vai trò phân tích'}
-              >
-                <span className={`badge badge-${activeRole}`}>{roleLabel}</span>
-                {currentSession && <span className={styles.roleLockIcon}>ĐÃ KHÓA</span>}
+              <button className={styles.avatarBtn} type="button" title={user?.email || 'Khách'}>
+                {userInitials}
               </button>
-              {showRoleLockPopup && (
-                <div className={styles.roleLockPopup}>
-                  Vai trò đã được khóa. Bạn không thể thay đổi vai trò trong phiên đang diễn ra.
-                </div>
-              )}
             </div>
           </div>
         </header>
 
-        <div className={`${styles.messages} scroll-area`}>
-          {messages.length === 0 && (
-            <div className={styles.welcome}>
-              <h3 className={styles.welcomeTitle}>Trợ lý Luật Hình sự</h3>
-              <p className={styles.welcomeDesc}>
-                Dán nội dung hồ sơ vụ án để nhận được phân tích pháp luật chi tiết.
-              </p>
-              <div className={styles.welcomeHints}>
-                <span>Phân tích tội danh &amp; Điều luật áp dụng</span>
-                <span>Hình phạt &amp; Tình tiết giảm nhẹ</span>
-                <span>Trích dẫn Bộ luật Hình sự</span>
+        <div className={styles.canvas}>
+          <aside className={styles.history}>
+            <div className={styles.historyHeader}>
+              <span>Tư vấn gần đây</span>
+            </div>
+            <div className={styles.historyList}>
+              {sessions.length === 0 && (
+                <div className={styles.emptyNote}>Chưa có cuộc hội thoại nào</div>
+              )}
+              {sessions.map((s) => (
+                <div
+                  key={s.id}
+                  className={`${styles.sessionCard} ${currentSession?.id === s.id ? styles.sessionActive : ''}`}
+                  onClick={() => handleSessionClick(s)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSessionClick(s); }}
+                >
+                  <div className={styles.sessionMeta}>
+                    <span>
+                      {new Date(s.createdAt).toLocaleDateString('vi-VN', {
+                        timeZone: 'Asia/Ho_Chi_Minh',
+                        day: '2-digit', month: '2-digit', year: 'numeric'
+                      })}
+                    </span>
+                    <button
+                      className={styles.sessionDelete}
+                      onClick={(e) => handleDeleteSession(e, s.id)}
+                      title="Xóa phiên"
+                      type="button"
+                    >
+                      <span className="material-symbols-outlined">close</span>
+                    </button>
+                  </div>
+                  <div className={styles.sessionTitle}>
+                    {s.title || (s.id ? `Phiên #${s.id.substring(0, 8)}` : 'Cuộc trò chuyện mới')}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className={styles.historyFooter}>
+              {user ? (
+                <button
+                  className="btn btn-outline"
+                  type="button"
+                  onClick={() => {
+                    logout();
+                    navigate('/login');
+                  }}
+                >
+                  Đăng xuất
+                </button>
+              ) : (
+                <div className={styles.historyAuth}>
+                  <button className="btn btn-ghost" type="button" onClick={() => navigate('/login')}>
+                    Đăng nhập
+                  </button>
+                  <button className="btn btn-primary" type="button" onClick={() => navigate('/register')}>
+                    Đăng ký
+                  </button>
+                </div>
+              )}
+            </div>
+          </aside>
+
+          <section className={styles.chatPanel}>
+            <div className={styles.caseHeader}>
+              <div>
+                <div className={styles.caseTags}>
+                  <span className={styles.tagNeutral}>Luật Hình sự</span>
+                  <span className={styles.tagSecondary}>Đang xem xét</span>
+                </div>
+                <h2 className={styles.caseTitle}>
+                  {currentSession ? currentSession.title : 'Phân tích vụ án mới'}
+                </h2>
+                <div className={styles.caseMeta}>
+                  <span>
+                    <span className="material-symbols-outlined">calendar_today</span>
+                    {new Date().toLocaleDateString('vi-VN')}
+                  </span>
+                  <span>
+                    <span className="material-symbols-outlined">account_balance</span>
+                    People&apos;s Court
+                  </span>
+                </div>
+              </div>
+              <div className={styles.caseActions}>
+                <button className={styles.iconBtn} type="button" title="Tải xuống">
+                  <span className="material-symbols-outlined">download</span>
+                </button>
+                <div className={styles.roleBtnWrap}>
+                  <button
+                    className={styles.roleBtn}
+                    onClick={handleRoleBtnClick}
+                    type="button"
+                  >
+                    <span className={`badge badge-${activeRole}`}>{roleLabel}</span>
+                    {currentSession && <span className={styles.roleLocked}>Đã khóa</span>}
+                  </button>
+                  {showRoleLockPopup && (
+                    <div className={styles.rolePopup}>
+                      Vai trò đã được khóa cho phiên này.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          )}
 
-          {messages.map((msg, i) => (
-            <div key={msg.id || i} className="animate-fade-in">
-              <MessageBubble
-                message={msg}
-                role={activeRole}
-                sessionId={currentSession?.id}
-                onLawClick={handleLawClick}
+            <div className={styles.feed}>
+              <div className={styles.feedInner}>
+                {messages.length === 0 && (
+                  <div className={styles.emptyState}>
+                    <h3>Trợ lý Luật Hình sự</h3>
+                    <p>Dán nội dung hồ sơ vụ án để nhận phân tích pháp luật chi tiết.</p>
+                    <div className={styles.hintRow}>
+                      <span>Phân tích tội danh</span>
+                      <span>Điều luật áp dụng</span>
+                      <span>Tình tiết giảm nhẹ</span>
+                    </div>
+                  </div>
+                )}
+
+                {messages.map((msg, i) => (
+                  <div key={msg.id || i} className="animate-fade-in">
+                    <MessageBubble
+                      message={msg}
+                      role={activeRole}
+                      sessionId={currentSession?.id}
+                      onLawClick={handleLawClick}
+                    />
+                  </div>
+                ))}
+
+                {loading && (
+                  <div className={styles.typingIndicator}>
+                    <span className={styles.typingDot} />
+                    <span className={styles.typingDot} />
+                    <span className={styles.typingDot} />
+                    <span>AI đang phân tích...</span>
+                  </div>
+                )}
+
+                {error && <div className={styles.errorBanner}>{error}</div>}
+                <div ref={messagesEndRef} />
+              </div>
+            </div>
+
+            <div className={styles.composer}>
+              <div className={styles.composerInner}>
+                <textarea
+                  ref={textareaRef}
+                  className={styles.composerTextarea}
+                  placeholder="Đặt câu hỏi tiếp theo hoặc yêu cầu trích xuất điều khoản..."
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  rows={3}
+                  disabled={loading}
+                />
+                <div className={styles.composerActions}>
+                  <button className={styles.attachBtn} type="button" title="Đính kèm">
+                    <span className="material-symbols-outlined">attach_file</span>
+                  </button>
+                  <span className={styles.charCount}>{charCount} ký tự</span>
+                  <button
+                    className={styles.sendBtn}
+                    onClick={handleSend}
+                    disabled={loading || !input.trim()}
+                    type="button"
+                  >
+                    <span className="material-symbols-outlined">send</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <aside className={`${styles.lawPanel} ${lawSidebar.open ? styles.lawPanelOpen : ''}`}>
+            {lawSidebar.open && (
+              <LawSidebar
+                lawData={lawSidebar.data}
+                loading={lawSidebar.loading}
+                error={lawSidebar.error}
+                onClose={closeLawSidebar}
               />
-            </div>
-          ))}
-
-          {loading && (
-            <div className={styles.typingIndicator}>
-              <span className={styles.typingDot} />
-              <span className={styles.typingDot} />
-              <span className={styles.typingDot} />
-              <span className={styles.typingText}>AI đang phân tích...</span>
-            </div>
-          )}
-
-          {error && <div className={styles.errorBanner}>{error}</div>}
-          <div ref={messagesEndRef} />
-        </div>
-
-        <div className={styles.inputArea}>
-          <div className={styles.inputWrapper}>
-            <textarea
-              ref={textareaRef}
-              className={styles.textarea}
-              placeholder="Dán nội dung hồ sơ vụ án hoặc câu hỏi pháp lý vào đây... (Enter để gửi, Shift+Enter xuống dòng)"
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              rows={4}
-              disabled={loading}
-            />
-            <div className={styles.inputFooter}>
-              <span className={styles.charCount}>{charCount} ký tự</span>
-              <button
-                className={`btn btn-primary ${styles.sendBtn}`}
-                onClick={handleSend}
-                disabled={loading || !input.trim()}
-              >
-                {loading ? <span className="loader" /> : '↑ Phân tích'}
-              </button>
-            </div>
-          </div>
+            )}
+          </aside>
         </div>
       </main>
 
-      {/* Law Reference Side Panel — inline beside chat, no overlay */}
-      <div className={`${styles.lawPanelWrapper} ${lawSidebar.open ? styles.lawPanelOpen : ''}`}>
-        {lawSidebar.open && (
-          <LawSidebar
-            lawData={lawSidebar.data}
-            loading={lawSidebar.loading}
-            error={lawSidebar.error}
-            onClose={closeLawSidebar}
-          />
-        )}
-      </div>
-
-      {/* Role Selection Modal — forced before session creation */}
       {showRoleModal && (
-        <div
-          className={styles.modalOverlay}
-          onClick={() => { setShowRoleModal(false); }}
-        >
-          <div className={`${styles.modal} card`} onClick={e => e.stopPropagation()}>
+        <div className={styles.modalOverlay} onClick={() => setShowRoleModal(false)}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <h3 className={styles.modalTitle}>Chọn vai trò phân tích</h3>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px', marginTop: '-12px' }}>
+            <p className={styles.modalDesc}>
               {pendingContent
                 ? 'Chọn vai trò trước khi bắt đầu. Vai trò sẽ không thể thay đổi sau khi phiên bắt đầu.'
                 : 'Vai trò sẽ được khóa cho toàn bộ phiên hội thoại này.'}
             </p>
             <RoleSelector selected={role} onChange={handleRoleConfirmed} />
-            {/* BUG-13 FIX: Always show Cancel; clear pendingContent so it's not re-sent. */}
             <button
               className="btn btn-ghost"
-              style={{ marginTop: '12px', width: '100%' }}
+              type="button"
               onClick={() => { setShowRoleModal(false); setPendingContent(''); }}
             >
               Hủy
@@ -526,7 +534,6 @@ export default function ChatPage() {
           </div>
         </div>
       )}
-
     </div>
   );
 }

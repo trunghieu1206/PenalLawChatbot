@@ -2,93 +2,67 @@
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  animation: fadeIn 0.25s ease;
 }
 
 .user { flex-direction: row-reverse; }
 
 .avatar {
-  width: 36px; 
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background: rgba(45, 95, 122, 0.15);
-  border: 2px solid rgba(45, 95, 122, 0.25);
-  display: flex; 
-  align-items: center; 
+  background: var(--surface-container-high);
+  border: 1px solid var(--surface-variant);
+  display: flex;
+  align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--primary);
   flex-shrink: 0;
-  margin-top: 4px;
-  letter-spacing: 0px;
+  margin-top: 2px;
 }
 
 .bubble {
-  max-width: 75%;
+  max-width: 78%;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
+.content {
+  font-size: 14px;
+  line-height: 1.65;
+}
+
 .user .bubble > .content {
-  background: var(--primary);
-  color: white;
-  border-radius: 6px 6px 2px 6px;
+  background: var(--primary-container);
+  color: var(--on-primary);
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-xs) var(--radius-lg);
   padding: 12px 16px;
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.65;
   box-shadow: var(--shadow-sm);
 }
 
 .assistant .bubble > .content {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 6px 6px 6px 2px;
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--surface-variant);
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-xs);
   padding: 16px 18px;
   font-size: 14px;
   box-shadow: var(--shadow-sm);
-  color: var(--text-primary);
+  color: var(--on-surface);
 }
 
 .roleBadge {
   align-self: flex-start;
-  margin-bottom: 2px;
-}
-
-.time {
-  font-size: 11px;
-  color: var(--text-muted);
-  align-self: flex-end;
-}
-
-.user .time { align-self: flex-start; }
-
-.lawsTag {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background: rgba(45, 95, 122, 0.05);
-  border: 1px solid rgba(45, 95, 122, 0.15);
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-}
-
-.lawsLabel {
-  color: var(--text-muted);
-  font-weight: 600;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
 }
 
 .lawPills {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .lawPill {
@@ -96,80 +70,52 @@
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  background: rgba(45, 95, 122, 0.08);
-  border-radius: 20px;
+  background: var(--surface-container-low);
+  border-radius: var(--radius-full);
   font-size: 12px;
   color: var(--primary);
-  border: 1px solid rgba(45, 95, 122, 0.25);
+  border: 1px solid var(--surface-variant);
   cursor: pointer;
-  font-family: inherit;
-  line-height: inherit;
   appearance: none;
-  transition: background 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
 }
 
 .lawPill:hover {
-  background: rgba(45, 95, 122, 0.18);
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(45, 95, 122, 0.12);
+  background: var(--surface-container);
+  border-color: var(--primary-container);
   transform: translateY(-1px);
 }
 
-.lawPill:active {
-  transform: translateY(0);
-  box-shadow: none;
-}
-
-.lawPillArticle {
-  font-weight: 700;
-}
+.lawPillArticle { font-weight: 700; }
 
 .lawPillEdition {
   font-size: 10px;
-  font-weight: 500;
-  color: var(--text-muted);
-  background: rgba(0,0,0,0.06);
-  padding: 1px 5px;
-  border-radius: 10px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  background: var(--surface-container-high);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
 }
 
-/* Legacy clickable-tag class kept for compat */
-.lawPillClickable {
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
-}
-
-
-/* Inline clickable law citation inside AI message body text */
 .inlineLawBtn {
   display: inline;
-  padding: 1px 5px;
-  background: rgba(45, 95, 122, 0.08);
-  border: 1px solid rgba(45, 95, 122, 0.22);
-  border-radius: 3px;
+  padding: 1px 6px;
+  background: rgba(254, 212, 136, 0.45);
+  border: 1px solid rgba(199, 161, 80, 0.35);
+  border-radius: var(--radius-xs);
   font-size: inherit;
-  font-family: inherit;
   font-weight: 600;
-  color: var(--primary);
+  color: var(--secondary);
   cursor: pointer;
   line-height: inherit;
-  vertical-align: baseline;
-  appearance: none;
-  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .inlineLawBtn:hover {
-  background: rgba(45, 95, 122, 0.18);
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(45, 95, 122, 0.12);
-  text-decoration: underline;
+  background: rgba(254, 212, 136, 0.8);
+  border-color: rgba(199, 161, 80, 0.6);
 }
 
-.inlineLawBtn:active {
-  background: rgba(45, 95, 122, 0.28);
-}
-
-/* ── Feedback bar ────────────────────────────────────────── */
 .feedbackBar {
   display: flex;
   align-items: center;
@@ -180,28 +126,26 @@
 
 .feedbackLabel {
   font-size: 11px;
-  color: var(--text-muted, #8a97a8);
-  margin-right: 2px;
+  color: var(--on-surface-variant);
 }
 
 .feedbackBtn {
-  background: transparent;
-  border: 1px solid var(--border, #dde3ea);
-  border-radius: 6px;
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--surface-variant);
+  border-radius: var(--radius-sm);
   padding: 3px 8px;
   font-size: 14px;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, transform 0.1s;
-  line-height: 1;
 }
 
-.feedbackBtn:hover  { background: var(--bg-hover, #f0f4f8); border-color: var(--primary); }
-.feedbackBtn:active { transform: scale(0.92); }
-.feedbackActive     { background: var(--bg-hover, #f0f4f8); border-color: var(--primary); }
+.feedbackBtn:hover  { background: var(--surface-container-low); border-color: var(--primary-container); }
+.feedbackBtn:active { transform: scale(0.95); }
+.feedbackActive     { background: var(--surface-container-low); border-color: var(--primary-container); }
 
 .feedbackDone {
   font-size: 12px;
-  color: var(--text-muted, #8a97a8);
+  color: var(--on-surface-variant);
 }
 
 .feedbackForm {
@@ -214,14 +158,13 @@
 
 .feedbackTextarea {
   width: 100%;
-  border: 1px solid var(--border, #dde3ea);
-  border-radius: 6px;
+  border: 1px solid var(--surface-variant);
+  border-radius: var(--radius-sm);
   padding: 8px 10px;
   font-size: 13px;
   resize: vertical;
-  background: var(--bg-card, #fff);
-  color: var(--text, #1a2332);
-  font-family: inherit;
+  background: var(--surface-container-lowest);
+  color: var(--on-surface);
 }
 
 .feedbackFormActions {
@@ -231,24 +174,30 @@
 
 .feedbackSubmitBtn {
   padding: 5px 14px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: none;
-  background: var(--primary, #2d5f7a);
-  color: white;
+  background: var(--primary-container);
+  color: var(--on-primary);
   font-size: 13px;
   cursor: pointer;
-  transition: opacity 0.15s;
 }
-.feedbackSubmitBtn:hover    { opacity: 0.85; }
-.feedbackSubmitBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .feedbackCancelBtn {
   padding: 5px 14px;
-  border-radius: 6px;
-  border: 1px solid var(--border, #dde3ea);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--surface-variant);
   background: transparent;
-  color: var(--text-muted, #8a97a8);
+  color: var(--on-surface-variant);
   font-size: 13px;
   cursor: pointer;
 }
-.feedbackCancelBtn:hover { background: var(--bg-hover, #f0f4f8); }
+
+.time {
+  font-size: 11px;
+  color: var(--on-surface-variant);
+  align-self: flex-end;
+}
+
+.user .time {
+  align-self: flex-start;
+}

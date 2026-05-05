@@ -47,27 +47,56 @@ export default function RegisterPage() {
       >
         ← Quay lại
       </button>
-      <div className={`${styles.container} card animate-fade-in`}>
+      <div className={`${styles.container} animate-fade-in`}>
         <div className={styles.logo}>
           <h1 className={styles.logoText}>VNPLaw</h1>
-          <p className={styles.logoSub}>Tạo Tài Khoản Mới</p>
+          <p className={styles.logoSub}>Tạo tài khoản mới</p>
         </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.field}>
             <label className="label" htmlFor="fullName">Họ và tên</label>
-            <input id="fullName" type="text" className="input" placeholder="Nguyễn Văn A"
-              value={form.fullName} onChange={e => setForm(f => ({ ...f, fullName: e.target.value }))} />
+            <div className={styles.inputWrap}>
+              <span className={`material-symbols-outlined ${styles.inputIcon}`}>badge</span>
+              <input
+                id="fullName"
+                type="text"
+                className={`input ${styles.input}`}
+                placeholder="Nguyễn Văn A"
+                value={form.fullName}
+                onChange={e => setForm(f => ({ ...f, fullName: e.target.value }))}
+              />
+            </div>
           </div>
           <div className={styles.field}>
             <label className="label" htmlFor="email">Email</label>
-            <input id="email" type="email" className="input" placeholder="example@email.com"
-              value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
+            <div className={styles.inputWrap}>
+              <span className={`material-symbols-outlined ${styles.inputIcon}`}>mail</span>
+              <input
+                id="email"
+                type="email"
+                className={`input ${styles.input}`}
+                placeholder="example@email.com"
+                value={form.email}
+                onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                required
+              />
+            </div>
           </div>
           <div className={styles.field}>
             <label className="label" htmlFor="password">Mật khẩu</label>
-            <input id="password" type="password" className="input" placeholder="Ít nhất 8 ký tự"
-              value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required />
+            <div className={styles.inputWrap}>
+              <span className={`material-symbols-outlined ${styles.inputIcon}`}>lock</span>
+              <input
+                id="password"
+                type="password"
+                className={`input ${styles.input}`}
+                placeholder="Ít nhất 8 ký tự"
+                value={form.password}
+                onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                required
+              />
+            </div>
           </div>
 
           {error && <div className={styles.error}>{error}</div>}
