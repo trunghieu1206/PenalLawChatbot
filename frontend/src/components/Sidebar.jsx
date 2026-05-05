@@ -54,10 +54,12 @@ export default function Sidebar({ activeTab }) {
           <span className="material-symbols-outlined">settings</span>
           <span className="text-sm">Cài đặt</span>
         </button>
-        <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2 rounded text-slate-500 hover:text-error hover:bg-red-50 transition-colors duration-200 ease-in-out">
-          <span className="material-symbols-outlined">logout</span>
-          <span className="text-sm">Đăng xuất</span>
-        </button>
+        {user && (
+          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2 rounded text-slate-500 hover:text-error hover:bg-red-50 transition-colors duration-200 ease-in-out">
+            <span className="material-symbols-outlined">logout</span>
+            <span className="text-sm">Đăng xuất</span>
+          </button>
+        )}
       </div>
     </nav>
   );

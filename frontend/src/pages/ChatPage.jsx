@@ -277,12 +277,23 @@ export default function ChatPage() {
               </div>
               
               <div className="flex items-center gap-3 border-l border-surface-variant pl-4 ml-2">
-                <button className="text-on-surface-variant hover:text-primary transition-colors">
-                  <span className="material-symbols-outlined">notifications</span>
-                </button>
-                <button className="text-on-surface-variant w-8 h-8 rounded-full bg-surface-container border border-surface-variant flex items-center justify-center font-bold text-sm hover:text-primary transition-colors">
-                  {userInitials}
-                </button>
+                {user ? (
+                  <>
+                    <button className="text-on-surface-variant hover:text-primary transition-colors hidden md:block">
+                      <span className="material-symbols-outlined">notifications</span>
+                    </button>
+                    <div className="text-right hidden md:block">
+                      <div className="text-xs font-semibold text-on-surface-variant">{user.email}</div>
+                    </div>
+                    <button className="text-on-surface-variant w-8 h-8 rounded-full bg-surface-container border border-surface-variant flex items-center justify-center font-bold text-sm hover:text-primary transition-colors" title={user.email}>
+                      {userInitials}
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={() => navigate('/login')} className="bg-primary-container text-on-primary font-label-sm text-sm px-4 py-2 rounded hover:bg-primary transition-colors">
+                    Đăng nhập
+                  </button>
+                )}
               </div>
             </div>
           </header>
@@ -329,23 +340,15 @@ export default function ChatPage() {
 
             {/* Main Chat Area */}
             <section className="flex-1 flex flex-col bg-surface relative min-w-0">
-              <div className="px-8 py-6 border-b border-surface-variant bg-surface-container-lowest flex-shrink-0">
-                <div className="max-w-3xl mx-auto flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="bg-surface-container text-on-surface-variant px-2 py-0.5 rounded font-label-sm text-xs border border-surface-variant">Luật Hình sự</span>
-                      <span className="bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded font-label-sm text-xs border border-secondary-fixed-dim">Đang Xem xét</span>
-                    </div>
-                    <h2 className="font-h2 text-h2 text-on-surface mb-2">{currentSession ? currentSession.title : 'Phân tích vụ án mới'}</h2>
-                    <div className="flex gap-4 font-body-md text-sm text-on-surface-variant">
-                      <div className="flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[16px]">calendar_today</span>
-                        <span>Ngày: {new Date().toLocaleDateString('vi-VN')}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[16px]">account_balance</span>
-                        <span>Địa điểm: Tòa án Nhân dân</span>
-                      </div>
+              <div className="px-8 py-3 border-b border-surface-variant bg-surface-container-lowest flex-shrink-0">
+                <div className="max-w-3xl mx-auto flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <h2 className="text-lg font-bold text-on-surface truncate max-w-sm mb-0.5">
+                      {currentSession ? currentSession.title : 'Phân tích vụ án mới'}
+                    </h2>
+                    <div className="flex items-center gap-1 text-xs text-on-surface-variant">
+                      <span className="material-symbols-outlined text-[14px]">calendar_today</span>
+                      <span>Ngày: {new Date().toLocaleDateString('vi-VN')}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 relative">
@@ -403,7 +406,7 @@ export default function ChatPage() {
                 <div className="max-w-3xl mx-auto relative">
                   <textarea
                     ref={textareaRef}
-                    className="w-full bg-surface resize-none border border-surface-variant rounded-lg p-4 pr-16 font-body-md text-on-surface focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none transition-all shadow-sm"
+                    className="w-full bg-surface resize-none border border-surface-variant rounded-lg p-4 pr-16 pb-12 font-body-md text-on-surface focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none transition-all shadow-sm"
                     placeholder="Đặt câu hỏi tiếp theo hoặc yêu cầu trích xuất điều khoản..."
                     value={input}
                     onChange={e => setInput(e.target.value)}
