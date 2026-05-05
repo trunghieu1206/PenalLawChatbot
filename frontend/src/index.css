@@ -247,32 +247,32 @@ button, input, textarea, select {
 .law-citation {
   display: inline;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--primary);
   cursor: pointer;
   position: relative;
-  border-bottom: 1px solid var(--accent);
+  border-bottom: 1px solid var(--primary);
   transition: var(--transition);
 }
 .law-citation:hover { 
-  color: var(--accent-light);
-  border-color: var(--accent-light);
+  color: var(--primary-container);
+  border-color: var(--primary-container);
 }
 
 /* --- SCROLLABLE CONTENT --- */
 .scroll-area {
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+  scrollbar-color: var(--surface-variant) transparent;
 }
 
 /* --- PROSE (for markdown rendering) --- */
 .prose {
-  color: var(--text-primary);
+  color: var(--on-surface);
   line-height: 1.8;
   font-size: 15px;
 }
 .prose h1, .prose h2, .prose h3 { 
-  font-family: var(--font-display);
+  font-family: var(--font-serif);
   font-weight: 700; 
   margin-top: 1.2em; 
   margin-bottom: 0.8em;
@@ -280,31 +280,31 @@ button, input, textarea, select {
 }
 .prose h2 { 
   font-size: 1.3rem; 
-  border-bottom: 2px solid var(--border); 
+  border-bottom: 2px solid var(--surface-variant); 
   padding-bottom: 8px; 
 }
 .prose h3 { font-size: 1.1rem; }
 .prose strong { 
-  color: var(--primary-light); 
+  color: var(--primary); 
   font-weight: 700; 
 }
 .prose em { 
-  color: var(--accent); 
+  color: var(--secondary); 
   font-style: italic;
 }
 .prose ul, .prose ol { padding-left: 1.8em; }
 .prose li { margin-bottom: 6px; }
 .prose p { margin-bottom: 1em; }
 .prose code { 
-  background: var(--bg-surface); 
+  background: var(--surface-container-low); 
   padding: 2px 6px; 
   border-radius: 3px; 
   font-size: 13px;
-  font-family: 'Roboto Mono', monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 }
 .prose blockquote {
-  border-left: 4px solid var(--primary);
+  border-left: 4px solid var(--primary-container);
   padding-left: 16px;
-  color: var(--text-secondary);
+  color: var(--on-surface-variant);
   margin: 1em 0;
 }

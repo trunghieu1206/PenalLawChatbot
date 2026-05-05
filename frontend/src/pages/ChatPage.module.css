@@ -1,40 +1,4 @@
-.layout {
-  display: flex;
-  height: 100vh;
-  overflow: hidden;
-  background: var(--bg-base);
-  position: relative; /* needed for floatingToggleBtn absolute positioning */
-}
-
-/* --- SIDEBAR --- */
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-card);
-  border-right: 1px solid var(--border);
-  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.sidebarOpen { width: 260px; }
-.sidebarClosed { width: 56px; }
-
-.sidebarHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 12px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 20px;
- .page {
+.page {
   display: flex;
   min-height: 100vh;
   background: var(--background);
@@ -639,44 +603,4 @@
   .history { display: none; }
   .nav { display: none; }
   .caseHeader, .composer, .feedInner { padding-left: 20px; padding-right: 20px; }
-}
-  inset: 0;
-  background: rgba(0,0,0,0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-  backdrop-filter: blur(4px);
-}
-
-.modal {
-  max-width: 480px;
-  width: 90%;
-  padding: 28px;
-}
-
-.modalTitle {
-  font-size: 18px;
-  font-weight: 700;
-  margin-bottom: 20px;
-  color: var(--text-primary);
-}
-
-/* ── Law Reference Side Panel ── */
-/* Wrapper that animates from 0 → 460px, compressing the chat area */
-.lawPanelWrapper {
-  width: 0;
-  flex-shrink: 0;
-  overflow: hidden;
-  transition: width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
-  /* Ensure it sits at full layout height */
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-
-.lawPanelOpen {
-  width: 460px;
-  min-width: 320px;
-  max-width: 46vw;
 }
