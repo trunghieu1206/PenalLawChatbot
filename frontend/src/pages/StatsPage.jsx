@@ -127,8 +127,8 @@ export default function StatsPage() {
           {!loading && !error && stats && (
             <>
               <div className={styles.statGrid}>
-                <StatCard label="Lượt truy cập" value={stats.total_sessions} accent="blue" />
-                <StatCard label="Người dùng đã đăng ký" value={stats.total_users} accent="teal" />
+                <StatCard label="Tổng lượt truy cập" value={stats.visitor_count} accent="blue" />
+                <StatCard label="Lượt hội thoại" value={stats.total_sessions} accent="teal" />
                 <StatCard label="Vụ án đã phân tích" value={stats.cases_processed} accent="purple" />
                 <StatCard label="Phản hồi nhận được" value={stats.feedback_total} accent="orange" />
               </div>

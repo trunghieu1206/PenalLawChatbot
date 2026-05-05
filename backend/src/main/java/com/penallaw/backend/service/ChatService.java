@@ -57,9 +57,22 @@ public class ChatService {
 
     @Transactional
     public ChatDTOs.SessionResponse createGuestSession(String guestId, ChatDTOs.CreateSessionRequest request) {
-        // Guests are also limited or blocked if needed. For now, let's block guest session creation 
-        // to encourage registration and consistent limit tracking.
-        throw new RateLimitException("Vui lòng đăng nhập để sử dụng tính năng phân tích vụ án.");
+        // Limit check: 3 sessions per day for guest users
+        LocalDateTime startOfToday = LocalDateTime.of(LocalDate.now(), LocalTime.MIDNIGHT);
+        long sessionsToday = sessionRepository.countByGuestIdAndCreatedAtAfter(guestId, startOfToday);
+        if (sessionsToday >= 3) {
+            throw new RateLimitException("Khách truy cập được giới hạn 3 vụ án mỗi ngày. Vui lòng đăng nhập để có giới hạn cao hơn.");
+        }
+
+        String mode = (request != null && request.mode() != null) ? request.mode() : "neutral";
+        LocalDateTime now = LocalDateTime.now();
+        ChatSession session = ChatSession.builder()
+                .guestId(guestId).mode(mode).title("Phiên mới")
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+        session = sessionRepository.save(session);
+        return toSessionResponse(session);
     }
 
     @Transactional(readOnly = true)

@@ -29,6 +29,7 @@ public class AdminService {
     private final ChatMessageRepository messageRepository;
     private final FeedbackRepository feedbackRepository;
     private final UserRepository userRepository;
+    private final VisitorTrackingService visitorTrackingService;
 
     // ── DASHBOARD STATS ──────────────────────────────────────────
 
@@ -77,6 +78,7 @@ public class AdminService {
 
         return new AdminDTOs.DashboardStats(
                 totalSessions, totalUsers, casesProcessed,
+                visitorTrackingService.getTotalVisitorCount(),
                 byRole, byProvince, byCrimeType,
                 feedbackTotal, feedbackCorrect, feedbackIncorrect
         );

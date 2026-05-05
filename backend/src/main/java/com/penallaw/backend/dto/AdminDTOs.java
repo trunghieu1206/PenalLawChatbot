@@ -15,6 +15,7 @@ public class AdminDTOs {
             @JsonProperty("total_sessions")  long totalSessions,
             @JsonProperty("total_users")     long totalUsers,
             @JsonProperty("cases_processed") long casesProcessed,
+            @JsonProperty("visitor_count")   long visitorCount,
             @JsonProperty("by_role")         Map<String, Long> byRole,
             @JsonProperty("by_province")     Map<String, Long> byProvince,
             @JsonProperty("by_crime_type")   Map<String, Long> byCrimeType,

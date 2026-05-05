@@ -13,4 +13,5 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
     List<ChatSession> findByUserIdOrderByCreatedAtDesc(UUID userId);
     List<ChatSession> findByGuestIdOrderByCreatedAtDesc(String guestId);
     long countByUserIdAndCreatedAtAfter(UUID userId, LocalDateTime after);
+    long countByGuestIdAndCreatedAtAfter(String guestId, LocalDateTime after);
 }
