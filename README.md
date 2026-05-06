@@ -288,34 +288,80 @@ The pipeline classifies intent on every request and routes accordingly:
 
 ```
 START
-  └─ classify_intent ──► casual      → casual_respond       → END
-                    ──► followup     → followup_generate     → END
-                    ──► new_case     → clarification_check
-                                          ↓ (fields missing?)
-                                     rewrite → retrieve → grade_documents
-                                          ↓ (relevant docs found?)
-                                     extract_facts → map_laws → generate → END
-                                                                    ↓ (rebuttal mode?)
-                                                               rebuttal → END
+  └─► classify_intent
+          ├─► casual       → casual_respond       → END
+          ├─► followup     → followup_generate     → END
+          └─► new_case
+                  └─► extract_facts
+                          └─► clarification_check
+                                  ├─► [MUST HAVEs missing] → clarification_node → END
+                                  └─► [OK] → multi_query_rewrite  (3 role-biased queries)
+                                                  └─► parallel_retrieve
+                                                          ├─► semantic search (3 queries × Milvus)
+                                                          └─► pinned_fetch(role)  ← direct metadata lookup
+                                                                  └─► temporal_priority_tagger
+                                                                          └─► rerank
+                                                                                  └─► map_laws
+                                                                                          ├─► [rebuttal_against set] → rebuttal_node → END
+                                                                                          └─► [normal] → generate → END
 ```
+
+**Complete graph edges (as registered in `main.py`):**
+
+| From | To | Condition |
+|------|----|----------|
+| `START` | `extract_facts` | `classify_intent` → `new_case` |
+| `START` | `followup_generate` | `classify_intent` → `followup` |
+| `START` | `casual_respond` | `classify_intent` → `casual` |
+| `extract_facts` | `clarification_check` | always |
+| `clarification_check` | `clarification_node` | `clarification_router` → `clarify` |
+| `clarification_check` | `multi_query_rewrite` | `clarification_router` → `continue` |
+| `clarification_node` | `END` | always |
+| `multi_query_rewrite` | `parallel_retrieve` | always |
+| `parallel_retrieve` | `temporal_priority_tagger` | always |
+| `temporal_priority_tagger` | `rerank` | always |
+| `rerank` | `map_laws` | always |
+| `map_laws` | `rebuttal_node` | `check_rebuttal` → `rebuttal` |
+| `map_laws` | `generate` | `check_rebuttal` → `generate` |
+| `generate` / `rebuttal` / `followup_generate` / `casual_respond` | `END` | always |
 
 **Pipeline nodes:**
 
-| Node | Role |
-|------|------|
-| `classify_intent` | Routes: `casual` / `followup` / `new_case` |
-| `clarification_check` | Checks for required fields (crime act, crime date) |
-| `rewrite` | Generates 3 role-specific retrieval queries from the case |
-| `retrieve` | Tri-Path semantic search in Milvus Lite (TOP_K=15 candidates) + BGE-M3 reranking |
-| `grade_documents` | LLM-based relevance filter on retrieved law articles |
-| `extract_facts` | Structured JSON extraction: crime act, date, defendants, aggravating/mitigating factors |
-| `map_laws` | Maps facts to specific BLHS articles with edition-aware lookup (BLHS 1999/2009/2017/2025) |
-| `generate` | Role-specific legal argument (defense / victim / neutral judge) |
-| `rebuttal` | Counter-argument against an opposing argument (`rebuttal_against`) |
-| `followup_generate` | Contextual follow-up using session history |
+| Node | Description |
+|------|-------------|
+| `classify_intent` | Router: classifies message as `new_case`, `followup`, or `casual` |
+| `extract_facts` | LLM-based structured JSON extraction of case facts (hanh_vi, ngay_pham_toi, aggravating/mitigating factors, multi-defendant dates, etc.) |
+| `clarification_check` | Validates required fields: `hanh_vi` and `ngay_pham_toi`. Rejects crime dates before 01/07/2000 (pre-BLHS 1999). |
+| `clarification_node` | Returns a user-facing prompt listing missing information |
+| `multi_query_rewrite` | Generates 3 retrieval queries in Vietnamese court-verdict narrative style: `behavior_query`, `circumstance_query` (role-biased), `evidence_query` |
+| `parallel_retrieve` | Two-step retrieval: (1) semantic search with all 3 queries against Milvus (deduped by article+source key); (2) pinned fetch of role-critical procedural articles by Milvus metadata filter (zero extra LLM calls) |
+| `temporal_priority_tagger` | Tags each retrieved document with `_temporal_role`: `primary` (crime-date edition), `comparison` (newer edition, for leniency check), or `adjustment` (always-applicable sentencing articles) |
+| `rerank` | Cross-encoder reranking using `BAAI/bge-reranker-v2-m3` directly via `AutoTokenizer` + `AutoModelForSequenceClassification`. Keeps top-5 semantic docs + all pinned docs (guaranteed inclusion). Replaces `grade_documents` (no serial LLM calls). |
+| `map_laws` | Maps extracted facts to specific BLHS articles, applying Article 7 retroactivity rules (crime-date edition = baseline; newer edition if more lenient) |
+| `generate` | Role-specific legal argument generation with mandatory ĐIỀU KHOẢN ÁP DỤNG citation table |
+| `rebuttal_node` | Study mode grader: scores user's submitted legal argument (0–100) against ground-truth `mapped_laws` on 4 criteria |
+| `followup_generate` | Follow-up answers reusing cached `documents` and `mapped_laws` from the previous turn — no re-retrieval |
 | `casual_respond` | Handles greetings and off-topic messages |
 
-**Legal code edition routing** — the pipeline automatically selects the correct Bộ luật Hình sự edition based on the crime date:
+**Required fields for `extract_facts` (MUST HAVE — pipeline blocks if missing):**
+
+| Field | Description |
+|-------|-------------|
+| `hanh_vi` | Description of the criminal act (what the defendant did) |
+| `ngay_pham_toi` | Date of the offense in `dd/mm/yyyy` format |
+
+All other fields (`hau_qua`, `tinh_tiet_tang_nang`, `tinh_tiet_giam_nhe`, `co_tien_an`, `per_defendant_dates`, etc.) are optional — the pipeline continues with `null` values if absent.
+
+**Pinned-fetch articles per role** — procedural articles that semantic search reliably misses because they share no vocabulary with case descriptions:
+
+| Role | Always-pinned purposes | BLHS 2015-era articles | BLHS 1999-era articles |
+|------|-----------------------|------------------------|------------------------|
+| All | Retroactivity | Điều 7 | Điều 7 |
+| `neutral` | Mitigating, Aggravating, Penalty consolidation | 51, 52, 55 | 46, 48, 50 |
+| `defense` | Mitigating, Below-minimum, Attempt reduction, Suspended sentence | 51, 54, 57, 65 | 46, 47, 52, 60 |
+| `victim` | Aggravating, Recidivism, Civil compensation, Penalty types | 52, 53, 48, 32 | 48, 49, 42, 28 |
+
+**Legal code edition routing** — applied by `temporal_priority_tagger` based on crime date:
 
 | Crime Date Range | Applied Edition |
 |-----------------|----------------|
@@ -323,6 +369,8 @@ START
 | 01/01/2010 – 31/12/2017 | BLHS 1999 (sửa đổi 2009) |
 | 01/01/2018 – 30/06/2025 | BLHS 2015 (sửa đổi 2017) |
 | 01/07/2025 – present | BLHS 2015 (sửa đổi 2025) |
+
+> **Retroactivity (Điều 7 BLHS):** The pipeline retrieves both the crime-date edition (`primary`) and any newer edition (`comparison`). `map_laws` then applies the more lenient edition per charge. Hard-filtering to a single edition is prohibited.
 
 ---
 
@@ -368,10 +416,16 @@ Users write their own legal analysis for a given case, then submit it for AI sco
 
 The AI service is optimized for CPU-only inference (no GPU required):
 
-- PyTorch thread count pinned to all available physical cores via `OMP_NUM_THREADS`, `MKL_NUM_THREADS`, `torch.set_num_threads()`
-- Auto-detection: uses GPU if CUDA is available, falls back to CPU with a warning
-- Override with `FORCE_CPU=1` env var to force CPU regardless of GPU availability
-- BGE-M3 reranker context of 8192 tokens handles the longest Vietnamese law articles (up to ~3,574 tokens for Điều 232 BLHS 2017) without truncation
+- PyTorch thread count pinned to all available physical cores via `OMP_NUM_THREADS`, `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, and `torch.set_num_threads()` / `torch.set_num_interop_threads()`
+- Auto-detection: uses CUDA GPU if available (with a kernel probe to verify), falls back to CPU with a warning
+- Override with `FORCE_CPU=1` env var to always use CPU regardless of GPU availability
+- BGE-M3 reranker uses 8192-token context — fits the longest Vietnamese law articles (up to ~3,574 tokens for Điều 232 BLHS 2017) without truncation
+- Reranker runs in fp16 on GPU (`model.half()`), fp32 on CPU
+- Reranker implementation uses `AutoTokenizer` + `AutoModelForSequenceClassification` directly (not `CrossEncoder` wrapper, which breaks on `transformers >= 4.57`)
+
+**Known limitation:** `sentence_transformers.CrossEncoder` and `FlagEmbedding.FlagReranker` both call `prepare_for_model`, which was removed in `transformers 4.57`. The project uses direct `AutoModel` inference to avoid this.
+
+**Surrogate sanitization:** All text passed to the LLM and Milvus is sanitized via `sanitize_text()` to strip lone UTF-16 surrogates (U+D800–U+DFFF) that appear in Vietnamese law text scraped from PDFs, which would otherwise crash Python's UTF-8 JSON encoder.
 
 ---
 
