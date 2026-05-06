@@ -22,7 +22,7 @@ function StatCard({ label, value, accent }) {
 function BarChart({ title, data, color }) {
   const sorted = useMemo(() =>
     Object.entries(data || {}).sort((a, b) => b[1] - a[1]).slice(0, 15),
-  [data]);
+    [data]);
 
   if (sorted.length === 0) {
     return (
@@ -55,11 +55,11 @@ function BarChart({ title, data, color }) {
 }
 
 export default function StatsPage() {
-  const navigate   = useNavigate();
-  const { user }   = useAuth();
-  const [stats, setStats]   = useState(null);
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     adminApi.getStats()
@@ -89,7 +89,7 @@ export default function StatsPage() {
               <h3>Về Hệ thống VNPLaw</h3>
             </div>
             <p>
-              VNPLaw là hệ thống được phát triển để giải quyết một vụ án hình sự, tích hợp chức năng điều chỉnh góc nhìn (thẩm phán, luật sư bảo vệ bị hại, luật sư bảo vệ bị cáo). Hệ thống hỗ trợ phân tích tình tiết vụ án, trích dẫn điều luật tương ứng trong Bộ luật Hình sự và đưa ra câu trả lời theo từng vai trò.
+              VNPLaw là hệ thống được phát triển để giải quyết một vụ án hình sự, tích hợp chức năng điều chỉnh góc nhìn (thẩm phán, luật sư bảo vệ bị hại, luật sư bảo vệ bị cáo). Hệ thống hỗ trợ phân tích tình tiết vụ án, trích dẫn điều luật tương ứng trong Bộ luật Hình sự và đưa ra câu trả lời dưới từng góc nhìn.
             </p>
             <div className={styles.featureGrid}>
               <div className={styles.featureItem}>
@@ -177,7 +177,7 @@ export default function StatsPage() {
               </div>
             </>
           )}
-          
+
           <div className="mt-12 flex justify-center pb-12">
             <button onClick={() => navigate('/chat')} className="bg-primary text-on-primary px-8 py-3 rounded-full text-lg font-bold shadow-md hover:bg-primary-container hover:text-on-primary-container transition-colors">
               Giải quyết vụ án ngay

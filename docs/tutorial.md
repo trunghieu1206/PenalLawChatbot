@@ -1,3 +1,12 @@
+# how to deploy overnight
+## ssh into server
+ssh root@74.81.39.6 -p 10000
+
+## create tmux session
+tmux new -s deploy
+
+## detach from the session
+
 # open following ports on server
 22,80,8000,8080,7681
 

@@ -1,15 +1,15 @@
-# ⚖️ LegalAI — Vietnamese Legal AI Chatbot
+# VNPLaw — Vietnamese Legal AI Chatbot
 
 Hệ thống tư vấn pháp lý hình sự thông minh dựa trên AI, RAG, và LangGraph.
 
 ## Features
 
-- 🤖 **AI-Powered Legal Analysis** — Analyzes criminal cases using RAG + LLM
-- 👥 **Optional Authentication** — Use as guest or create account
-- 💾 **Persistent Sessions** — Chat history saved to PostgreSQL for authenticated users
-- 🛡️ **Role-Based Analysis** — Analyze from neutral, defense, or victim perspective
-- 📊 **Law Extraction** — Automatically identifies relevant legal articles
-- 🎓 **Training Mode** — Practice legal analysis with evaluation
+- **AI-Powered Legal Analysis** — Analyzes criminal cases using RAG + LLM
+- **Optional Authentication** — Use as guest or create account
+- **Persistent Sessions** — Chat history saved to PostgreSQL for authenticated users
+- **Role-Based Analysis** — Analyze from neutral, defense, or victim perspective
+- **Law Extraction** — Automatically identifies relevant legal articles
+- **Training Mode** — Practice legal analysis with evaluation
 
 ## Architecture
 
@@ -80,7 +80,7 @@ PenalLawChatbot/
 - Docker + Docker Compose
 - NVIDIA GPU (for embedding model) — or use CPU (slower)
 - OpenRouter API key
-- HuggingFace token (for `trunghieu1206/lawchatbot-40k` LoRA adapter)
+- HuggingFace token (for the Jina v5 LoRA adapter)
 
 ### 2. Environment Setup
 ```bash
@@ -101,7 +101,7 @@ Key environment variables:
 | `POSTGRES_USER` | `postgres` | PostgreSQL username |
 | `POSTGRES_PASSWORD` | `postgres` | PostgreSQL password |
 | `COLLECTION_NAME` | `legal_rag_lora` | Milvus collection name |
-| `EMBEDDING_ADAPTER` | `trunghieu1206/lawchatbot-40k` | HuggingFace LoRA adapter |
+| `EMBEDDING_ADAPTER` | `trunghieu1206/jina-embeddings-v5-text-nano-retrieval-vn-legal-lora-2026-04-28-19-05` | HuggingFace LoRA adapter |
 | `LLM_MODEL` | `google/gemini-2.5-flash` | LLM via OpenRouter |
 | `TOP_K` | `15` | Number of retrieved chunks |
 
@@ -193,6 +193,12 @@ For detailed authentication setup, see [docs/AUTHENTICATION.md](docs/AUTHENTICAT
 | POST | `/api/auth/register` | Register new user |
 | POST | `/api/auth/login` | Login, get JWT token |
 
+### Dashboard & Analytics
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/home` | Get system statistics for dashboard |
+| POST | `/api/home/track-visit` | Track daily unique visitor via client-side UUID |
+
 ### Chat — Guest (no login required)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -237,7 +243,7 @@ START
 Nodes:
 - **classify_intent** — Routes to `casual`, `followup`, or `new_case`
 - **rewrite** — Rewrites query with role-specific legal keywords for better retrieval
-- **retrieve** — Semantic search in Milvus Lite with LoRA-finetuned BGE-M3
+- **retrieve** — Semantic search in Milvus Lite using Tri-Path RAG (Jina v5 Nano for embeddings + BGE-M3 cross-encoder reranking)
 - **grade_documents** — LLM-based relevance filtering of retrieved chunks
 - **extract_facts** — Structured JSON extraction of case facts (dates, offenses, aggravating/mitigating factors)
 - **map_laws** — Maps extracted facts to specific Bộ luật Hình sự articles
@@ -280,21 +286,25 @@ Users write their own legal analysis for a given case, then submit it to the AI 
 ```
 
 ## Features
-- ✅ Guest mode — no login required (sessions identified by `guestId`)
-- ✅ JWT authentication for registered users
-- ✅ RAG with Milvus Lite (local `.db` file, no separate Milvus server)
-- ✅ LoRA-finetuned BGE-M3 embedding (`trunghieu1206/lawchatbot-40k`)
-- ✅ LangGraph pipeline with intent classification: Casual / Follow-up / New Case
-- ✅ LangGraph nodes: Rewrite → Retrieve → Grade → Extract Facts → Map Laws → Generate
-- ✅ Deterministic sentencing calculations (detention months, victim/defendant age at crime)
-- ✅ Rebuttal (counter-argument) mode
-- ✅ Practice Mode with AI scoring and structured feedback
-- ✅ Role-specific legal argument generation (defense, victim, neutral)
-- ✅ Chat history persistence (PostgreSQL)
-- ✅ Docker Compose deployment with optional GPU support
+- Guest mode — no login required (sessions identified by `guestId`)
+- JWT authentication for registered users
+- RAG with Milvus Lite (local `.db` file, no separate Milvus server)
+- Tri-Path RAG Architecture with clause-level chunking
+- Embeddings: LoRA-finetuned Jina v5 Nano
+- Reranker: Multilingual Cross-encoder (`BAAI/bge-reranker-v2-m3`)
+- Daily Unique Visitor Tracking via client-side UUIDs
+- CPU inference optimization for bare-metal deployments (INT8 quantization, thread limits)
+- LangGraph pipeline with intent classification: Casual / Follow-up / New Case
+- LangGraph nodes: Rewrite → Retrieve → Grade → Extract Facts → Map Laws → Generate
+- Deterministic sentencing calculations (detention months, victim/defendant age at crime)
+- Rebuttal (counter-argument) mode
+- Practice Mode with AI scoring and structured feedback
+- Role-specific legal argument generation (defense, victim, neutral)
+- Chat history persistence (PostgreSQL)
+- Docker Compose deployment with optional GPU support
 
 ## Technology Stack
-- **AI Service**: Python 3.x, FastAPI 0.111, LangGraph, LangChain, Milvus Lite (pymilvus), BGE-M3 + PEFT/LoRA, OpenRouter (gemini-2.5-flash)
+- **AI Service**: Python 3.x, FastAPI 0.111, LangGraph, LangChain, Milvus Lite (pymilvus), Jina v5 Nano, BGE-M3 Reranker, PEFT/LoRA, OpenRouter (gemini-2.5-flash)
 - **Backend**: Java 21, Spring Boot 3.4, Spring Security (JWT via jjwt 0.12.6), Spring Data JPA, WebFlux (WebClient), PostgreSQL, Bucket4j (rate limiting), Lombok
 - **Frontend**: React 19, Vite 6, React Router v7, React Markdown, Axios, date-fns, CSS Modules
 - **Infrastructure**: Docker Compose, nginx, PostgreSQL 16

@@ -1,5 +1,5 @@
 """
-Vietnamese Legal AI Chatbot — FastAPI AI Service
+VNPLaw — FastAPI AI Service
 Enhanced LangGraph pipeline with:
   - Fact extraction node
   - Law mapping node
