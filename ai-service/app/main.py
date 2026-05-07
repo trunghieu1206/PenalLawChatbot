@@ -1308,16 +1308,12 @@ OUTPUT: CHỈ JSON array hợp lệ."""
             print(f"  {_pin}Điều {str(_art):>4} | {str(_src):<30} | {str(_rtag):<12} | {_prev}...")
         # ─────────────────────────────────────────────────────────────
 
-        # Role-specific instructions
         if role == "defense":
             role_instruction = "VAI TRÒ: LUẬT SƯ BÀO CHỮA cho bị cáo. Mục tiêu: Tìm mọi căn cứ để giảm nhẹ hình phạt xuống mức thấp nhất (hoặc Án treo). Đứng trên góc nhìn luật sư bào chữa, không phải tòa án."
-            advice_section_instruction = "\n**III. KHUYẾN NGHỊ CHO THÂN CHỦ:**\n(Đưa ra các bước cụ thể: bồi thường, xin giấy bãi nại, nộp án phí...)"
         elif role == "victim":
             role_instruction = "VAI TRÒ: LUẬT SƯ BẢO VỆ BỊ HẠI. Mục tiêu: Yêu cầu xử nghiêm minh và bồi thường tối đa."
-            advice_section_instruction = "\n**III. KHUYẾN NGHỊ CHO GIA ĐÌNH BỊ HẠI:**\n(Hướng dẫn thu thập hóa đơn, chứng từ thiệt hại, yêu cầu cấp dưỡng...)"
         else:
             role_instruction = "VAI TRÒ: THẨM PHÁN CHỦ TỌA. Tư duy: Lạnh lùng, Chính xác, Chỉ dựa trên chứng cứ trong hồ sơ."
-            advice_section_instruction = ""
 
         # Deterministic data context
         det_context = ""
@@ -1730,12 +1726,31 @@ TIÊU CHÍ (100 điểm):
 
     # NODE: FOLLOW-UP GENERATE
     def followup_generate(state: AgentState) -> dict:
+        """
+        Handle follow-up questions about a prior response.
+
+        BUG-3 FIX: When intent='followup', the graph routes START→followup directly,
+        bypassing the full pipeline (extract_facts → retrieve → map_laws).
+        This means state['documents'] is always [] and state['mapped_laws'] is always None.
+        Fix: retrieve fresh law context using the question + any cached mapped_laws
+        article numbers, so the follow-up response has legal grounding.
+        """
         print("[NODE: followup_generate]")
-        documents    = state.get("documents") or []
         mapped_laws  = state.get("mapped_laws") or []
         chat_history = (state.get("chat_history") or [])[-6:]
         question     = state["question"]
         role         = state.get("user_role", "neutral")
+
+        # Try to get cached documents first; if empty (followup bypasses pipeline),
+        # do a lightweight retrieval using the user's follow-up question.
+        documents = state.get("documents") or []
+        if not documents:
+            try:
+                documents = retriever.invoke(question[:512])
+                print(f"  [FOLLOWUP] Retrieved {len(documents)} docs (fresh — pipeline bypassed)")
+            except Exception as e:
+                print(f"  [FOLLOWUP] Retrieval failed: {e}")
+                documents = []
 
         context_text = sanitize_text("\n\n".join([
             f"[Điều {d.metadata.get('article_number','?')} - {d.metadata.get('source','Unknown')} | "
@@ -1751,13 +1766,13 @@ TIÊU CHÍ (100 điểm):
             SystemMessage(content=(
                 f"Bạn là chuyên gia luật hình sự Việt Nam, góc độ: {role}.\n"
                 "Dựa vào văn bản luật và kết quả ánh xạ đã có, trả lời câu hỏi tiếp theo.\n"
-                "Giữ nguyên quy tắc hiệu lực luật (Điều 7 BLHS) từ lượt phân tích trước."
+                "Giữ nguyên quy tắc hiệu lực luật (Điều 7 Bộ luật Hình sự) từ lượt phân tích trước."
             )),
             *history_messages,
             HumanMessage(content=(
                 f"CÂU HỎI: {question}\n\n"
-                f"VĂN BẢN LUẬT (cache):\n{context_text}\n\n"
-                f"KẾT QUẢ ÁNH XẠ (cache):\n{json.dumps(mapped_laws, ensure_ascii=False)}"
+                f"VĂN BẢN LUẬT (tham khảo):\n{context_text}\n\n"
+                f"KẾT QUẢ ÁNH XẠ (nếu có):\n{json.dumps(mapped_laws, ensure_ascii=False)}"
             ))
         ]))
         return {"messages": [AIMessage(content=cleanup_response(response.content))]}

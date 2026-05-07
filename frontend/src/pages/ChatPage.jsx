@@ -214,6 +214,23 @@ export default function ChatPage() {
   const roleLabel = activeRole === 'defense' ? 'Luật sư Bào chữa' : activeRole === 'victim' ? 'Luật sư Bị hại' : 'Thẩm phán';
   const charCount = input.length;
 
+  /** Export the current conversation to a .txt file. */
+  const handleDownload = () => {
+    if (!messages.length) return;
+    const title = currentSession?.title || 'Phiên hội thoại';
+    const lines = messages.map(m => {
+      const speaker = m.role === 'user' ? 'Người dùng' : `Trợ lý (${roleLabel})`;
+      return `[${speaker}]\n${m.content}\n`;
+    });
+    const blob = new Blob([`${title}\n${'='.repeat(60)}\n\n${lines.join('\n')}`], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${title.replace(/[^a-z0-9\u00C0-\u024F\s]/gi, '').trim() || 'phien-tu-van'}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   /**
    * Called when user clicks a law pill in MessageBubble.
    * Fetches the version of the law effective at the crimeDate.
@@ -330,7 +347,7 @@ export default function ChatPage() {
                         Vai trò đã bị khóa cho phiên này.
                       </div>
                     )}
-                    <button className="text-primary hover:bg-surface-container p-2 rounded transition-colors border border-transparent hover:border-surface-variant">
+                    <button onClick={handleDownload} disabled={!messages.length} className="text-primary hover:bg-surface-container p-2 rounded transition-colors border border-transparent hover:border-surface-variant disabled:opacity-40 disabled:cursor-not-allowed" title="Tải xuống cuộc trò chuyện">
                       <span className="material-symbols-outlined">download</span>
                     </button>
                   </div>

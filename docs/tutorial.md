@@ -12,13 +12,13 @@ tmux new -s deploy
 
 # ── Step 1: upload scripts + .env template + DB backup ───────────────────────
 # Run these from your LOCAL machine (inside PenalLawChatbot/ directory):
-scp -P 10000 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@74.81.39.6:/root/
-scp -P 10000 .env.example root@74.81.39.6:/root/.env.example
+scp -P 1927 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@n3.ckey.vn:/root/
+scp -P 1927 .env.example root@n3.ckey.vn:/root/.env.example
 
 # Create backup dir and upload DB backup (mkdir needed before clone runs)
-ssh -p 10000 root@74.81.39.6 "mkdir -p ~/PenalLawChatbot/database/backups"
-scp -P 10000 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260505_150435.sql \
-    root@74.81.39.6:~/PenalLawChatbot/database/backups/
+ssh -p 1927 root@n3.ckey.vn "mkdir -p ~/PenalLawChatbot/database/backups"
+scp -P 1927 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260505_150435.sql \
+    root@n3.ckey.vn:~/PenalLawChatbot/database/backups/
 
 # run the installer 
 chmod +x setup_server.sh deploy_nodocker.sh

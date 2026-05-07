@@ -66,7 +66,7 @@ export default function TrainingPage() {
       const data = await practiceApi.evaluate(caseDesc, mode, userAnalysis);
       setResult(data);
     } catch (err) {
-      const msg = err.response?.data?.detail || err.message || 'Đánh giá thất bại. Vui lòng thử lại.';
+      const msg = err.response?.data?.detail || err.response?.data?.message || err.message || 'Đánh giá thất bại. Vui lòng thử lại.';
       setError(msg);
     } finally {
       setLoading(false);
