@@ -12,7 +12,7 @@ import java.io.IOException;
  * navigating between pages to be counted multiple times.
  *
  * Visitor tracking is now handled by a dedicated endpoint:
- *   POST /api/track-visit  { visitor_id: "<browser-uuid>" }
+ *   POST /api/home/track-visit  { visitor_id: "<browser-uuid>" }
  *
  * The browser sends this once per day (checked via localStorage date).
  * The backend stores one row per (visitor_id, date) in the daily_visits table,

@@ -1,7 +1,7 @@
 package com.penallaw.backend.controller;
 
-import com.penallaw.backend.dto.AdminDTOs;
-import com.penallaw.backend.service.AdminService;
+import com.penallaw.backend.dto.StatsDTOs;
+import com.penallaw.backend.service.StatsService;
 import com.penallaw.backend.service.VisitorTrackingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -10,23 +10,26 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 /**
- * Public statistics endpoint — accessible to any user (no authentication required).
- * GET /api/home  →  aggregate dashboard statistics (sessions, cases, by province, by role, etc.)
+ * Public statistics endpoints — accessible to any authenticated user (not admin-only).
  *
- * Separate from /api/admin/** (which is ROLE_ADMIN only) so that ordinary users
- * can view system-wide metrics without needing admin credentials.
+ * GET  /api/home              — aggregate dashboard statistics
+ * POST /api/home/track-visit  — record a unique daily browser visit
+ *
+ * Completely separated from /api/admin/** (ROLE_ADMIN only), ensuring
+ * ordinary users can view system-wide metrics without admin credentials.
  */
 @RestController
 @RequestMapping("/api/home")
 @RequiredArgsConstructor
 public class StatsController {
 
-    private final AdminService adminService;
+    private final StatsService statsService;
     private final VisitorTrackingService visitorTrackingService;
 
+    /** Return aggregate dashboard statistics for the public Stats page. */
     @GetMapping
-    public ResponseEntity<AdminDTOs.DashboardStats> getStats() {
-        return ResponseEntity.ok(adminService.getStats());
+    public ResponseEntity<StatsDTOs.DashboardStats> getStats() {
+        return ResponseEntity.ok(statsService.getStats());
     }
 
     /**

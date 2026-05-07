@@ -20,7 +20,6 @@ public class DataInitializer implements ApplicationListener<ApplicationReadyEven
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final com.penallaw.backend.repository.SiteStatsRepository statsRepository;
 
     @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
@@ -38,13 +37,5 @@ public class DataInitializer implements ApplicationListener<ApplicationReadyEven
             log.debug("Admin account already exists — skipping seed.");
         }
 
-        // 2. Initialize global site stats if missing
-        if (!statsRepository.existsById("global")) {
-            statsRepository.save(com.penallaw.backend.entity.SiteStats.builder()
-                    .id("global")
-                    .visitorCount(0L)
-                    .build());
-            log.info("✅ Global site statistics row initialized.");
-        }
     }
 }

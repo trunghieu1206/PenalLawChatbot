@@ -38,7 +38,7 @@ ai-service/logs
 ai-service/scraped_datasets/
 ai-service/test_datasets/
 
-.docx
+*.docx
 
 scripts/
 
