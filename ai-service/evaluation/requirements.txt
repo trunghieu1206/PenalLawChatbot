@@ -1,0 +1,5 @@
+# Evaluation pipeline dependencies (install separately from ai-service/requirements.txt)
+openai>=1.30.0          # OpenRouter-compatible client
+requests>=2.31.0
+numpy>=1.26.0
+python-dotenv>=1.0.0

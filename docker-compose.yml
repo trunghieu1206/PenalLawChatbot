@@ -38,6 +38,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      ai-service:
+        condition: service_healthy
     restart: unless-stopped
 
   # ---- PYTHON AI SERVICE ----
@@ -49,27 +51,34 @@ services:
     environment:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       HF_TOKEN: ${HF_TOKEN}
-      MILVUS_URI: /data/VN_law_lora.db
+      # BUG-FIX: Use MILVUS_DB_PATH (not MILVUS_URI) — main.py reads MILVUS_DB_PATH
+      # to prevent pymilvus from reading MILVUS_URI at import time and crashing.
+      MILVUS_DB_PATH: /data/VN_law_lora.db
       COLLECTION_NAME: ${COLLECTION_NAME:-legal_rag_lora}
       LLM_MODEL: ${LLM_MODEL:-google/gemini-2.5-flash}
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: penallaw
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     volumes:
       - ./database/ai_data:/data
     ports:
       - "8000:8000"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    # BUG-FIX: Removed nvidia GPU reservation — it blocks deployment on CPU-only servers.
+    # GPU acceleration is auto-detected at runtime via _detect_device().
+    # Uncomment the block below only if you have a GPU host:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
     restart: unless-stopped
 
   # ---- REACT FRONTEND ----

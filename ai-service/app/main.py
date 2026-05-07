@@ -873,8 +873,8 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
                 HumanMessage(content=f"NỘI DUNG VỤ ÁN:\n{case_text}")
             ]))
             raw = response.content.strip()
-            # Strip markdown code fences if present
-            raw = re.sub(r"```json?\s*", "", raw).strip("`").strip()
+            # Strip markdown code fences (handles ```json, ```JSON, or plain ```)
+            raw = re.sub(r"```(?:json)?\s*", "", raw).strip()
             facts = json.loads(raw)
         except Exception as e:
             print(f"⚠️  Fact extraction failed: {e}")
@@ -993,7 +993,7 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
 
         try:
             response = llm.invoke(_sanitize_msgs([HumanMessage(content=prompt)]))
-            raw = re.sub(r"```json?\s*", "", response.content.strip()).strip("`").strip()
+            raw = re.sub(r"```(?:json)?\s*", "", response.content.strip()).strip()
             queries = json.loads(raw)
             q_list = [
                 q for q in [
@@ -1260,7 +1260,7 @@ OUTPUT: CHỈ JSON array hợp lệ."""
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=f"SỰ KIỆN:\n{facts_str}\n\nVĂN BẢN LUẬT (có nhãn role):\n{context}\n\nVỤ ÁN:\n{case_text}")
             ]))
-            raw    = re.sub(r"```json?\s*", "", response.content.strip()).strip("`").strip()
+            raw    = re.sub(r"```(?:json)?\s*", "", response.content.strip()).strip()
             mapped = json.loads(raw)
             if not isinstance(mapped, list) or len(mapped) == 0:
                 raise ValueError("Empty or non-list mapped_laws")
@@ -1896,10 +1896,6 @@ async def predict_judgment(req: RequestBody):
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
 
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
-
 
 # ===========================================================
 # PRACTICE / EVALUATE ENDPOINT
@@ -1985,7 +1981,7 @@ OUTPUT: CHỈ JSON."""
     try:
         response = llm_instance.invoke([HumanMessage(content=eval_prompt)])
         raw = response.content.strip()
-        raw = re.sub(r"```json?\s*", "", raw).strip("`").strip()
+        raw = re.sub(r"```(?:json)?\s*", "", raw).strip()
         data = json.loads(raw)
 
         # Clean up BLHS references in missed_articles
@@ -2008,3 +2004,8 @@ OUTPUT: CHỈ JSON."""
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Practice evaluation failed: {e}")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
