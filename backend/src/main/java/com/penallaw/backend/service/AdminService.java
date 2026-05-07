@@ -1,13 +1,11 @@
 package com.penallaw.backend.service;
 
 import com.penallaw.backend.dto.AdminDTOs;
-import com.penallaw.backend.entity.ChatMessage;
 import com.penallaw.backend.entity.ChatSession;
 import com.penallaw.backend.entity.Feedback;
 import com.penallaw.backend.entity.User;
 import com.penallaw.backend.repository.ChatMessageRepository;
 import com.penallaw.backend.repository.ChatSessionRepository;
-import com.penallaw.backend.repository.DailyVisitRepository;
 import com.penallaw.backend.repository.FeedbackRepository;
 import com.penallaw.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,11 +19,19 @@ import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.TreeMap;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Service responsible for admin-only operations.
+ *
+ * Responsibilities:
+ *   - Retrieve and review user feedback on AI responses.
+ *   - Aggregate per-user case (session) statistics for the admin panel.
+ *   - Submit and update feedback review status.
+ *
+ * Public-facing stats (for the /api/home endpoint) have been moved to StatsService.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -35,60 +41,6 @@ public class AdminService {
     private final ChatMessageRepository messageRepository;
     private final FeedbackRepository feedbackRepository;
     private final UserRepository userRepository;
-    private final DailyVisitRepository dailyVisitRepository;
-
-    // ── DASHBOARD STATS ──────────────────────────────────────────
-
-    @Transactional(readOnly = true)
-    public AdminDTOs.DashboardStats getStats() {
-
-        long totalSessions = sessionRepository.count();
-        long totalUsers    = userRepository.count();
-
-        // Sessions that ran the new_case pipeline (AI response has extracted_facts)
-        List<ChatMessage> aiMessages = messageRepository.findAssistantMessagesWithFacts();
-        long casesProcessed = aiMessages.stream()
-                .map(m -> m.getSession().getId())
-                .distinct()
-                .count();
-
-        // -- Sessions by role --
-        Map<String, Long> byRole = sessionRepository.findAll().stream()
-                .collect(Collectors.groupingBy(
-                        s -> Optional.ofNullable(s.getMode()).orElse("neutral"),
-                        Collectors.counting()
-                ));
-
-        // -- Cases by province (dia_danh from extracted_facts) --
-        Map<String, Long> byProvince = new TreeMap<>();
-        for (ChatMessage m : aiMessages) {
-            String province = extractField(m.getExtractedFacts(), "dia_danh");
-            if (province != null && !province.isBlank()) {
-                byProvince.merge(normalizeProvince(province), 1L, Long::sum);
-            }
-        }
-
-        // -- Cases by crime type (offense_name from mappedLaws[0]) --
-        Map<String, Long> byCrimeType = new TreeMap<>();
-        for (ChatMessage m : aiMessages) {
-            String crimeType = extractCrimeType(m.getMappedLaws());
-            if (crimeType != null && !crimeType.isBlank()) {
-                byCrimeType.merge(crimeType, 1L, Long::sum);
-            }
-        }
-
-        // -- Feedback stats --
-        long feedbackTotal     = feedbackRepository.count();
-        long feedbackCorrect   = feedbackRepository.countByIsCorrectTrue();
-        long feedbackIncorrect = feedbackRepository.countByIsCorrectFalse();
-
-        return new AdminDTOs.DashboardStats(
-                totalSessions, totalUsers, casesProcessed,
-                dailyVisitRepository.count(),
-                byRole, byProvince, byCrimeType,
-                feedbackTotal, feedbackCorrect, feedbackIncorrect
-        );
-    }
 
     // ── FEEDBACK ADMIN LIST ───────────────────────────────────────
 
@@ -181,32 +133,4 @@ public class AdminService {
         return new AdminDTOs.FeedbackResponse(feedbackId, "Đã cập nhật trạng thái.");
     }
 
-    // ── HELPERS ───────────────────────────────────────────────────
-
-    @SuppressWarnings("unchecked")
-    private String extractField(Map<String, Object> facts, String key) {
-        if (facts == null) return null;
-        Object val = facts.get(key);
-        return val instanceof String ? (String) val : null;
-    }
-
-    @SuppressWarnings("unchecked")
-    private String extractCrimeType(List<Map<String, Object>> mappedLaws) {
-        if (mappedLaws == null || mappedLaws.isEmpty()) return null;
-        Object name = mappedLaws.get(0).get("offense_name");
-        return name instanceof String ? (String) name : null;
-    }
-
-    /** Normalize province strings: trim, title-case common abbreviations. */
-    private String normalizeProvince(String raw) {
-        if (raw == null) return null;
-        String s = raw.trim();
-        // Map common abbreviations
-        if (s.toLowerCase().contains("hà nội"))        return "Hà Nội";
-        if (s.toLowerCase().contains("hồ chí minh") || s.toLowerCase().contains("tp.hcm") || s.toLowerCase().contains("tp hcm")) return "TP. Hồ Chí Minh";
-        if (s.toLowerCase().contains("đà nẵng"))       return "Đà Nẵng";
-        if (s.toLowerCase().contains("cần thơ"))       return "Cần Thơ";
-        if (s.toLowerCase().contains("hải phòng"))     return "Hải Phòng";
-        return s;
-    }
 }

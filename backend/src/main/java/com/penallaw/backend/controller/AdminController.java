@@ -10,11 +10,15 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Admin endpoints — secured at the URL level by SecurityConfig.
+ * Admin endpoints — secured at the URL level by SecurityConfig (ROLE_ADMIN only).
  *
- * GET  /api/admin/stats     — aggregate dashboard statistics (ROLE_ADMIN)
- * GET  /api/admin/feedback  — all feedback with full session conversations (ROLE_ADMIN)
- * POST /api/admin/feedback  — submit feedback on an AI response (open to all users)
+ * GET   /api/admin/feedback          — all feedback with full session conversations
+ * POST  /api/admin/feedback          — submit feedback on an AI response (open to all users)
+ * PATCH /api/admin/feedback/{id}/status — update the review status of a feedback record
+ * GET   /api/admin/user-stats        — per-user session/case counts
+ *
+ * Public aggregate statistics (total sessions, visitors, etc.) have been moved to
+ * StatsController at /api/home (accessible to all authenticated users).
  */
 @RestController
 @RequestMapping("/api/admin")
@@ -22,12 +26,6 @@ import java.util.UUID;
 public class AdminController {
 
     private final AdminService adminService;
-
-    /** Aggregate dashboard statistics. */
-    @GetMapping("/stats")
-    public ResponseEntity<AdminDTOs.DashboardStats> getStats() {
-        return ResponseEntity.ok(adminService.getStats());
-    }
 
     /** All feedback records with full conversation context (admin view). */
     @GetMapping("/feedback")
