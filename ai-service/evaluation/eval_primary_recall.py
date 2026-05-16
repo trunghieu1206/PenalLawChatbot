@@ -78,63 +78,48 @@ def _extract_nums_from_text(text: str) -> set:
     ))
 
 
-def load_cases(test_path: str, full_path: str) -> list:
+def load_cases(dataset_path: str, _unused: str = "") -> list:
     """
-    Build ordered case list. Each case has:
+    Build ordered case list from case_eval_dataset.json. Each case has:
       - case_url
-      - question          (longest question from test dataset)
-      - primary_article   (first non-procedural article in full verdict)
-      - all_gt_articles   (every article the court applied)
+      - case_description  (sent to /predict)
+      - primary_article   (first non-procedural Điều extracted from final_verdict)
+      - final_verdict     (ground truth)
     """
-    with open(test_path, encoding="utf-8") as f:
-        test_data = json.load(f)
-    with open(full_path, encoding="utf-8") as f:
-        full_data = json.load(f)
-
-    # Group by URL
-    test_by_url: dict = defaultdict(list)
-    for e in test_data:
-        test_by_url[e["link_to_case"]].append(e)
-
-    full_by_url: dict = defaultdict(list)
-    for e in full_data:
-        full_by_url[e["link_to_case"]].append(e)
-
-    # Stable order from test dataset
-    seen: dict = {}
-    for e in test_data:
-        url = e["link_to_case"]
-        if url not in seen:
-            seen[url] = len(seen)
+    with open(dataset_path, encoding="utf-8") as f:
+        data = json.load(f)
 
     cases = []
-    for url, _ in sorted(seen.items(), key=lambda x: x[1]):
-        te = test_by_url[url]
-        fe = full_by_url.get(url, te)
+    for entry in data:
+        url         = entry.get("url", "")
+        final_text  = entry.get("final_verdict", "")
 
-        all_gt = [e["expected_article"] for e in fe]
+        # Extract all Điều numbers from the actual court verdict
+        all_nums = re.findall(r"[Ðđd][iíI][eêE][uU]\s*(\d+[A-Za-z]?)",
+                              final_text, re.I)
+        # Remove duplicates, keep order
+        seen_nums: dict = {}
+        for n in all_nums:
+            if n not in seen_nums:
+                seen_nums[n] = None
+        all_gt_nums = list(seen_nums.keys())
 
-        # Primary = first non-procedural article in the verdict
-        primary = next(
-            (a for a in all_gt
-             if _article_num(a) and _article_num(a) not in _PROCEDURAL),
-            None
+        # Primary = first non-procedural article
+        primary_num = next(
+            (n for n in all_gt_nums if n not in _PROCEDURAL), None
         )
-
-        if not primary:
-            # Edge case: verdict only has procedural articles — skip
-            continue
-
-        question = max(te, key=lambda e: len(e["question"]))["question"]
+        if not primary_num:
+            continue  # skip: no identifiable crime article in verdict
 
         cases.append({
-            "case_url":        url,
-            "question":        question,
-            "primary_article": primary,         # e.g. "Điều 173 - BLHS 2015 (sửa đổi 2017)"
-            "primary_num":     _article_num(primary),  # e.g. "173"
-            "all_gt_articles": all_gt,
+            "case_url":          url,
+            "crime_type":        entry.get("crime_type", ""),
+            "case_description":  entry.get("case_description", ""),
+            "final_verdict":     final_text,
+            "primary_article":   f"Điều {primary_num}",
+            "primary_num":       primary_num,
+            "all_gt_articles":   [f"Điều {n}" for n in all_gt_nums],
         })
-
     return cases
 
 
@@ -201,10 +186,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="Primary Article Recall evaluation for VNPLaw AI service."
     )
-    parser.add_argument("--test-dataset",
-                        default="ai-service/scraped_datasets/toaan_gov_test_datasets.json")
-    parser.add_argument("--full-dataset",
-                        default="ai-service/scraped_datasets/toaan_gov_datasets.json")
+    parser.add_argument("--dataset",
+                        default="ai-service/scraped_datasets/thesis_eval_1000.json",
+                        help="Path to case_eval_dataset.json")
     parser.add_argument("--output",
                         default="ai-service/evaluation/results/primary_recall_results.jsonl")
     parser.add_argument("--summary",
@@ -235,7 +219,7 @@ def main():
     log.info("=" * 70)
 
     # Load datasets
-    cases = load_cases(args.test_dataset, args.full_dataset)
+    cases = load_cases(args.dataset)
     log.info(f"Total cases with identifiable primary article: {len(cases)}")
 
     # Apply range (1-indexed)
@@ -275,8 +259,8 @@ def main():
             log.info(f"[{cidx}/{s_idx + len(cases)}]  primary={case['primary_article']}")
             log.debug(f"  URL: {url[-60:]}")
 
-            # Call AI service
-            pred = call_predict(args.ai_url, case["question"], args.timeout, log)
+            # Call AI — send full case facts as the prompt
+            pred = call_predict(args.ai_url, case["case_description"], args.timeout, log)
             if not pred:
                 log.warning("  Empty response — skipping")
                 continue

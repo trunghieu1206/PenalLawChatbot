@@ -63,15 +63,17 @@ Return ONLY this JSON:
 """
 
 def build_context(case: dict) -> dict:
-    return {"nhan_dinh": get_nhan_dinh(case["case_url"])}
+    return {
+        "nhan_dinh":    case.get("explanation", get_nhan_dinh(case["case_url"])),
+        "final_verdict": case.get("final_verdict", ""),
+    }
 
 def build_prompt(question: str, case: dict, ctx: dict,
                  response: str, baseline: str) -> str:
-    gt = "\n".join(f"  • {a}" for a in case["all_gt_articles"])
     return _PROMPT.format(
         question=question[:1200],
         nhan_dinh=ctx["nhan_dinh"][:2000],
-        gt_articles=gt,
+        gt_articles=ctx["final_verdict"][:800],
         response=response[:2000],
         baseline=baseline[:1200],
     )

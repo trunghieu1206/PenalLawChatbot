@@ -129,32 +129,21 @@ def setup_logging(log_file: Optional[str]) -> logging.Logger:
 
 
 # ── Dataset loader ────────────────────────────────────────────────────────────
-def load_cases(test_path: str, full_path: str) -> list:
-    with open(test_path, encoding="utf-8") as f:
-        test_data = json.load(f)
-    with open(full_path, encoding="utf-8") as f:
-        full_data = json.load(f)
-
-    full_by_url: dict = defaultdict(list)
-    for e in full_data:
-        full_by_url[e["link_to_case"]].append(e)
-
-    seen: dict = {}
-    test_by_url: dict = defaultdict(list)
-    for e in test_data:
-        url = e["link_to_case"]
-        test_by_url[url].append(e)
-        if url not in seen:
-            seen[url] = len(seen)
-
+def load_cases(dataset_path: str, _unused: str = "") -> list:
+    """Load from case_eval_dataset.json."""
+    with open(dataset_path, encoding="utf-8") as f:
+        data = json.load(f)
     cases = []
-    for url, _ in sorted(seen.items(), key=lambda x: x[1]):
-        te = test_by_url[url]
-        fe = full_by_url.get(url, te)
+    for entry in data:
         cases.append({
-            "case_url": url,
-            "question": max(te, key=lambda e: len(e["question"]))["question"],
-            "ground_truth_articles": [e["expected_article"] for e in fe],
+            "case_url":          entry.get("url", ""),
+            "crime_type":        entry.get("crime_type", ""),
+            "case_description":  entry.get("case_description", ""),
+            # backward-compat alias — signal scoring uses case["question"]
+            "question":          entry.get("case_description", ""),
+            "explanation":       entry.get("explanation", ""),
+            "final_verdict":     entry.get("final_verdict", ""),
+            "ground_truth_articles": [],
         })
     return cases
 
@@ -246,10 +235,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="Role Adherence evaluation for VNPLaw AI service."
     )
-    parser.add_argument("--test-dataset",
-                        default="ai-service/scraped_datasets/toaan_gov_test_datasets.json")
-    parser.add_argument("--full-dataset",
-                        default="ai-service/scraped_datasets/toaan_gov_datasets.json")
+    parser.add_argument("--dataset",
+                        default="ai-service/scraped_datasets/thesis_eval_1000.json",
+                        help="Path to case_eval_dataset.json")
     parser.add_argument("--output",
                         default="ai-service/evaluation/results/role_adherence_results.jsonl")
     parser.add_argument("--summary",
@@ -257,7 +245,7 @@ def main():
     parser.add_argument("--ai-url",
                         default=os.getenv("AI_SERVICE_URL", "http://localhost:8000"))
     parser.add_argument("--model",
-                        default=os.getenv("LLM_MODEL", "google/gemini-2.5-flash"))
+                        default=os.getenv("LLM_JUDGE_MODEL", "google/gemini-2.5-pro"))
     parser.add_argument("--timeout",  type=int, default=120)
     parser.add_argument("--start",    type=int, default=1,
                         help="First case (1-indexed, inclusive)")
@@ -279,7 +267,7 @@ def main():
     log.info(f"  Pass goal  : mean score >= 0.85")
     log.info("=" * 70)
 
-    cases = load_cases(args.test_dataset, args.full_dataset)
+    cases = load_cases(args.dataset)
     log.info(f"Total unique cases loaded: {len(cases)}")
 
     s_idx = max(0, args.start - 1)
@@ -299,7 +287,7 @@ def main():
                     pass
         log.info(f"Resume: {len(done_urls)} cases already done.")
 
-    oai = OpenAI(api_key=os.getenv("OPENROUTER_API_KEY") or "missing",
+    oai = OpenAI(api_key=os.getenv("OPENROUTER_LLM_JUDGE_KEY") or os.getenv("OPENROUTER_API_KEY") or "missing",
                  base_url="https://openrouter.ai/api/v1")
 
     # Per-role accumulators
@@ -325,7 +313,7 @@ def main():
             case_combined = []
 
             for role in ROLES:
-                response = call_predict(args.ai_url, case["question"],
+                response = call_predict(args.ai_url, case["case_description"],
                                         role, args.timeout, log)
                 if not response:
                     log.debug(f"  [{role}] empty response — skipping role")

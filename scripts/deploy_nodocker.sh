@@ -209,11 +209,25 @@ su -c "cd /tmp && psql -c \"ALTER USER $DB_USER WITH PASSWORD '$DB_PASS';\"" pos
 su -c "cd /tmp && createdb $DB_NAME" postgres 2>/dev/null || true   # silently fails if exists
 info "Database '$DB_NAME' ready."
 
-# Auto-restore backup if DB is empty
+# Auto-restore backup if DB is empty OR if laws table has no data.
+# BUG-FIX: The old guard (TABLE_COUNT > 0 → skip) was too naive.
+# Hibernate ddl-auto=update creates empty tables on first boot BEFORE this
+# restore check runs. This caused the restore to be skipped even though laws
+# had 0 rows. We now check the laws row count directly.
 BACKUP_DIR="$PROJECT_DIR/database/backups"
 TABLE_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM information_schema.tables WHERE table_schema='public';\"" postgres 2>/dev/null || echo "0")
+LAWS_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM laws;\"" postgres 2>/dev/null || echo "0")
 
-if [ "${TABLE_COUNT:-0}" -eq 0 ] && [ -d "$BACKUP_DIR" ]; then
+if [ "${LAWS_COUNT:-0}" -gt 0 ]; then
+    skip "DB already populated — laws: ${LAWS_COUNT:-0} articles in $TABLE_COUNT tables — skipping restore."
+elif [ -d "$BACKUP_DIR" ]; then
+    # Laws is empty (0 rows) — restore regardless of whether tables exist.
+    if [ "${TABLE_COUNT:-0}" -gt 0 ]; then
+        info "DB has $TABLE_COUNT tables but laws is empty — forcing restore (Hibernate may have created empty tables)."
+    else
+        info "DB is empty — restoring from backup..."
+    fi
+
     if [ -f "$BACKUP_DIR/penallaw_combined_backup.sql" ]; then
         LATEST_BACKUP="$BACKUP_DIR/penallaw_combined_backup.sql"
     else
@@ -221,7 +235,7 @@ if [ "${TABLE_COUNT:-0}" -eq 0 ] && [ -d "$BACKUP_DIR" ]; then
     fi
 
     if [ -n "$LATEST_BACKUP" ] && [ -f "$LATEST_BACKUP" ]; then
-        info "DB is empty — restoring from: $(basename "$LATEST_BACKUP")..."
+        info "Restoring from: $(basename "$LATEST_BACKUP")..."
         su -c "cd /tmp && dropdb --if-exists $DB_NAME" postgres 2>/dev/null || true
         su -c "cd /tmp && createdb $DB_NAME" postgres 2>/dev/null || true
         TEMP_BACKUP="/tmp/penallaw_restore_$$.sql"
@@ -237,9 +251,6 @@ if [ "${TABLE_COUNT:-0}" -eq 0 ] && [ -d "$BACKUP_DIR" ]; then
     else
         info "No backup found — starting with empty database (Spring Boot will auto-create tables)."
     fi
-elif [ "${TABLE_COUNT:-0}" -gt 0 ]; then
-    LAWS_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM laws;\"" postgres 2>/dev/null || echo "0")
-    skip "DB already has $TABLE_COUNT tables (laws: ${LAWS_COUNT:-0}) — skipping restore."
 fi
 
 # Idempotent schema migration for sentencing_data column
@@ -281,12 +292,18 @@ if command -v nvidia-smi &>/dev/null; then
     _TORCH_CU=$("$AI_PYTHON" -c "import torch; v=torch.__version__; print(v.split('+')[1] if '+' in v else 'cpu')" 2>/dev/null || echo "cpu")
     info "  Driver CUDA cap: ${_DRIVER_CUDA}.x  |  torch cu-tag: $_TORCH_CU"
 
-    # Select the highest compatible cu tag for this driver.
-    # Use the driver *major version number* (e.g. 525, 550, 535) directly.
+    # Map driver version to the HIGHEST compatible PyTorch cu-tag.
+    # PyTorch cu-tag compatibility:
+    #   cu124 → CUDA 12.4 → requires driver >= R550 (550.x)
+    #   cu121 → CUDA 12.1 → requires driver >= R525 (525.x)  ← RTX 2080 R525 goes here
+    #   cu118 → CUDA 11.8 → requires driver >= R520 (520.x)
+    # Rule: pick the HIGHEST cu-tag that the driver can support.
+    # torch 2.5.x does NOT have a cu118 wheel — min is cu121 for torch>=2.4.
     _DRV_MAJOR=$(nvidia-smi 2>/dev/null | grep -oP 'Driver Version: \K[0-9]+' | head -1 || echo "0")
     if   [ "$_DRV_MAJOR" -ge 550 ]; then _NEED_CU="cu124"   # CUDA 12.4+ (RTX 40xx, A100 new)
-    elif [ "$_DRV_MAJOR" -ge 530 ]; then _NEED_CU="cu121"   # CUDA 12.1
-    else                                  _NEED_CU="cu118"; fi # CUDA 11.8 — works from R520
+    elif [ "$_DRV_MAJOR" -ge 525 ]; then _NEED_CU="cu121"   # CUDA 12.1 — RTX 2080/3080 with R525+
+    elif [ "$_DRV_MAJOR" -ge 520 ]; then _NEED_CU="cu118"   # CUDA 11.8 — older R520 drivers
+    else                                  _NEED_CU="cu118"; fi # last resort
     info "  Driver major: R${_DRV_MAJOR} → selecting $_NEED_CU"
 
     if [ "$_TORCH_CU" != "$_NEED_CU" ] && [ "$_TORCH_CU" != "cpu" ]; then
@@ -298,10 +315,16 @@ if command -v nvidia-smi &>/dev/null; then
             python3 -c "p='$1'.split('.')[:2]; print(f'0.{int(p[0])*10+int(p[1])-5}.0')" 2>/dev/null || echo "0.20.0"
         }
 
-        # Try the exact torch version first; if that fails (e.g. 2.5.x has no cu118 wheel),
-        # fall back to 2.4.1+cu118 which is the last cu118-compatible release.
+        # Try the exact torch version first.
+        # Fallback order: same base with target cu-tag, then 2.5.1, then 2.4.1.
+        # Note: torch 2.5.x has cu121 and cu124 wheels but NOT cu118.
+        #       torch 2.4.x has cu118, cu121, cu124 wheels.
         _REINSTALL_OK=false
-        for _TBASE in "$_TORCH_BASE" "2.4.1"; do
+        _fallback_bases=("$_TORCH_BASE")
+        [ "$_TORCH_BASE" != "2.5.1" ] && _fallback_bases+=("2.5.1")
+        [ "$_NEED_CU" = "cu118" ]     && _fallback_bases+=("2.4.1")  # 2.5.x has no cu118
+
+        for _TBASE in "${_fallback_bases[@]}"; do
             _TVBASE=$(_calc_tv "$_TBASE")
             info "  Trying torch==${_TBASE}+${_NEED_CU} torchvision==${_TVBASE}+${_NEED_CU}..."
             if "$AI_PYTHON" -m pip install \
@@ -315,7 +338,9 @@ if command -v nvidia-smi &>/dev/null; then
             fi
             warn "  torch ${_TBASE}+${_NEED_CU} unavailable — trying fallback..."
         done
-        [ "$_REINSTALL_OK" = false ] && warn "  torch cu-tag reinstall failed — CUDA may not work (will run on CPU)."
+        if [ "$_REINSTALL_OK" = false ]; then
+            warn "  torch cu-tag reinstall failed — will try to fix device nodes and test CUDA."
+        fi
         TORCH_VER=$("$AI_PYTHON" -c "import torch; print(torch.__version__)" 2>/dev/null)
         info "  torch after fix: $TORCH_VER"
     fi
@@ -329,39 +354,66 @@ if command -v nvidia-smi &>/dev/null; then
     if [ ! -e /dev/nvidia-uvm ]; then
         info "  /dev/nvidia-uvm missing — attempting fix..."
 
-        # Strategy 1: modprobe (works on bare metal, fails in containers)
-        if modprobe nvidia-uvm 2>/dev/null; then
+        # Strategy 1: nvidia-modprobe (the official tool — creates /dev/nvidia* nodes).
+        # Install it first if missing (it's in the nvidia driver package).
+        if ! command -v nvidia-modprobe &>/dev/null; then
+            info "  Installing nvidia-modprobe..."
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                nvidia-modprobe 2>/dev/null || true
+        fi
+        if command -v nvidia-modprobe &>/dev/null && nvidia-modprobe -u -c 0 2>/dev/null; then
+            info "  ✅ /dev/nvidia-uvm created via nvidia-modprobe."
+
+        # Strategy 2: modprobe (bare metal; fails inside containers)
+        elif modprobe nvidia-uvm 2>/dev/null; then
             info "  ✅ nvidia-uvm loaded via modprobe."
             grep -qxF "nvidia-uvm" /etc/modules 2>/dev/null || echo "nvidia-uvm" >> /etc/modules
 
-        # Strategy 2: mknod (works in containers/LXC where modprobe is blocked,
-        # as long as the host kernel already has the nvidia-uvm module loaded)
+        # Strategy 3: mknod (container/LXC — host kernel has module, but modprobe is blocked;
+        # works if nvidia-uvm *major number* is listed in /proc/devices)
         elif _UVM_MAJOR=$(awk '/nvidia-uvm/{print $1}' /proc/devices 2>/dev/null) && [ -n "$_UVM_MAJOR" ]; then
             info "  modprobe blocked (container) — creating device nodes via mknod (major=$_UVM_MAJOR)..."
             mknod /dev/nvidia-uvm       c "$_UVM_MAJOR" 0 2>/dev/null && \
             mknod /dev/nvidia-uvm-tools c "$_UVM_MAJOR" 1 2>/dev/null || true
             chmod 666 /dev/nvidia-uvm /dev/nvidia-uvm-tools 2>/dev/null || true
             [ -e /dev/nvidia-uvm ] && info "  ✅ /dev/nvidia-uvm created via mknod." || \
-                warn "  mknod failed — CUDA may not work."
+                warn "  mknod failed — /dev/nvidia-uvm still absent."
 
         else
-            warn "  Both modprobe and mknod failed. nvidia-uvm not in /proc/devices."
-            warn "  The host kernel may not have the GPU driver loaded."
+            warn "  All strategies failed — nvidia-uvm not in /proc/devices."
+            warn "  GPU is visible but kernel UVM module is not loaded."
         fi
     fi
 
     _TORCH_CUDA=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
     if [ "$_TORCH_CUDA" = "True" ]; then
         _GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || echo "unknown")
-        info "✅ GPU ready: $_GPU_NAME | torch CUDA: True"
+        _GPU_MEM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader 2>/dev/null | head -1 || echo "?")
+        info "✅ GPU ready: $_GPU_NAME ($_GPU_MEM) | torch CUDA: True"
     else
         echo ""
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        warn "GPU detected but CUDA unavailable — falling back to CPU."
-        warn "This is likely a cloud provider issue (nvidia-uvm not in /proc/devices)."
-        warn "Contact your provider to enable CUDA compute access on this instance."
-        warn "The AI service will run on CPU (slower but fully functional)."
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo -e "${RED}[ERR]${NC}   GPU detected (nvidia-smi OK) but CUDA is NOT available."
+        echo -e "${RED}[ERR]${NC}   torch.cuda.is_available() = False"
+        echo ""
+        echo -e "${YELLOW}[HELP]${NC}  This is a driver/kernel issue — NOT a PyTorch issue."
+        echo -e "${YELLOW}[HELP]${NC}  Likely cause: the GPU container is missing CUDA device files."
+        echo ""
+        echo -e "${YELLOW}[HELP]${NC}  Try these steps on the HOST (not inside the container):"
+        echo -e "${YELLOW}[HELP]${NC}    1. nvidia-modprobe -u    # load nvidia-uvm kernel module"
+        echo -e "${YELLOW}[HELP]${NC}    2. ls /dev/nvidia*       # should show nvidia0, nvidia-uvm, etc."
+        echo -e "${YELLOW}[HELP]${NC}    3. Re-run this script."
+        echo ""
+        echo -e "${YELLOW}[HELP]${NC}  If on a rental server: contact your provider to enable"
+        echo -e "${YELLOW}[HELP]${NC}  'CUDA compute access' or to run nvidia-modprobe on the host."
+        echo -e "${YELLOW}[HELP]${NC}  Some providers expose this as a 'GPU passthrough' toggle."
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        read -rp "You have a GPU but CUDA is unavailable. Continue on CPU anyway? [y/N] " _CONTINUE_CPU
+        if [[ ! "$_CONTINUE_CPU" =~ ^[Yy]$ ]]; then
+            error "Aborted. Fix CUDA access and re-run."
+        fi
+        warn "Continuing on CPU as requested. Inference will be significantly slower."
     fi
 else
     warn "nvidia-smi not found — deploying in CPU-only mode."

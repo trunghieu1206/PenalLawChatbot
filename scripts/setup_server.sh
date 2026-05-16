@@ -262,14 +262,18 @@ if [ "$_TORCH_ALREADY" = "false" ]; then
     if command -v nvidia-smi &>/dev/null; then
         # Detect driver and select the highest compatible cu-tag
         _DRV_MAJOR=$(nvidia-smi 2>/dev/null | grep -oP 'Driver Version: \K[0-9]+' | head -1 || echo "0")
-        if   [ "$_DRV_MAJOR" -ge 550 ]; then _CU_TAG="cu124"; _TORCH_VER="2.5.1"; _TV_VER="0.20.1"
-        elif [ "$_DRV_MAJOR" -ge 530 ]; then _CU_TAG="cu121"; _TORCH_VER="2.5.1"; _TV_VER="0.20.1"
-        else                                  _CU_TAG="cu118"; _TORCH_VER="2.4.1"; _TV_VER="0.19.1"; fi
+        if   [ "$_DRV_MAJOR" -ge 550 ]; then _CU_TAG="cu124"; _TORCH_VER="2.5.1"
+        elif [ "$_DRV_MAJOR" -ge 525 ]; then _CU_TAG="cu121"; _TORCH_VER="2.5.1"
+        elif [ "$_DRV_MAJOR" -ge 520 ]; then _CU_TAG="cu118"; _TORCH_VER="2.4.1"
+        else                                  _CU_TAG="cu118"; _TORCH_VER="2.4.1"; fi
         info "  GPU R${_DRV_MAJOR} → installing torch==${_TORCH_VER}+${_CU_TAG}..."
 
         _GPU_TORCH_OK=false
-        # Try preferred version first, fall back to 2.4.1 (last cu118-compatible release)
-        for _TB in "$_TORCH_VER" "2.4.1"; do
+        _fallback_bases=("$_TORCH_VER")
+        [ "$_TORCH_VER" != "2.5.1" ] && _fallback_bases+=("2.5.1")
+        [ "$_CU_TAG" = "cu118" ]     && _fallback_bases+=("2.4.1")
+
+        for _TB in "${_fallback_bases[@]}"; do
             _TVB=$(python3 -c "p='$_TB'.split('.')[:2]; print(f'0.{int(p[0])*10+int(p[1])-5}.1')" 2>/dev/null || echo "0.19.1")
             if "$PYTHON_BIN" -m pip install \
                     "torch==${_TB}+${_CU_TAG}" "torchvision==${_TVB}+${_CU_TAG}" \

@@ -67,54 +67,35 @@ def setup_logging(log_file: Optional[str]) -> logging.Logger:
 
 
 # ── Dataset loading ───────────────────────────────────────────────────────────
-def load_cases(test_path: str, full_path: str) -> list:
+def load_cases(dataset_path: str, _unused: str = "") -> list:
     """
-    Returns ordered list of unique cases with:
-      question, case_url, ground_truth_articles (from full dataset),
-      article_contents (enriched from test dataset)
+    Load from case_eval_dataset.json. Each case exposes:
+      case_url, case_description, explanation, final_verdict, crime_type.
     """
-    with open(test_path, encoding="utf-8") as f:
-        test_data = json.load(f)
-    with open(full_path, encoding="utf-8") as f:
-        full_data = json.load(f)
-
-    test_by_url: dict = defaultdict(list)
-    for e in test_data:
-        test_by_url[e["link_to_case"]].append(e)
-
-    full_by_url: dict = defaultdict(list)
-    for e in full_data:
-        full_by_url[e["link_to_case"]].append(e)
-
-    # Stable order: first occurrence in test dataset
-    seen: dict = {}
-    for e in test_data:
-        url = e["link_to_case"]
-        if url not in seen:
-            seen[url] = len(seen)
-
+    with open(dataset_path, encoding="utf-8") as f:
+        data = json.load(f)
     cases = []
-    for url, _ in sorted(seen.items(), key=lambda x: x[1]):
-        te = test_by_url[url]
-        fe = full_by_url.get(url, te)
+    for entry in data:
         cases.append({
-            "case_url":              url,
-            "question":              max(te, key=lambda e: len(e["question"]))["question"],
-            "ground_truth_articles": [e["expected_article"] for e in fe],
-            "article_contents":      {e["expected_article"]: e.get("article_content","")
-                                       for e in te if e.get("article_content")},
+            "case_url":          entry.get("url", ""),
+            "crime_type":        entry.get("crime_type", ""),
+            "case_description":  entry.get("case_description", ""),
+            "explanation":       entry.get("explanation", ""),
+            "final_verdict":     entry.get("final_verdict", ""),
+            "ground_truth_articles": [],
+            "article_contents":  {},
         })
     return cases
 
 
-def _valid_article_set(full_path: str) -> set:
-    """All article numbers appearing in the full dataset = known valid BLHS articles."""
-    with open(full_path, encoding="utf-8") as f:
+def _valid_article_set(dataset_path: str, _unused: str = "") -> set:
+    """All article numbers cited in final_verdict texts — treated as known-valid corpus."""
+    with open(dataset_path, encoding="utf-8") as f:
         data = json.load(f)
-    nums = set()
-    for e in data:
-        m = re.search(r"(\d+[A-Za-z]?)", e.get("expected_article",""))
-        if m:
+    nums: set = set()
+    for entry in data:
+        for m in re.finditer(r"[\u00d0đd][i\u00edI][e\u00eaE][uU]\s*(\d+[A-Za-z]?)",
+                             entry.get("final_verdict", ""), re.I):
             nums.add(m.group(1))
     return nums
 
@@ -145,6 +126,12 @@ def _gt_nums(gt_articles: list) -> set:
         if m:
             nums.add(m.group(1))
     return nums
+
+
+def _gt_nums_from_text(verdict_text: str) -> set:
+    """Extract article numbers directly from the final_verdict free text."""
+    return set(re.findall(r"[\u00d0đd][i\u00edI][e\u00eaE][uU]\s*(\d+[A-Za-z]?)",
+                          verdict_text, re.I))
 
 
 def _parse_date(s: str) -> Optional[date]:
@@ -332,16 +319,22 @@ def layer3_sentencing(response_text: str, gt_articles: list,
 # ── LAYER 4: Factual Consistency (LLM judge) ──────────────────────────────────
 _L4_PROMPT = """\
 Given this Vietnamese criminal case description:
-{question}
+{case_description}
 
-Does the following AI-generated legal analysis state any FACT that DIRECTLY CONTRADICTS the case description?
+The REAL court's reasoning (Nhận định) and verdict (Quyết định) are:
+--- COURT REASONING ---
+{explanation}
+--- COURT VERDICT ---
+{final_verdict}
+
+Does the following AI-generated legal analysis state any FACT that DIRECTLY CONTRADICTS
+the case description or the court's actual verdict above?
 
 Examples of contradictions:
-- Wrong monetary amount (case says 11 triệu, response says 5 triệu)
-- Wrong date (case says 24/7/2021, response says 2019)
-- Wrong victim count or defendant count
+- Wrong monetary amount, date, victim count, defendant count
 - Invents a weapon, substance, or method not mentioned in the case
-- States the defendant was acquitted when the case clearly describes a conviction
+- States the defendant was acquitted when the verdict clearly shows a conviction
+- Cites a completely wrong article number for the crime charged
 
 AI Response to check:
 {response}
@@ -350,10 +343,12 @@ Reply ONLY with this JSON and nothing else:
 {{"contradiction": false, "example": ""}}
 """
 
-def layer4_factual(client: OpenAI, model: str, question: str,
+def layer4_factual(client: OpenAI, model: str, case: dict,
                    response_text: str, log: logging.Logger) -> dict:
     prompt = _L4_PROMPT.format(
-        question=question[:1200],
+        case_description=case["case_description"][:1000],
+        explanation=case["explanation"][:800],
+        final_verdict=case["final_verdict"][:600],
         response=response_text[:1800],
     )
     for attempt in range(3):
@@ -390,12 +385,13 @@ def main():
     parser = argparse.ArgumentParser(
         description="4-Layer hallucination evaluation for VNPLaw AI service."
     )
-    parser.add_argument("--test-dataset", default="ai-service/scraped_datasets/toaan_gov_test_datasets.json")
-    parser.add_argument("--full-dataset", default="ai-service/scraped_datasets/toaan_gov_datasets.json")
+    parser.add_argument("--dataset",
+                        default="ai-service/scraped_datasets/thesis_eval_1000.json",
+                        help="Path to case_eval_dataset.json")
     parser.add_argument("--output",   default="ai-service/evaluation/results/hallucination_results.jsonl")
     parser.add_argument("--summary",  default="ai-service/evaluation/results/hallucination_summary.json")
     parser.add_argument("--ai-url",   default=os.getenv("AI_SERVICE_URL", "http://localhost:8000"))
-    parser.add_argument("--model",    default=os.getenv("LLM_MODEL", "google/gemini-2.5-flash"))
+    parser.add_argument("--model",    default=os.getenv("LLM_JUDGE_MODEL", "google/gemini-2.5-pro"))
     parser.add_argument("--timeout",  type=int, default=120,
                         help="AI service request timeout in seconds (use ~60 on GPU)")
     parser.add_argument("--start",    type=int, default=1, help="First case (1-indexed, inclusive)")
@@ -416,8 +412,8 @@ def main():
     log.info("=" * 70)
 
     # Load
-    cases       = load_cases(args.test_dataset, args.full_dataset)
-    valid_corpus = _valid_article_set(args.full_dataset)
+    cases       = load_cases(args.dataset)
+    valid_corpus = _valid_article_set(args.dataset)
     log.info(f"Cases loaded: {len(cases)}  |  Valid BLHS article nums: {len(valid_corpus)}")
 
     # Apply range
@@ -439,7 +435,7 @@ def main():
                     pass
         log.info(f"Resume: {len(done_urls)} cases already done.")
 
-    oai = OpenAI(api_key=os.getenv("OPENROUTER_API_KEY") or "missing",
+    oai = OpenAI(api_key=os.getenv("OPENROUTER_LLM_JUDGE_KEY") or os.getenv("OPENROUTER_API_KEY") or "missing",
                  base_url="https://openrouter.ai/api/v1")
 
     scores, l1_flags, l2_flags, l3_flags, l4_flags = [], [], [], [], []
@@ -454,8 +450,8 @@ def main():
 
             log.info(f"[{cidx}/{s_idx + len(cases)}] {url[-60:]}")
 
-            # Call AI service
-            pred = call_predict(args.ai_url, case["question"], args.timeout, log)
+            # Call AI — send case_description (full facts) to /predict
+            pred = call_predict(args.ai_url, case["case_description"], args.timeout, log)
             if not pred:
                 log.warning("  Empty response — skipping case")
                 continue
@@ -464,14 +460,15 @@ def main():
             mapped_laws    = pred.get("mapped_laws") or []
             extracted_facts = pred.get("extracted_facts") or {}
 
-            gt = _gt_nums(case["ground_truth_articles"])
+            # Ground-truth article numbers extracted from final_verdict text
+            gt = _gt_nums_from_text(case["final_verdict"])
 
             # Run layers
             l1 = layer1_article_existence(mapped_laws, gt, valid_corpus)
             l2 = layer2_edition(mapped_laws, extracted_facts)
-            l3 = layer3_sentencing(result_text, case["ground_truth_articles"],
+            l3 = layer3_sentencing(result_text, [],
                                    case["article_contents"])
-            l4 = (layer4_factual(oai, args.model, case["question"], result_text, log)
+            l4 = (layer4_factual(oai, args.model, case, result_text, log)
                   if not args.skip_l4 else {"flagged": False, "note": "skipped"})
 
             score = composite(l1, l2, l3, l4)
