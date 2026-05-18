@@ -38,7 +38,9 @@ from collections import defaultdict
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from project root (3 levels up: eval/ → ai-service/ → PenalLawChatbot/)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+load_dotenv(dotenv_path=_PROJECT_ROOT / ".env", override=False)
 
 # ── Articles that are procedural/supporting — never the primary crime article ──
 _PROCEDURAL = {
@@ -87,7 +89,7 @@ def _article_num(s: str) -> Optional[str]:
 def _extract_nums_from_text(text: str) -> set:
     """Fallback: parse all Điều N mentions from free-text response."""
     return set(re.findall(
-        r"[Ðđd][iíI][eêE][uU]\s*(\d+[A-Za-z]?)", text, re.IGNORECASE
+        r"(?i:điều|diều|điêu|đều)\s*(\d+[A-Za-z]?)", text
     ))
 
 
