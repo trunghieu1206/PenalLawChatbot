@@ -256,16 +256,25 @@ def llm_score(client: OpenAI, model: str, question: str,
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
-                max_tokens=80,
+                max_tokens=200,   # 4-Q JSON ~50 tokens; 200 handles any code-fence wrapping
             )
             raw = (r.choices[0].message.content or "").strip()
             if not raw:
                 raise ValueError(f"Model returned empty content. Finish reason: {r.choices[0].finish_reason}")
+
+            # ── Step 1: strip markdown fences (opening AND closing) ──────────
+            clean = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+
+            # ── Step 2: extract first {...} block (handles extra prose) ──────
+            brace_m = re.search(r"\{[^}]+\}", clean, re.DOTALL)
+            if brace_m:
+                clean = brace_m.group(0)
+
             try:
-                data = json.loads(re.sub(r"```(?:json)?\s*", "", raw).strip())
+                data = json.loads(clean)
             except json.JSONDecodeError as jde:
-                log.debug(f"    JSON decode failed: {jde}. Raw text was: {repr(raw)}")
-                # Fallback: regex-parse any q1–q4 key-value pairs
+                log.debug(f"    JSON decode failed: {jde}. Raw text was: {repr(raw[:120])}")
+                # Fallback: regex-parse any q1–q4 key-value pairs from the raw text
                 data = {}
                 for m in re.finditer(r'"(q[1-4])"\s*:\s*"(yes|no)"', raw, re.I):
                     data[m.group(1).lower()] = m.group(2).lower()
@@ -276,7 +285,7 @@ def llm_score(client: OpenAI, model: str, question: str,
             yes_count = sum(1 for a in answers.values() if a == "yes")
             return {
                 "score":   round(yes_count / 4, 4),
-                "answers": answers,  # {"q1": "yes/no", "q2": ..., "q3": ..., "q4": ...}
+                "answers": answers,
             }
         except Exception as e:
             log.warning(f"    LLM judge attempt {attempt+1} failed: {e}")

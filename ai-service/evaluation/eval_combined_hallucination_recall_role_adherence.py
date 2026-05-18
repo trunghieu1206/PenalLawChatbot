@@ -238,12 +238,17 @@ def call_rubric_judge(client, model: str, role: str, case: dict,
                 raw = (r.choices[0].message.content or "").strip()
                 if not raw:
                     raise ValueError(f"Empty. finish={r.choices[0].finish_reason}")
-                clean = re.sub(r"```(?:json)?\s*", "", raw).strip().rstrip("`")
+                # Step 1: strip markdown fences (opening AND closing)
+                clean = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+                # Step 2: extract first {...} block in case of extra prose
+                brace_m = re.search(r"\{[^}]+\}", clean, re.DOTALL)
+                if brace_m:
+                    clean = brace_m.group(0)
                 try:
                     data = json.loads(clean)
                 except json.JSONDecodeError:
                     data = {}
-                    for m in re.finditer(r'"(D\d_\w+)"\s*:\s*(\d)', clean):
+                    for m in re.finditer(r'"(D\d_\w+)"\s*:\s*(\d)', raw):
                         data[m.group(1)] = int(m.group(2))
                     if not data:
                         raise ValueError(f"No dims parsed: {repr(raw[:100])}")
