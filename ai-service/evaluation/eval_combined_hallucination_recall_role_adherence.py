@@ -212,10 +212,10 @@ def call_rubric_judge(client, model: str, role: str, case: dict,
     Returns {"sys": {...}, "base": {...}} each with dimensions, total/30, normalized 0–5.
     Pass condition: sys["normalized"] - base["normalized"] >= +0.5
     """
-    dims      = _RUBRIC_DIMS[role]
-    gt_arts   = "\n".join(f"  • {a}" for a in case.get("all_gt_articles", [])) or "  (none)"
-    question  = case["case_description"][:1200]
-    prim_art  = case.get("primary_article", "(unknown)")
+    dims     = _RUBRIC_DIMS[role]
+    gt_arts  = "\n".join(f"  • {a}" for a in case.get("all_gt_articles", [])) or "  (none)"
+    question = case["case_description"][:1200]
+    prim_art = case.get("primary_article", "(unknown)")
 
     def _build(response, other):
         if role == "neutral":
@@ -232,26 +232,32 @@ def call_rubric_judge(client, model: str, role: str, case: dict,
             try:
                 r = client.chat.completions.create(
                     model=model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.0, max_tokens=300,
+                    messages=[
+                        {"role": "system", "content":
+                         "You are a strict JSON evaluator. Output ONLY a single compact "
+                         "JSON object with no explanation, no markdown, no extra text."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.0, max_tokens=600,
                 )
                 raw = (r.choices[0].message.content or "").strip()
                 if not raw:
                     raise ValueError(f"Empty. finish={r.choices[0].finish_reason}")
                 # Step 1: strip markdown fences (opening AND closing)
                 clean = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
-                # Step 2: extract first {...} block in case of extra prose
-                brace_m = re.search(r"\{[^}]+\}", clean, re.DOTALL)
+                # Step 2: extract outermost {...} block — greedy so multiline JSON works
+                brace_m = re.search(r"\{.*\}", clean, re.DOTALL)
                 if brace_m:
                     clean = brace_m.group(0)
                 try:
                     data = json.loads(clean)
                 except json.JSONDecodeError:
+                    # Fallback: regex-scan raw for "DX_..." int pairs (survives truncation)
                     data = {}
                     for m in re.finditer(r'"(D\d_\w+)"\s*:\s*(\d)', raw):
                         data[m.group(1)] = int(m.group(2))
                     if not data:
-                        raise ValueError(f"No dims parsed: {repr(raw[:100])}")
+                        raise ValueError(f"No dims parsed: {repr(raw[:120])}")
                 total = sum(data.get(d, 0) for d in dims)
                 return {
                     "dimensions": {d: data.get(d, 0) for d in dims},
