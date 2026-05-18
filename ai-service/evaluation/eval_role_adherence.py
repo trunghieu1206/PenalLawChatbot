@@ -83,23 +83,57 @@ ROLE_SIGNALS = {
 # For neutral role, BOTH "giảm nhẹ" AND "tăng nặng" must appear
 NEUTRAL_BALANCE_TERMS = ["giảm nhẹ", "tăng nặng"]
 
-# ── LLM judge prompt ──────────────────────────────────────────────────────────
-_JUDGE_PROMPT = """\
-You are evaluating whether an AI legal assistant correctly adopted the requested role.
+# ── LLM judge prompts (role-specific, 4 yes/no questions each) ──────────────────────
+# 4 questions → LLM score ∈ {0.00, 0.25, 0.50, 0.75, 1.00}
+# Combined formula: 0.3 × signal + 0.7 × llm_yes_rate
 
-ROLE REQUESTED: {role_label}
+_JUDGE_PROMPTS = {
+    "neutral": """\
+You are evaluating whether an AI legal assistant correctly adopted the NEUTRAL JUDGE role.
+
 CASE SUMMARY: {question}
 AI RESPONSE: {response}
 
-Answer ONLY these 2 questions with yes or no:
-Q1: Does the response clearly advocate from the {role_label} perspective \
-(not just mention the role but actually argue from that viewpoint)?
-Q2: Is the tone and language strictly consistent with the requested role without contradicting itself \
-(e.g., if defense, it does NOT argue for harsh punishment; if victim, it does NOT argue for leniency; if judge, it does NOT show obvious bias)?
+Answer ONLY these 4 questions with yes or no:
+Q1: Does the response cite legally relevant articles appropriate for this case?
+Q2: Is the response balanced, without clearly advocating for either prosecution or defense?
+Q3: Does it provide clear legal reasoning that links case facts to applicable articles?
+Q4: Does it address sentencing with a legally grounded basis (not just a vague recommendation)?
 
 Return ONLY this JSON with no other text:
-{{"q1": "yes", "q2": "yes"}}
-"""
+{{"q1": "yes", "q2": "yes", "q3": "yes", "q4": "yes"}}
+""",
+    "defense": """\
+You are evaluating whether an AI legal assistant correctly adopted the DEFENSE LAWYER role.
+
+CASE SUMMARY: {question}
+AI RESPONSE: {response}
+
+Answer ONLY these 4 questions with yes or no:
+Q1: Does the response argue from the defendant's perspective throughout (not neutral or prosecution)?
+Q2: Does it identify mitigating circumstances or cite mitigating articles (Điều 51, 54, or 65)?
+Q3: Does it argue for the lightest possible sentence (reduced penalty, suspended sentence, or below-minimum)?
+Q4: Does it avoid citing aggravating factors or evidence that would harm the defendant's case?
+
+Return ONLY this JSON with no other text:
+{{"q1": "yes", "q2": "yes", "q3": "yes", "q4": "yes"}}
+""",
+    "victim": """\
+You are evaluating whether an AI legal assistant correctly adopted the VICTIM'S LAWYER role.
+
+CASE SUMMARY: {question}
+AI RESPONSE: {response}
+
+Answer ONLY these 4 questions with yes or no:
+Q1: Does the response advocate strongly for the victim's interests throughout?
+Q2: Does it identify aggravating circumstances or cite aggravating articles (Điều 52)?
+Q3: Does it argue for the harshest applicable sentence against the defendant?
+Q4: Does it address civil compensation (bồi thường thiệt hại) for the victim?
+
+Return ONLY this JSON with no other text:
+{{"q1": "yes", "q2": "yes", "q3": "yes", "q4": "yes"}}
+""",
+}
 
 ROLE_LABELS = {
     "neutral": "Thẩm phán trung lập (neutral judge)",
@@ -205,11 +239,14 @@ def signal_score(response: str, role: str) -> dict:
     }
 
 
-# ── Layer B: LLM judge ────────────────────────────────────────────────────────
+# ── Layer B: LLM judge ──────────────────────────────────────────────────────────────────
 def llm_score(client: OpenAI, model: str, question: str,
               response: str, role: str, log: logging.Logger) -> dict:
-    prompt = _JUDGE_PROMPT.format(
-        role_label=ROLE_LABELS[role],
+    """
+    4 role-specific yes/no questions → score ∈ {0.00, 0.25, 0.50, 0.75, 1.00}.
+    Each role has different questions targeting its specific failure modes.
+    """
+    prompt = _JUDGE_PROMPTS[role].format(
         question=question[:800],
         response=response[:1500],
     )
@@ -219,7 +256,7 @@ def llm_score(client: OpenAI, model: str, question: str,
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
-                max_tokens=300,
+                max_tokens=80,
             )
             raw = (r.choices[0].message.content or "").strip()
             if not raw:
@@ -228,18 +265,18 @@ def llm_score(client: OpenAI, model: str, question: str,
                 data = json.loads(re.sub(r"```(?:json)?\s*", "", raw).strip())
             except json.JSONDecodeError as jde:
                 log.debug(f"    JSON decode failed: {jde}. Raw text was: {repr(raw)}")
-                # Fallback: manually parse q1/q2 if JSON is mangled
+                # Fallback: regex-parse any q1–q4 key-value pairs
                 data = {}
-                for m in re.finditer(r'"(q[12])"\s*:\s*"(yes|no)"', raw, re.I):
+                for m in re.finditer(r'"(q[1-4])"\s*:\s*"(yes|no)"', raw, re.I):
                     data[m.group(1).lower()] = m.group(2).lower()
                 if not data:
                     raise ValueError("Could not extract any yes/no answers via regex.")
 
-            answers = [data.get(f"q{i}", "no").lower().strip() for i in range(1, 3)]
-            yes_count = sum(1 for a in answers if a == "yes")
+            answers = {f"q{i}": data.get(f"q{i}", "no").lower().strip() for i in range(1, 5)}
+            yes_count = sum(1 for a in answers.values() if a == "yes")
             return {
-                "score":   round(yes_count / 2, 4),
-                "answers": {"q1": answers[0], "q2": answers[1]},
+                "score":   round(yes_count / 4, 4),
+                "answers": answers,  # {"q1": "yes/no", "q2": ..., "q3": ..., "q4": ...}
             }
         except Exception as e:
             log.warning(f"    LLM judge attempt {attempt+1} failed: {e}")

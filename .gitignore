@@ -67,3 +67,10 @@ database/backups/*.sql
 
 
 *.pem
+
+
+# Python cache — never commit compiled bytecode or cache dirs
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo

@@ -158,39 +158,54 @@ def check_primary_hit(primary_num: str, mapped_laws: list,
                       response_text: str) -> dict:
     """
     Returns dict with:
-      hit         : bool — system correctly identified the primary article
-      source      : 'mapped_laws' | 'text_fallback' | 'miss'
-      cited_nums  : list of article numbers the system cited
+      hit             : bool — system correctly identified the primary article
+      source          : 'mapped_laws' | 'text_fallback' | 'miss'
+      cited_nums      : list of article numbers the system cited
+      document_source : name of the law document the matching article came from
     """
     # Source 1: structured mapped_laws (preferred — reliable)
     mapped_nums = set()
+    document_source: Optional[str] = None
+    _DOC_FIELDS = ("law_name", "source_document", "law_title", "name",
+                   "_law_name", "document", "source", "title")
+
     for law in mapped_laws:
         if law.get("_mapping_error"):
             continue
         num = _article_num(law.get("article", ""))
         if num:
             mapped_nums.add(num)
+            # Capture document name from the entry that matches the primary article
+            if num == primary_num and document_source is None:
+                for field in _DOC_FIELDS:
+                    val = law.get(field)
+                    if val and isinstance(val, str) and val.strip():
+                        document_source = val.strip()
+                        break
 
     if primary_num in mapped_nums:
         return {
-            "hit":        True,
-            "source":     "mapped_laws",
-            "cited_nums": sorted(mapped_nums),
+            "hit":             True,
+            "source":          "mapped_laws",
+            "cited_nums":      sorted(mapped_nums),
+            "document_source": document_source or "(source field unavailable)",
         }
 
     # Source 2: text regex fallback (in case mapped_laws is empty/failed)
     text_nums = _extract_nums_from_text(response_text)
     if primary_num in text_nums:
         return {
-            "hit":        True,
-            "source":     "text_fallback",
-            "cited_nums": sorted(text_nums),
+            "hit":             True,
+            "source":          "text_fallback",
+            "cited_nums":      sorted(text_nums),
+            "document_source": "(extracted from free text — no structured source)",
         }
 
     return {
-        "hit":        False,
-        "source":     "miss",
-        "cited_nums": sorted(mapped_nums or text_nums),
+        "hit":             False,
+        "source":          "miss",
+        "cited_nums":      sorted(mapped_nums or text_nums),
+        "document_source": None,
     }
 
 

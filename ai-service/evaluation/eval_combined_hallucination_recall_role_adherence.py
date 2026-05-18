@@ -23,7 +23,7 @@ OUTPUTS:
                             (download this file to review results offline)
 """
 
-import os, json, sys, time, argparse, logging
+import os, json, re, sys, time, argparse, logging
 from pathlib import Path
 from tqdm import tqdm
 import requests
@@ -70,6 +70,198 @@ from eval_hallucination import _valid_article_set, layer1_article_existence, lay
 from eval_role_adherence import ROLE_SIGNALS, ROLE_LABELS, signal_score, llm_score, combined_score
 from eval_rubric_common import call_baseline
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# METRIC A — Role Adherence  (separate from Rubric)
+# ───────────────────────────────────────────────────────────────────────────────
+# 2 yes/no questions sent to LLM judge per response:
+#   Q1: Does the response clearly advocate from the requested role perspective?
+#   Q2: Is the tone and language consistent with the role, without contradicting itself?
+# Score = 0.3 * keyword_signal + 0.7 * llm_yes_rate  (0–1, target ≥ 0.85)
+# Implemented in eval_role_adherence.py — imported above as llm_score/combined_score.
+#
+# METRIC B — Rubric Quality Assessment  (separate from Role Adherence)
+# ───────────────────────────────────────────────────────────────────────────────
+# 6-dimension 1–5 scoring from rubric_framework.md, one rubric per role.
+# Scores BOTH system and baseline; pass = system_normalized − baseline_normalized ≥ +0.5
+# Scale: 6 × (1–5) = max 30 → normalized 0–5
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_RUBRIC_DIMS = {
+    "neutral": [
+        "D1_legal_accuracy", "D2_reasoning_alignment",
+        "D3_circumstance_coverage", "D4_sentencing_consistency",
+        "D5_judicial_neutrality", "D6_clarity_precision",
+    ],
+    "defense": [
+        "D1_mitigating_article_accuracy", "D2_defense_argument_strength",
+        "D3_mitigating_circumstance_id", "D4_sentencing_minimization",
+        "D5_defense_perspective_consistency", "D6_clarity_precision",
+    ],
+    "victim": [
+        "D1_aggravating_article_accuracy", "D2_victim_advocacy_strength",
+        "D3_aggravating_circumstance_id", "D4_maximum_sentencing_argument",
+        "D5_victim_perspective_consistency", "D6_civil_compensation_coverage",
+    ],
+}
+
+# Exact prompts from eval_rubric_neutral/defense/victim.py
+_RUBRIC_PROMPTS = {
+    "neutral": """\
+You are an expert Vietnamese criminal law professor evaluating an AI judge assistant.
+
+## CASE FACTS (fed into the system)
+{question}
+
+## COURT'S ACTUAL NHẬN ĐỊNH (real judge's reasoning — PRIMARY ground truth)
+{nhan_dinh}
+
+## ALL ARTICLES APPLIED BY COURT
+{gt_articles}
+
+## RESPONSE BEING EVALUATED (neutral/judge role)
+{response}
+
+## BASELINE RESPONSE (direct LLM, no RAG — context only, do NOT score)
+{baseline}
+
+---
+Using the COURT'S NHẬN ĐỊNH as your primary benchmark, score the EVALUATED RESPONSE (1–5 each):
+
+D1_legal_accuracy:          articles match Nhận định? (1=all wrong, 5=all correct+edition)
+D2_reasoning_alignment:     reasoning follows court logic? (1=contradicts, 5=mirrors)
+D3_circumstance_coverage:   mitigating+aggravating from Nhận định covered? (1=none, 5=all)
+D4_sentencing_consistency:  sentencing matches court decision? (1=opposite, 5=exact khoản+range)
+D5_judicial_neutrality:     neutral judge perspective? (1=one-sided, 5=perfectly neutral)
+D6_clarity_precision:       clear + precise legal language? (1=incoherent, 5=professional)
+
+Return ONLY this JSON:
+{{"D1_legal_accuracy":0,"D2_reasoning_alignment":0,"D3_circumstance_coverage":0,"D4_sentencing_consistency":0,"D5_judicial_neutrality":0,"D6_clarity_precision":0,"total":0,"normalized":0.0,"key_gaps":""}}
+""",
+    "defense": """\
+You are an expert Vietnamese criminal law professor evaluating an AI defense lawyer.
+
+## CASE FACTS
+{question}
+
+## PRIMARY CRIME ARTICLE (what the defendant is charged under)
+{primary_article}
+
+## ALL ARTICLES APPLIED BY COURT
+{gt_articles}
+
+## RESPONSE BEING EVALUATED (defense/bào chữa role)
+{response}
+
+## BASELINE RESPONSE (direct LLM, no RAG — context only, do NOT score)
+{baseline}
+
+---
+Evaluate how effectively the EVALUATED RESPONSE defends the accused. Score (1–5 each):
+
+D1_mitigating_article_accuracy:     correct mitigating articles cited? (1=none/wrong, 5=all Điều 51/54/65 correct)
+D2_defense_argument_strength:       compelling legal defense? (1=weak/absent, 5=facts→articles→sentence reduction)
+D3_mitigating_circumstance_id:      all mitigating factors from case found? (1=none, 5=all linked to Điều 51 clauses)
+D4_sentencing_minimization:         argues for lightest outcome? (1=accepts max, 5=án treo/below-min if applicable)
+D5_defense_perspective_consistency: stays in defense role? (1=argues against client, 5=fully advocates)
+D6_clarity_precision:               professional defense brief? (1=incoherent, 5=clause+edition+formal language)
+
+Return ONLY this JSON:
+{{"D1_mitigating_article_accuracy":0,"D2_defense_argument_strength":0,"D3_mitigating_circumstance_id":0,"D4_sentencing_minimization":0,"D5_defense_perspective_consistency":0,"D6_clarity_precision":0,"total":0,"normalized":0.0,"key_gaps":""}}
+""",
+    "victim": """\
+You are an expert Vietnamese criminal law professor evaluating an AI victim's lawyer.
+
+## CASE FACTS
+{question}
+
+## PRIMARY CRIME ARTICLE (what the defendant was convicted under)
+{primary_article}
+
+## ALL ARTICLES APPLIED BY COURT
+{gt_articles}
+
+## RESPONSE BEING EVALUATED (victim/bị hại role)
+{response}
+
+## BASELINE RESPONSE (direct LLM, no RAG — context only, do NOT score)
+{baseline}
+
+---
+Evaluate how effectively the EVALUATED RESPONSE advocates for the victim. Score (1–5 each):
+
+D1_aggravating_article_accuracy:   correct aggravating articles cited? (1=none/wrong, 5=all Điều 52 clauses correct)
+D2_victim_advocacy_strength:       compelling victim advocacy? (1=neutral/absent, 5=facts→articles→max+compensation)
+D3_aggravating_circumstance_id:    all aggravating factors found? (1=none, 5=all linked to Điều 52 clauses)
+D4_maximum_sentencing_argument:    argues for harshest applicable outcome? (1=implies leniency, 5=highest khoản+against án treo)
+D5_victim_perspective_consistency: stays in victim advocate role? (1=defends accused, 5=fully advocates)
+D6_civil_compensation_coverage:    covers bồi thường thiệt hại? (1=not mentioned, 5=quantified+legal basis cited)
+
+Return ONLY this JSON:
+{{"D1_aggravating_article_accuracy":0,"D2_victim_advocacy_strength":0,"D3_aggravating_circumstance_id":0,"D4_maximum_sentencing_argument":0,"D5_victim_perspective_consistency":0,"D6_civil_compensation_coverage":0,"total":0,"normalized":0.0,"key_gaps":""}}
+""",
+}
+
+
+def call_rubric_judge(client, model: str, role: str, case: dict,
+                      sys_response: str, base_response: str, log) -> dict:
+    """
+    Rubric Quality Assessment (METRIC B) — scores BOTH system and baseline responses.
+    Returns {"sys": {...}, "base": {...}} each with dimensions, total/30, normalized 0–5.
+    Pass condition: sys["normalized"] - base["normalized"] >= +0.5
+    """
+    dims      = _RUBRIC_DIMS[role]
+    gt_arts   = "\n".join(f"  • {a}" for a in case.get("all_gt_articles", [])) or "  (none)"
+    question  = case["case_description"][:1200]
+    prim_art  = case.get("primary_article", "(unknown)")
+
+    def _build(response, other):
+        if role == "neutral":
+            nhan_dinh = case.get("explanation", "")[:2000] or "(not available)"
+            return _RUBRIC_PROMPTS["neutral"].format(
+                question=question, nhan_dinh=nhan_dinh,
+                gt_articles=gt_arts, response=response[:2000], baseline=other[:1200])
+        return _RUBRIC_PROMPTS[role].format(
+            question=question, primary_article=prim_art,
+            gt_articles=gt_arts, response=response[:2000], baseline=other[:1200])
+
+    def _call(prompt, label):
+        for attempt in range(3):
+            try:
+                r = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.0, max_tokens=300,
+                )
+                raw = (r.choices[0].message.content or "").strip()
+                if not raw:
+                    raise ValueError(f"Empty. finish={r.choices[0].finish_reason}")
+                clean = re.sub(r"```(?:json)?\s*", "", raw).strip().rstrip("`")
+                try:
+                    data = json.loads(clean)
+                except json.JSONDecodeError:
+                    data = {}
+                    for m in re.finditer(r'"(D\d_\w+)"\s*:\s*(\d)', clean):
+                        data[m.group(1)] = int(m.group(2))
+                    if not data:
+                        raise ValueError(f"No dims parsed: {repr(raw[:100])}")
+                total = sum(data.get(d, 0) for d in dims)
+                return {
+                    "dimensions": {d: data.get(d, 0) for d in dims},
+                    "total":      total,
+                    "normalized": round(total / 30 * 5, 2),  # 0–5 scale
+                    "key_gaps":   data.get("key_gaps", ""),
+                }
+            except Exception as e:
+                log.warning(f"    Rubric[{label}] attempt {attempt+1} failed: {e}")
+                time.sleep(2 ** attempt)
+        return {"dimensions": {}, "total": None, "normalized": None, "key_gaps": "", "note": "failed"}
+
+    sys_rubric  = _call(_build(sys_response,  base_response), "sys")
+    time.sleep(0.5)
+    base_rubric = _call(_build(base_response, sys_response),  "base")
+    return {"sys": sys_rubric, "base": base_rubric}
+
+
 # Procedural articles that are never the primary crime article
 _PROCEDURAL = {
     "7", "28", "32", "34", "42", "45", "46", "47", "48", "49", "50",
@@ -114,6 +306,7 @@ def load_all_cases(dataset_path: str) -> list:
             "primary_article":  f"Điều {primary_num}" if primary_num else "N/A",
             "primary_num":      primary_num,  # may be None — recall skipped for these
             "all_gt_articles":  [f"Điều {n}" for n in all_gt_nums],
+            "explanation":      entry.get("explanation", ""),  # court's Nhận định (for neutral rubric)
         })
     return cases
 
@@ -157,10 +350,12 @@ def evaluate_metrics(response_dict, case, gt_nums, valid_corpus, role,
         recall_hit    = recall["hit"]
         recall_source = recall["source"]
         recall_cited  = recall["cited_nums"]
+        recall_doc    = recall.get("document_source") or "N/A"
     else:
         recall_hit    = None  # N/A — no ground truth article in verdict
         recall_source = "n/a"
         recall_cited  = []
+        recall_doc    = "N/A"
 
     # 2. Hallucination (L1-L3)
     l1 = layer1_article_existence(mapped_laws, gt_nums, valid_corpus)
@@ -168,34 +363,38 @@ def evaluate_metrics(response_dict, case, gt_nums, valid_corpus, role,
     l3 = layer3_sentencing(result_text, case["all_gt_articles"], {})
     hall_score = composite_hallucination(l1, l2, l3)
 
-    # 3. Role Adherence
+    # 3. Role Adherence (METRIC A) — 2 yes/no LLM questions + keyword signal
+    #    Q1: Does response advocate from the requested role perspective?
+    #    Q2: Is tone/language consistent with role, no self-contradiction?
+    #    Formula: 0.3 * signal + 0.7 * llm_yes_rate
     sig        = signal_score(result_text, role)
     llm        = llm_score(oai_judge, judge_model, case["case_description"], result_text, role, log)
-    role_score = combined_score(sig["score"], llm.get("score"))
+    role_score = combined_score(sig["score"], llm.get("score"), w_sig=0.3, w_llm=0.7)
 
     return {
-        "recall":          recall_hit,    # None = N/A (no ground truth article)
-        "recall_source":   recall_source,
-        "recall_cited":    recall_cited,
-        "hallucination":   hall_score,
-        "hall_l1":         l1.get("triggered", False) if l1 else False,
-        "hall_l2":         l2.get("triggered", False) if l2 else False,
-        "hall_l3":         l3.get("triggered", False) if l3 else False,
-        "role_adherence":  role_score,
-        "role_sig_score":  sig["score"],
-        "role_llm_score":  llm.get("score"),
-        "text_preview":    result_text[:300],
+        "recall":           recall_hit,
+        "recall_source":    recall_source,
+        "recall_cited":     recall_cited,
+        "recall_doc":       recall_doc,
+        "hallucination":    hall_score,
+        "hall_l1":          l1.get("triggered", False) if l1 else False,
+        "hall_l2":          l2.get("triggered", False) if l2 else False,
+        "hall_l3":          l3.get("triggered", False) if l3 else False,
+        "role_adherence":   role_score,
+        "role_sig_score":   sig["score"],
+        "role_llm_score":   llm.get("score"),
+        "role_llm_answers": llm.get("answers", {}),  # {"q1": "yes"/"no", "q2": "yes"/"no"}
+        "text_preview":     result_text[:300],
     }
 
 def _pct(val):
     return f"{val * 100:.1f}%"
 
-def _print_case_report(report, cidx, total, case, role, sys_eval, base_eval):
+def _print_case_report(report, cidx, total, case, role, sys_eval, base_eval, rubric=None):
     """Write a nicely formatted block for one case+role to both terminal and report file."""
     r_icon  = ("✅" if sys_eval["recall"] else "❌") if sys_eval["recall"] is not None else "➖"
     h_icon  = "✅" if sys_eval["hallucination"] == 0        else "⚠️ "
     ro_icon = "✅" if (sys_eval["role_adherence"] or 0) >= 0.7 else "⚠️ "
-
     br_icon  = ("✅" if base_eval["recall"] else "❌") if base_eval["recall"] is not None else "➖"
     bh_icon  = "✅" if base_eval["hallucination"] == 0        else "⚠️ "
     bro_icon = "✅" if (base_eval["role_adherence"] or 0) >= 0.7 else "⚠️ "
@@ -204,28 +403,58 @@ def _print_case_report(report, cidx, total, case, role, sys_eval, base_eval):
     report(f"  │  Crime  : {case.get('crime_type', 'N/A')}")
     report(f"  │")
     report(f"  │  ── SYSTEM (RAG) ─────────────────────────────────────────────")
-    
-    # Show recall details explicitly
     sys_recall_text = "N/A (No GT)" if sys_eval['recall'] is None else ('HIT' if sys_eval['recall'] else 'MISS')
     report(f"  │  {r_icon} Recall        : {sys_recall_text}")
-    report(f"  │       What was extracted in the final verdict in the origin law case: {case.get('primary_article', 'N/A')}")
-    report(f"  │       The primary law article that the system used to generate the response: {', '.join(sys_eval.get('recall_cited', [])) or 'None'}")
-    report(f"  │       Source of law document cited: {sys_eval.get('recall_source', 'N/A')}")
-    
+    report(f"  │       Ground truth article (from court verdict) : {case.get('primary_article', 'N/A')}")
+    report(f"  │       Article cited by system                   : {', '.join(sys_eval.get('recall_cited', [])) or 'None'}")
+    report(f"  │       Law document source of cited article      : {sys_eval.get('recall_doc', 'N/A')}")
+    report(f"  │       Hit method                                : {sys_eval.get('recall_source', 'N/A')}")
     report(f"  │  {h_icon} Hallucination : score={sys_eval['hallucination']}"
            f"  L1={sys_eval['hall_l1']}  L2={sys_eval['hall_l2']}  L3={sys_eval['hall_l3']}")
-    report(f"  │  {ro_icon} Role Adherence: {sys_eval['role_adherence']}"
-           f"  (signal={sys_eval['role_sig_score']}  llm={sys_eval['role_llm_score']})")
+    report(f"  │  {ro_icon} Role Adherence: {sys_eval['role_adherence']:.3f}"
+           f"  (signal={sys_eval['role_sig_score']:.3f}  llm={sys_eval['role_llm_score']})")
+    sys_ans = sys_eval.get('role_llm_answers', {})
+    for qi in range(1, 5):
+        report(f"  │       Q{qi}: {sys_ans.get(f'q{qi}', 'n/a').upper()}")
     report(f"  │  Response: {repr(sys_eval['text_preview'][:120])}")
     report(f"  │")
     report(f"  │  ── BASELINE (no RAG) ────────────────────────────────────────")
     bas_recall_text = "N/A (No GT)" if base_eval['recall'] is None else ('HIT' if base_eval['recall'] else 'MISS')
     report(f"  │  {br_icon} Recall        : {bas_recall_text}")
-    report(f"  │       What was extracted in the final verdict in the origin law case: {case.get('primary_article', 'N/A')}")
-    report(f"  │       The primary law article that the baseline used to generate the response: {', '.join(base_eval.get('recall_cited', [])) or 'None'}")
-    report(f"  │       Source of law document cited: {base_eval.get('recall_source', 'N/A')}")
+    report(f"  │       Ground truth article (from court verdict) : {case.get('primary_article', 'N/A')}")
+    report(f"  │       Article cited by baseline                 : {', '.join(base_eval.get('recall_cited', [])) or 'None'}")
+    report(f"  │       Law document source of cited article      : {base_eval.get('recall_doc', 'N/A')}")
+    report(f"  │       Hit method                                : {base_eval.get('recall_source', 'N/A')}")
     report(f"  │  {bh_icon} Hallucination : score={base_eval['hallucination']}")
-    report(f"  │  {bro_icon} Role Adherence: {base_eval['role_adherence']}")
+    report(f"  │  {bro_icon} Role Adherence: {base_eval['role_adherence']}"
+           f"  (signal={base_eval['role_sig_score']}  llm={base_eval['role_llm_score']})")
+    base_ans = base_eval.get('role_llm_answers', {})
+    for qi in range(1, 5):
+        report(f"  │       Q{qi}: {base_ans.get(f'q{qi}', 'n/a').upper()}")
+    # ── METRIC B: Rubric Quality Assessment ──────────────────────────────────
+    if rubric:
+        s_rub = rubric.get("sys",  {})
+        b_rub = rubric.get("base", {})
+        s_norm = s_rub.get("normalized")
+        b_norm = b_rub.get("normalized")
+        if s_norm is not None and b_norm is not None:
+            delta    = round(s_norm - b_norm, 2)
+            rub_icon = "✅" if delta >= 0.5 else "⚠️ "
+            report(f"  │")
+            report(f"  │  ── RUBRIC (Quality 6-dim 1–5, max 30 → 0–5 norm) ─────────────")
+            report(f"  │  {rub_icon} System: {s_norm:.2f}/5  Baseline: {b_norm:.2f}/5  Δ={delta:+.2f}  (pass Δ≥+0.5)")
+            report(f"  │       System total: {s_rub.get('total','?')}/30  |  Baseline total: {b_rub.get('total','?')}/30")
+            dims   = _RUBRIC_DIMS.get(role, [])
+            s_dims = s_rub.get("dimensions", {})
+            b_dims = b_rub.get("dimensions", {})
+            for dim in dims:
+                sv = s_dims.get(dim, 0)
+                bv = b_dims.get(dim, 0)
+                bar_s = '█' * int(sv) + '░' * (5 - int(sv))
+                bar_b = '█' * int(bv) + '░' * (5 - int(bv))
+                report(f"  │    {dim:<37} sys:{bar_s}{sv}/5  base:{bar_b}{bv}/5")
+            if s_rub.get("key_gaps"):
+                report(f"  │    Key gaps (sys) : {s_rub['key_gaps']}")
     report(f"  └──────────────────────────────────────────────────────────────")
 
 def _print_running_totals(report, metrics, processed):
@@ -243,16 +472,22 @@ def _print_running_totals(report, metrics, processed):
     bas_recall = b["recall_hits"] / n
     bas_hall   = _avg(b["hallucination_scores"])
     bas_role   = _avg(b["role_scores"])
+    sys_rub    = _avg(s["rubric_scores"])
+    bas_rub    = _avg(b["rubric_scores"])
+    rub_delta  = round(sys_rub - bas_rub, 2) if s["rubric_scores"] and b["rubric_scores"] else None
 
     report(f"  📊 Running totals after {processed} case(s)  ({n} role evals)")
     report(f"     {'Metric':<22} {'System':>9} {'Baseline':>9}  Target")
-    report(f"     {'-'*55}")
+    report(f"     {'-'*60}")
     report(f"     {'Primary Recall':<22} {_pct(sys_recall):>9} {_pct(bas_recall):>9}  ≥90%  "
            f"{'✅' if sys_recall >= 0.90 else '❌'}")
     report(f"     {'Hallucination Rate':<22} {_pct(sys_hall):>9} {_pct(bas_hall):>9}  ≤10%  "
            f"{'✅' if sys_hall <= 0.10 else '❌'}")
     report(f"     {'Role Adherence':<22} {_pct(sys_role):>9} {_pct(bas_role):>9}  ≥85%  "
            f"{'✅' if sys_role >= 0.85 else '❌'}")
+    if rub_delta is not None:
+        report(f"     {'Rubric (0–5 norm)':<22} {sys_rub:>9.2f} {bas_rub:>9.2f}  Δ≥+0.5  "
+               f"{'✅' if rub_delta >= 0.5 else '❌'}  (Δ={rub_delta:+.2f})")
 
 def main():
     parser = argparse.ArgumentParser(description="Combined Evaluation Script")
@@ -318,20 +553,35 @@ def main():
         "X-Title": "VNPLaw Eval"
     }
 
+    # ── API key resolution ─────────────────────────────────────────────────
+    judge_key    = os.getenv("OPENROUTER_LLM_JUDGE_KEY")
+    baseline_key = os.getenv("OPENROUTER_API_KEY")
+
+    if not judge_key:
+        log.warning("OPENROUTER_LLM_JUDGE_KEY is not set — falling back to OPENROUTER_API_KEY for judge!")
+        judge_key = baseline_key
+    if not baseline_key:
+        log.warning("OPENROUTER_API_KEY is not set — baseline calls will fail!")
+
+    # Mask key for safe logging: show first 8 chars only
+    def _mask(k): return (k[:8] + "...") if k and len(k) > 8 else "(missing)"
+    report(f"  Judge API key : {_mask(judge_key)}  (OPENROUTER_LLM_JUDGE_KEY)")
+    report(f"  Baseline key  : {_mask(baseline_key)}  (OPENROUTER_API_KEY)")
+
     oai_judge    = OpenAI(
-        api_key=os.getenv("OPENROUTER_LLM_JUDGE_KEY") or os.getenv("OPENROUTER_API_KEY") or "missing",
+        api_key=judge_key or "missing",
         base_url="https://openrouter.ai/api/v1",
         default_headers=or_headers,
     )
     oai_baseline = OpenAI(
-        api_key=os.getenv("OPENROUTER_API_KEY") or "missing",
+        api_key=baseline_key or "missing",
         base_url="https://openrouter.ai/api/v1",
         default_headers=or_headers,
     )
 
     metrics = {
-        "system":   {"recall_hits": 0, "recall_total": 0, "hallucination_scores": [], "role_scores": []},
-        "baseline": {"recall_hits": 0, "recall_total": 0, "hallucination_scores": [], "role_scores": []},
+        "system":   {"recall_hits": 0, "recall_total": 0, "hallucination_scores": [], "role_scores": [], "rubric_scores": []},
+        "baseline": {"recall_hits": 0, "recall_total": 0, "hallucination_scores": [], "role_scores": [], "rubric_scores": []},
         "total_evals": 0,
     }
     processed = 0
@@ -363,9 +613,13 @@ def main():
                 base_eval = evaluate_metrics(base_pred, case, gt_nums, valid_corpus, role,
                                              oai_judge, args.judge_model, is_baseline=True,  log=log)
 
-                _print_case_report(report, cidx, total, case, role, sys_eval, base_eval)
+                sys_text  = sys_pred.get("result", "") if sys_pred else ""
+                rubric    = call_rubric_judge(oai_judge, args.judge_model, role, case,
+                                              sys_text, base_text, log)
 
-                row["evaluations"][role] = {"system": sys_eval, "baseline": base_eval}
+                _print_case_report(report, cidx, total, case, role, sys_eval, base_eval, rubric)
+
+                row["evaluations"][role] = {"system": sys_eval, "baseline": base_eval, "rubric": rubric}
 
                 metrics["total_evals"] += 1
                 if sys_eval["recall"] is not None:
@@ -374,12 +628,16 @@ def main():
 
                 metrics["system"]["hallucination_scores"].append(sys_eval["hallucination"])
                 metrics["system"]["role_scores"].append(sys_eval["role_adherence"])
+                if rubric.get("sys", {}).get("normalized") is not None:
+                    metrics["system"]["rubric_scores"].append(rubric["sys"]["normalized"])
 
                 if base_eval["recall"] is not None:
                     metrics["baseline"]["recall_hits"] += int(base_eval["recall"])
                     metrics["baseline"]["recall_total"] += 1
                 metrics["baseline"]["hallucination_scores"].append(base_eval["hallucination"])
                 metrics["baseline"]["role_scores"].append(base_eval["role_adherence"])
+                if rubric.get("base", {}).get("normalized") is not None:
+                    metrics["baseline"]["rubric_scores"].append(rubric["base"]["normalized"])
 
                 time.sleep(args.delay)
 

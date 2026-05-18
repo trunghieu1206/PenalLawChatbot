@@ -107,8 +107,8 @@ def _valid_article_set(dataset_path: str, _unused: str = "") -> set:
         data = json.load(f)
     nums: set = set()
     for entry in data:
-        for m in re.finditer(r"[\u00d0đd][i\u00edI][e\u00eaE][uU]\s*(\d+[A-Za-z]?)",
-                             entry.get("final_verdict", ""), re.I):
+        for m in re.finditer(r"(?i:điều|diều|điêu|đều)\s*(\d+[A-Za-z]?)",
+                             entry.get("final_verdict", "")):
             nums.add(m.group(1))
     return nums
 
@@ -143,8 +143,8 @@ def _gt_nums(gt_articles: list) -> set:
 
 def _gt_nums_from_text(verdict_text: str) -> set:
     """Extract article numbers directly from the final_verdict free text."""
-    return set(re.findall(r"[\u00d0đd][i\u00edI][e\u00eaE][uU]\s*(\d+[A-Za-z]?)",
-                          verdict_text, re.I))
+    return set(re.findall(r"(?i:điều|diều|điêu|đều)\s*(\d+[A-Za-z]?)",
+                          verdict_text))
 
 
 def _parse_date(s: str) -> Optional[date]:
@@ -199,7 +199,7 @@ def layer1_article_existence(mapped_laws: list, gt_nums: set,
                 "reason": "not_in_verdict",
             })
     flagged = len(false_arts) > 0
-    return {"flagged": flagged, "false_articles": false_arts}
+    return {"triggered": flagged, "flagged": flagged, "false_articles": false_arts}
 
 
 # ── LAYER 2: Edition / Retroactivity ──────────────────────────────────────────
@@ -212,7 +212,7 @@ def layer2_edition(mapped_laws: list, extracted_facts: dict) -> dict:
     crime_date_str = (extracted_facts or {}).get("ngay_pham_toi","")
     crime_date = _parse_date(crime_date_str) if crime_date_str else None
     if not crime_date:
-        return {"flagged": False, "details": [],
+        return {"triggered": False, "flagged": False, "details": [],
                 "note": "crime_date_unavailable — cannot check retroactivity"}
 
     expected_edition = _edition_for_date(crime_date)
@@ -239,7 +239,8 @@ def layer2_edition(mapped_laws: list, extracted_facts: dict) -> dict:
                     "crime_date":        crime_date_str,
                 })
 
-    return {"flagged": len(errors) > 0, "details": errors,
+    triggered = len(errors) > 0
+    return {"triggered": triggered, "flagged": triggered, "details": errors,
             "crime_date": crime_date_str, "expected_edition": expected_edition}
 
 
@@ -306,11 +307,11 @@ def layer3_sentencing(response_text: str, gt_articles: list,
         None
     )
     if not primary:
-        return {"flagged": False, "details": [], "note": "no_primary_article"}
+        return {"triggered": False, "flagged": False, "details": [], "note": "no_primary_article"}
 
     content = article_contents.get(primary, "")
     if not content:
-        return {"flagged": False, "details": [],
+        return {"triggered": False, "flagged": False, "details": [],
                 "note": f"no_article_content_for_{primary}"}
 
     actual_range  = _parse_penalty_years(content)
@@ -324,7 +325,8 @@ def layer3_sentencing(response_text: str, gt_articles: list,
                 "stated_range": stated_range,
             })
 
-    return {"flagged": len(errors) > 0, "details": errors,
+    triggered = len(errors) > 0
+    return {"triggered": triggered, "flagged": triggered, "details": errors,
             "primary_article": primary,
             "actual_range": actual_range, "stated_range": stated_range}
 
@@ -479,7 +481,8 @@ def main():
             # Run layers
             l1 = layer1_article_existence(mapped_laws, gt, valid_corpus)
             l2 = layer2_edition(mapped_laws, extracted_facts)
-            l3 = layer3_sentencing(result_text, [],
+            l3 = layer3_sentencing(result_text,
+                                   list(gt),
                                    case["article_contents"])
             l4 = (layer4_factual(oai, args.model, case, result_text, log)
                   if not args.skip_l4 else {"flagged": False, "note": "skipped"})
