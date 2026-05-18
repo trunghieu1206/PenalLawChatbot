@@ -12,30 +12,27 @@ tmux new -s deploy
 
 # upload scripts + .env template + DB backup ───────────────────────
 # Run these from your LOCAL machine (inside PenalLawChatbot/ directory):
-scp -P 1927 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@n3.ckey.vn:/root/
-scp -P 1927 .env.example root@n3.ckey.vn:/root/.env.example
+scp -P 2692 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@n3.ckey.vn:/root/
+scp -P 2692 .env.example root@n3.ckey.vn:/root/.env.example
 
-# Create backup dir and upload DB backup (mkdir needed before clone runs)
-ssh -p 1927 root@n3.ckey.vn "mkdir -p ~/PenalLawChatbot/database/backups"
-scp -P 1927 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260505_150435.sql \
-    root@n3.ckey.vn:~/PenalLawChatbot/database/backups/
-
-# upload eval datasets
-scp -P 1927 ai-service/scraped_datasets/thesis_eval_1000.json \
-    root@n3.ckey.vn:~/PenalLawChatbot/ai-service/scraped_datasets/
-
-# run the installer 
-chmod +x setup_server.sh deploy_nodocker.sh
+# ── ON SERVER: Run the base setup first ──────────────────────────────────────
+chmod +x setup_server.sh deploy_nodocker.sh restore_database.sh
 bash setup_server.sh
 
-# restore database
+# ── ON LOCAL: Upload backups and datasets ────────────────────────────────────
+# Run these from your LOCAL machine AFTER setup_server.sh has finished!
+ssh -p 2692 root@n3.ckey.vn "mkdir -p ~/PenalLawChatbot/database/backups ~/PenalLawChatbot/ai-service/scraped_datasets"
+
+scp -P 2692 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260505_150435.sql \
+    root@n3.ckey.vn:~/PenalLawChatbot/database/backups/
+
+scp -P 2692 ai-service/scraped_datasets/thesis_eval_1000.json \
+    root@n3.ckey.vn:~/PenalLawChatbot/ai-service/scraped_datasets/
+
+# ── ON SERVER: Finish deployment ─────────────────────────────────────────────
+# Back on your server terminal:
 bash restore_database.sh
-
-# note: if the server itself is a Docker container run this script instead of setup_server.sh 
 bash deploy_nodocker.sh
-
-# then deploy the server
-bash deploy.sh
 
 # how to create backup db file and download to local
 ## create backup on server

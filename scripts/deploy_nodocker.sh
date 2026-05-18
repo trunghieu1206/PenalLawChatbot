@@ -22,6 +22,9 @@
 # =============================================================
 set -euo pipefail
 
+# Bypass PEP 668 on Ubuntu 24.04 for global pip installs
+export PIP_BREAK_SYSTEM_PACKAGES=1
+
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 info()  { echo -e "${GREEN}[INFO]${NC}  $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
@@ -159,7 +162,7 @@ POSTGRES_PASSWORD=postgres
 ENVEOF
     fi
     warn ">>> Edit .env — fill in OPENROUTER_API_KEY and HF_TOKEN <<<"
-    warn "    nano /root/PenalLawChatbot/.env"
+    warn "    sudo nano $PROJECT_DIR/.env"
     echo ""
     read -rp "Press ENTER after editing .env..." _
 fi
@@ -425,17 +428,26 @@ info "Installing AI service requirements..."
 # Record CUDA state BEFORE pip install — needed to detect if pip downgraded torch.
 _TORCH_CUDA_BEFORE=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
 
-"$AI_PYTHON" -m pip install "setuptools>=70.0" --quiet 2>&1 | tail -2 || true
-grep -v "^torch" "$PROJECT_DIR/ai-service/requirements.txt" > /tmp/requirements_notorch.txt
-"$AI_PYTHON" -m pip install --quiet -r /tmp/requirements_notorch.txt 2>&1 | tail -5 || \
-    error "Failed to install AI dependencies. Check pip output above."
+if "$AI_PYTHON" -c "import fastapi, transformers, langchain, pymilvus" 2>/dev/null; then
+    skip "AI service requirements already installed."
+else
+    "$AI_PYTHON" -m pip install "setuptools>=70.0" --quiet 2>&1 | tail -2 || true
+    grep -v "^torch" "$PROJECT_DIR/ai-service/requirements.txt" > /tmp/requirements_notorch.txt
+    "$AI_PYTHON" -m pip install --ignore-installed typing_extensions --quiet -r /tmp/requirements_notorch.txt 2>&1 | tail -5 || \
+        error "Failed to install AI dependencies. Check pip output above."
 
-# Upgrade milvus-lite + pymilvus (pkg_resources fix)
-"$AI_PYTHON" -m pip install "milvus-lite>=2.4.9" "pymilvus>=2.4.0" \
-    --upgrade --quiet 2>&1 | tail -2 || true
+    # Fix Numpy 2.0 ABI incompatibilities with scipy
+    "$AI_PYTHON" -m pip install "numpy>=2.0.0" "scipy>=1.13.0" --upgrade --quiet 2>&1 | tail -2 || true
 
-# Install FlagEmbedding (required by bge-reranker-v2-m3)
-"$AI_PYTHON" -m pip install "FlagEmbedding>=1.2.0" --quiet 2>&1 | tail -2 || true
+    # Install FlagEmbedding (required by bge-reranker-v2-m3)
+    "$AI_PYTHON" -m pip install "FlagEmbedding>=1.2.0" --quiet 2>&1 | tail -2 || true
+fi
+
+# Always enforce pymilvus 2.4.x — pymilvus 3.0 breaks MilvusLite by treating .db file as a directory.
+# This runs every time (outside the skip block) to fix servers with a pre-cached bad version.
+info "Enforcing pymilvus<2.5 (required for legacy SQLite VN_law_lora.db)..."
+"$AI_PYTHON" -m pip install "milvus-lite>=2.4.9,<2.5.0" "pymilvus>=2.4.0,<2.5.0" \
+    --quiet 2>&1 | tail -2 || true
 
 # Verify torch CUDA state AFTER all installs.
 # Only fail if CUDA was working BEFORE pip but is now broken (pip downgraded torch).
@@ -576,6 +588,13 @@ if [ ! -d dist ] || find src -newer dist/index.html 2>/dev/null | grep -q .; the
 else
     skip "frontend dist is up-to-date"
 fi
+
+# Ensure nginx is installed
+if ! command -v nginx &>/dev/null; then
+    info "Installing nginx..."
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nginx >/dev/null 2>&1 || true
+fi
+mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
 
 # nginx config
 cat > /etc/nginx/sites-available/penallaw <<'NGINX'

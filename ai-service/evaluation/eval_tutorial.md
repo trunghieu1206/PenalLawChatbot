@@ -328,3 +328,17 @@ scp -P 1927 \
 | RUBRIC — Victim | `eval_rubric_victim.py` | `rubric_victim_summary.json` | `rubric_score_0_5.delta ≥ 0.5` |
 
 Check each summary JSON's `"pass": true/false` field for the final verdict.
+
+---
+
+### 🚀 The Combined Script (eval_combined.py)
+
+To minimize the cost of calling the LLM APIs, you can run all 3 evaluations (Primary Recall, Hallucination L1-L3, and Role Adherence) in a single pass. 
+This script also runs a side-by-side comparison with the raw baseline (`gemini-2.5-flash` without RAG) for all 3 metrics! L4 Hallucination is intentionally removed here to reduce costs.
+
+```bash
+python3 ai-service/evaluation/eval_combined.py \
+  --log-file ai-service/logs/eval_combined.txt
+```
+
+**Outputs:** `results/combined_results.jsonl`, `results/combined_summary.json`

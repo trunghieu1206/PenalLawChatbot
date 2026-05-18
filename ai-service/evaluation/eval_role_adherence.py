@@ -112,12 +112,25 @@ ROLE_LABELS = {
 
 
 # ── Logging ───────────────────────────────────────────────────────────────────
+from tqdm import tqdm
+
+class TqdmLoggingHandler(logging.Handler):
+    def __init__(self, level=logging.NOTSET):
+        super().__init__(level)
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            tqdm.write(msg)
+            self.flush()
+        except Exception:
+            self.handleError(record)
+
 def setup_logging(log_file: Optional[str]) -> logging.Logger:
     log = logging.getLogger("role_adherence")
     log.setLevel(logging.DEBUG)
     fmt = logging.Formatter("%(asctime)s  %(levelname)-8s  %(message)s",
                             datefmt="%Y-%m-%d %H:%M:%S")
-    ch = logging.StreamHandler(sys.stdout)
+    ch = TqdmLoggingHandler()
     ch.setFormatter(fmt)
     log.addHandler(ch)
     if log_file:
@@ -297,7 +310,7 @@ def main():
     processed = 0
 
     with open(out_path, "a", encoding="utf-8") as out_f:
-        for i, case in enumerate(cases):
+        for i, case in enumerate(tqdm(cases, desc="Evaluating", unit="case")):
             url  = case["case_url"]
             cidx = s_idx + i + 1
             if url in done_urls:

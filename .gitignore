@@ -64,3 +64,6 @@ frontend/coverage/
 frontend/.vite/
 # Database backups — large SQL files; upload manually via scp, never committed to git
 database/backups/*.sql
+
+
+*.pem
