@@ -17,7 +17,9 @@ import requests
 from openai import OpenAI
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from project root (eval/ → ai-service/ → PenalLawChatbot/)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+load_dotenv(dotenv_path=_PROJECT_ROOT / ".env", override=False)
 
 # ── Nhận định index (neutral role only) ──────────────────────────────────────
 # Now reads directly from case_eval_dataset.json — the `explanation` field IS
@@ -157,13 +159,34 @@ def call_judge(client: OpenAI, model: str, prompt: str,
         try:
             r = client.chat.completions.create(
                 model=model,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {"role": "system", "content":
+                     "You are a strict JSON evaluator. Output ONLY a single compact "
+                     "JSON object with no explanation, no markdown, no extra text."},
+                    {"role": "user", "content": prompt},
+                ],
                 temperature=0,
-                max_tokens=300,
+                max_tokens=4096,  # Gemini 2.5 Pro thinking tokens count here; give full budget
+                extra_body={"thinking": {"type": "disabled"}},  # disable extended thinking
             )
-            raw = r.choices[0].message.content.strip()
-            raw = re.sub(r"```(?:json)?\s*", "", raw).strip()
-            data = json.loads(raw)
+            raw = (r.choices[0].message.content or "").strip()
+            if not raw:
+                raise ValueError(f"Empty response. finish={r.choices[0].finish_reason}")
+            # Step 1: strip markdown fences (opening AND closing)
+            clean = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+            # Step 2: extract outermost {...} block — greedy so multiline JSON works
+            brace_m = re.search(r"\{.*\}", clean, re.DOTALL)
+            if brace_m:
+                clean = brace_m.group(0)
+            try:
+                data = json.loads(clean)
+            except json.JSONDecodeError:
+                # Fallback: regex-scan raw for "DX_..." int pairs (survives truncation)
+                data = {}
+                for m in re.finditer(r'"(D\d_\w+)"\s*:\s*(\d)', raw):
+                    data[m.group(1)] = int(m.group(2))
+                if not data:
+                    raise ValueError(f"No dims parsed: {repr(raw[:120])}")
             total = sum(data.get(d, 0) for d in dimensions)
             data["total"]      = total
             data["normalized"] = round(total / 30 * 5, 2)

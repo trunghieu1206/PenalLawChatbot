@@ -30,7 +30,9 @@ import requests
 from openai import OpenAI
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from project root (eval/ → ai-service/ → PenalLawChatbot/)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+load_dotenv(dotenv_path=_PROJECT_ROOT / ".env", override=False)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 WEIGHTS = {"l1": 0.30, "l2": 0.30, "l3": 0.25, "l4": 0.15}
@@ -129,7 +131,8 @@ def call_predict(ai_url: str, question: str, timeout: int, log: logging.Logger) 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def _extract_nums(text: str) -> set:
-    return set(re.findall(r"[Ðđd][iíI][eêE][uU]\s*(\d+[A-Za-z]?)", text, re.I))
+    """Extract article numbers from Vietnamese text. Uses robust Unicode pattern."""
+    return set(re.findall(r"(?i:điều|diều|điêu|đều)\s*(\d+[A-Za-z]?)", text))
 
 
 def _gt_nums(gt_articles: list) -> set:
@@ -370,21 +373,32 @@ def layer4_factual(client: OpenAI, model: str, case: dict,
         try:
             r = client.chat.completions.create(
                 model=model,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {"role": "system", "content":
+                     "You are a strict JSON classifier. Output ONLY the raw JSON object, "
+                     "no explanation, no markdown fences, no prose."},
+                    {"role": "user", "content": prompt},
+                ],
                 temperature=0,
-                max_tokens=120,
+                max_tokens=4096,  # Gemini 2.5 Pro thinking tokens count here
+                extra_body={"thinking": {"type": "disabled"}},  # disable extended thinking
             )
-            raw = r.choices[0].message.content.strip()
-            raw = re.sub(r"```(?:json)?\s*", "", raw).strip()
-            data = json.loads(raw)
+            raw = (r.choices[0].message.content or "").strip()
+            clean = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+            brace_m = re.search(r"\{.*\}", clean, re.DOTALL)
+            if brace_m:
+                clean = brace_m.group(0)
+            data = json.loads(clean)
+            triggered = bool(data.get("contradiction", False))
             return {
-                "flagged":  bool(data.get("contradiction", False)),
-                "example":  data.get("example", ""),
+                "triggered": triggered,
+                "flagged":   triggered,  # both keys for compatibility
+                "example":   data.get("example", ""),
             }
         except Exception as e:
             log.warning(f"    L4 attempt {attempt+1} failed: {e}")
             time.sleep(2 ** attempt)
-    return {"flagged": False, "example": "", "note": "l4_failed_after_retries"}
+    return {"triggered": False, "flagged": False, "example": "", "note": "l4_failed_after_retries"}
 
 
 # ── Composite score ───────────────────────────────────────────────────────────

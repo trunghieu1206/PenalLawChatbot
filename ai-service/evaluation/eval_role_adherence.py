@@ -7,13 +7,11 @@ TWO-LAYER SCORING PER CASE:
     Each role has positive signals (should appear) and negative signals (should NOT appear).
     signal_score = positive_hit_rate - 0.5 * negative_hit_rate   (clamped to 0–1)
 
-  Layer B — LLM Judge (3 targeted yes/no questions, ~60 tokens per call)
-    Q1: Does it clearly adopt the requested role perspective?
-    Q2: Does it cite role-appropriate articles?
-    Q3: Does it avoid arguing against its role?
-    llm_score = yes_count / 3
+  Layer B — LLM Judge (4 targeted yes/no questions per role)
+    Q1–Q4: Role-specific questions (see _JUDGE_PROMPTS below for each role)
+    llm_score = yes_count / 4
 
-  final_score = 0.6 * signal_score + 0.4 * llm_score
+  final_score = 0.3 * signal_score + 0.7 * llm_score
   Pass: mean(final_score) >= 0.85
 
 RUN ON GPU SERVER:
@@ -30,7 +28,9 @@ import requests
 from openai import OpenAI
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from project root (eval/ → ai-service/ → PenalLawChatbot/)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+load_dotenv(dotenv_path=_PROJECT_ROOT / ".env", override=False)
 
 ROLES = ["neutral", "defense", "victim"]
 
@@ -300,7 +300,8 @@ def llm_score(client: OpenAI, model: str, question: str,
 
 
 # ── Layer C: Final combine ────────────────────────────────────────────────────
-def combined_score(sig_val: float, llm_val: float | None, w_sig: float = 0.4, w_llm: float = 0.6) -> float:
+def combined_score(sig_val: float, llm_val: float | None, w_sig: float = 0.3, w_llm: float = 0.7) -> float:
+    """Combine signal (Layer A) and LLM (Layer B) scores. Default: 0.3 signal + 0.7 LLM."""
     if llm_val is None:
         return round(sig_val, 4)
     return round(w_sig * sig_val + w_llm * llm_val, 4)
@@ -451,11 +452,11 @@ def main():
             "n_cases":    processed,
             "case_range": f"{args.start}–{'END' if not args.end else args.end}",
             "llm_used":   not args.skip_llm,
-            "weights":    {"layer_a_signal": 0.6, "layer_b_llm": 0.4},
+            "weights":    {"layer_a_signal": 0.3, "layer_b_llm": 0.7},
             "scoring": {
                 "layer_a": "signal_rate - 0.5*negative_rate (+ balance bonus for neutral)",
-                "layer_b": "yes_count/3 across 3 targeted yes/no questions",
-                "final":   "0.6 * layer_a + 0.4 * layer_b",
+                "layer_b": "yes_count/4 across 4 role-specific yes/no questions",
+                "final":   "0.3 * layer_a + 0.7 * layer_b",
             },
         },
         "overall": {
