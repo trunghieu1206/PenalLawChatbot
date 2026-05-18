@@ -30,13 +30,16 @@ import requests
 from openai import OpenAI
 from dotenv import load_dotenv
 
-load_dotenv()
-
 # Project root = 3 levels up from this file:
 # eval_combined...py  →  evaluation/  →  ai-service/  →  PenalLawChatbot/
-_HERE = Path(__file__).resolve().parent          # .../ai-service/evaluation/
-_AI_SERVICE = _HERE.parent                        # .../ai-service/
-PROJECT_ROOT = _AI_SERVICE.parent                 # .../PenalLawChatbot/
+_HERE        = Path(__file__).resolve().parent   # .../ai-service/evaluation/
+_AI_SERVICE  = _HERE.parent                      # .../ai-service/
+PROJECT_ROOT = _AI_SERVICE.parent                # .../PenalLawChatbot/
+
+# Load .env from project root explicitly — works regardless of cwd
+_ENV_FILE = PROJECT_ROOT / ".env"
+load_dotenv(dotenv_path=_ENV_FILE, override=False)
+
 
 # --- Tqdm Logging ---
 class TqdmLoggingHandler(logging.Handler):
