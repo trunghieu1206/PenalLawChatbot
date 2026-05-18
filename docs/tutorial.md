@@ -12,22 +12,18 @@ tmux new -s deploy
 
 # upload scripts + .env template + DB backup ───────────────────────
 # Run these from your LOCAL machine (inside PenalLawChatbot/ directory):
-scp -P 2692 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@n3.ckey.vn:/root/
-scp -P 2692 .env.example root@n3.ckey.vn:/root/.env.example
+scp -P 1652 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@n3.ckey.vn:/root/
+scp -P 1652 .env.example root@n3.ckey.vn:/root/.env.example
 
 # ── ON SERVER: Run the base setup first ──────────────────────────────────────
 chmod +x setup_server.sh deploy_nodocker.sh restore_database.sh
 bash setup_server.sh
 
-# ── ON LOCAL: Upload backups and datasets ────────────────────────────────────
-# Run these from your LOCAL machine AFTER setup_server.sh has finished!
-ssh -p 2692 root@n3.ckey.vn "mkdir -p ~/PenalLawChatbot/database/backups ~/PenalLawChatbot/ai-service/scraped_datasets"
+# Create directories on the server first (scp cannot create them automatically)
+ssh -p 1652 root@n3.ckey.vn "mkdir -p ~/PenalLawChatbot/database/backups ~/PenalLawChatbot/ai-service/scraped_datasets"
 
-scp -P 2692 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260505_150435.sql \
+scp -P 1652 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260505_150435.sql \
     root@n3.ckey.vn:~/PenalLawChatbot/database/backups/
-
-scp -P 2692 ai-service/scraped_datasets/thesis_eval_1000.json \
-    root@n3.ckey.vn:~/PenalLawChatbot/ai-service/scraped_datasets/
 
 # ── ON SERVER: Finish deployment ─────────────────────────────────────────────
 # Back on your server terminal:
@@ -52,7 +48,7 @@ ls -lh ~/PenalLawChatbot/database/backups/
 watch -n 1 nvidia-smi
 
 # server specs
-CUDA 12.4.1 Ubuntu 22.04
+CUDA 12.4.1 Ubuntu 24q.04
 
 # ── EVALUATION ────────────────────────────────────────────────────────────────
 # Run FROM the server inside ~/PenalLawChatbot/ (ai-service must be running)

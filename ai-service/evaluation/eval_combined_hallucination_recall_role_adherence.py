@@ -6,13 +6,15 @@ Compares System (RAG) vs Baseline (gemini-2.5-flash) to reduce LLM calls threefo
 L4 Hallucination is removed per request to minimize LLM judge cost.
 
 HOW TO RUN EXAMPLES:
-  # Run for a specific chunk of cases (e.g. 1 to 10)
-  python3 ai-service/evaluation/eval_combined_hallucination_recall_role_adherence.py \
-    --start 1 --end 10 --log-file ai-service/logs/eval_chunk_1_10.txt
+  # Run from anywhere — paths are resolved automatically
+  python3 /root/PenalLawChatbot/ai-service/evaluation/eval_combined_hallucination_recall_role_adherence.py \
+    --start 1 \
+    --end 1 \
+    --log-file /root/PenalLawChatbot/ai-service/logs/eval_chunk_1_10.txt
 
   # Resume a chunk if it was interrupted (skips already finished cases)
-  python3 ai-service/evaluation/eval_combined_hallucination_recall_role_adherence.py \
-    --start 1 --end 50 --resume --log-file ai-service/logs/eval_chunk_1_50.txt
+  python3 /root/PenalLawChatbot/ai-service/evaluation/eval_combined_hallucination_recall_role_adherence.py \
+    --start 1 --end 50 --resume --log-file /root/PenalLawChatbot/ai-service/logs/eval_chunk_1_50.txt
 
 OUTPUTS:
   combined_results.jsonl  — full raw data per case (for programmatic analysis)
@@ -29,6 +31,12 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Project root = 3 levels up from this file:
+# eval_combined...py  →  evaluation/  →  ai-service/  →  PenalLawChatbot/
+_HERE = Path(__file__).resolve().parent          # .../ai-service/evaluation/
+_AI_SERVICE = _HERE.parent                        # .../ai-service/
+PROJECT_ROOT = _AI_SERVICE.parent                 # .../PenalLawChatbot/
 
 # --- Tqdm Logging ---
 class TqdmLoggingHandler(logging.Handler):
@@ -57,10 +65,58 @@ def setup_logging(log_file):
     return log
 
 # --- Imports from existing scripts ---
-from eval_primary_recall import load_cases, check_primary_hit, _extract_nums_from_text
+from eval_primary_recall import check_primary_hit, _extract_nums_from_text
 from eval_hallucination import _valid_article_set, layer1_article_existence, layer2_edition, layer3_sentencing, _gt_nums
 from eval_role_adherence import ROLE_SIGNALS, ROLE_LABELS, signal_score, llm_score, combined_score
 from eval_rubric_common import call_baseline
+
+# Procedural articles that are never the primary crime article
+_PROCEDURAL = {
+    "7", "28", "32", "34", "42", "45", "46", "47", "48", "49", "50",
+    "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "65",
+}
+
+def load_all_cases(dataset_path: str) -> list:
+    """
+    Permissive loader — loads ALL cases from the dataset.
+    Attempts to extract primary_article from final_verdict,
+    but does NOT skip cases where extraction fails.
+    (Unlike eval_primary_recall.load_cases which skips them.)
+    """
+    import re
+    with open(dataset_path, encoding="utf-8") as f:
+        data = json.load(f)
+
+    cases = []
+    for entry in data:
+        final_text = entry.get("final_verdict", "")
+        all_nums_raw = re.findall(
+            r"(?i:điều|dieu|điêu|đều)\s*(\d+[A-Za-z]?)", final_text
+        )
+        # De-duplicate while preserving order
+        seen: dict = {}
+        for n in all_nums_raw:
+            if n not in seen:
+                seen[n] = None
+        all_gt_nums = list(seen.keys())
+
+        # Primary = first non-procedural article (may be None if verdict is missing/empty)
+        primary_num = next(
+            (n for n in all_gt_nums if n not in _PROCEDURAL), None
+        )
+
+        cases.append({
+            "case_url":         entry.get("url", ""),
+            "crime_type":       entry.get("crime_type", ""),
+            "case_description": entry.get("case_description", ""),
+            "question":         entry.get("case_description", ""),
+            "final_verdict":    final_text,
+            "primary_article":  f"Điều {primary_num}" if primary_num else "N/A",
+            "primary_num":      primary_num,  # may be None — recall skipped for these
+            "all_gt_articles":  [f"Điều {n}" for n in all_gt_nums],
+        })
+    return cases
+
 
 def call_system(ai_url, question, role, timeout, log):
     try:
@@ -95,13 +151,21 @@ def evaluate_metrics(response_dict, case, gt_nums, valid_corpus, role,
         mapped_laws     = response_dict.get("mapped_laws") or []
         extracted_facts = response_dict.get("extracted_facts") or {}
 
-    # 1. Primary Recall
-    recall = check_primary_hit(case["primary_num"], mapped_laws, result_text)
+    # 1. Primary Recall (skip if dataset has no primary article for this case)
+    if case.get("primary_num"):
+        recall = check_primary_hit(case["primary_num"], mapped_laws, result_text)
+        recall_hit    = recall["hit"]
+        recall_source = recall["source"]
+        recall_cited  = recall["cited_nums"]
+    else:
+        recall_hit    = None  # N/A — no ground truth article in verdict
+        recall_source = "n/a"
+        recall_cited  = []
 
     # 2. Hallucination (L1-L3)
     l1 = layer1_article_existence(mapped_laws, gt_nums, valid_corpus)
     l2 = layer2_edition(mapped_laws, extracted_facts)
-    l3 = layer3_sentencing(result_text, case["all_gt_articles"], mapped_laws, log)
+    l3 = layer3_sentencing(result_text, case["all_gt_articles"], {})
     hall_score = composite_hallucination(l1, l2, l3)
 
     # 3. Role Adherence
@@ -110,9 +174,9 @@ def evaluate_metrics(response_dict, case, gt_nums, valid_corpus, role,
     role_score = combined_score(sig["score"], llm.get("score"))
 
     return {
-        "recall":          recall["hit"],
-        "recall_source":   recall["source"],
-        "recall_cited":    recall["cited_nums"],
+        "recall":          recall_hit,    # None = N/A (no ground truth article)
+        "recall_source":   recall_source,
+        "recall_cited":    recall_cited,
         "hallucination":   hall_score,
         "hall_l1":         l1.get("triggered", False) if l1 else False,
         "hall_l2":         l2.get("triggered", False) if l2 else False,
@@ -128,21 +192,26 @@ def _pct(val):
 
 def _print_case_report(report, cidx, total, case, role, sys_eval, base_eval):
     """Write a nicely formatted block for one case+role to both terminal and report file."""
-    r_icon  = "✅" if sys_eval["recall"]                    else "❌"
+    r_icon  = ("✅" if sys_eval["recall"] else "❌") if sys_eval["recall"] is not None else "➖"
     h_icon  = "✅" if sys_eval["hallucination"] == 0        else "⚠️ "
     ro_icon = "✅" if (sys_eval["role_adherence"] or 0) >= 0.7 else "⚠️ "
 
-    br_icon  = "✅" if base_eval["recall"]                    else "❌"
+    br_icon  = ("✅" if base_eval["recall"] else "❌") if base_eval["recall"] is not None else "➖"
     bh_icon  = "✅" if base_eval["hallucination"] == 0        else "⚠️ "
     bro_icon = "✅" if (base_eval["role_adherence"] or 0) >= 0.7 else "⚠️ "
 
     report(f"  ┌─ [{cidx}/{total}]  Role: {role.upper()}  ──────────────────────────────────────")
     report(f"  │  Crime  : {case.get('crime_type', 'N/A')}")
-    report(f"  │  Primary: {case.get('primary_article', 'N/A')}")
     report(f"  │")
     report(f"  │  ── SYSTEM (RAG) ─────────────────────────────────────────────")
-    report(f"  │  {r_icon} Recall        : {'HIT' if sys_eval['recall'] else 'MISS'}"
-           f"  via={sys_eval['recall_source']}  cited={sys_eval['recall_cited']}")
+    
+    # Show recall details explicitly
+    sys_recall_text = "N/A (No GT)" if sys_eval['recall'] is None else ('HIT' if sys_eval['recall'] else 'MISS')
+    report(f"  │  {r_icon} Recall        : {sys_recall_text}")
+    report(f"  │       What was extracted in the final verdict in the origin law case: {case.get('primary_article', 'N/A')}")
+    report(f"  │       The primary law article that the system used to generate the response: {', '.join(sys_eval.get('recall_cited', [])) or 'None'}")
+    report(f"  │       Source of law document cited: {sys_eval.get('recall_source', 'N/A')}")
+    
     report(f"  │  {h_icon} Hallucination : score={sys_eval['hallucination']}"
            f"  L1={sys_eval['hall_l1']}  L2={sys_eval['hall_l2']}  L3={sys_eval['hall_l3']}")
     report(f"  │  {ro_icon} Role Adherence: {sys_eval['role_adherence']}"
@@ -150,8 +219,11 @@ def _print_case_report(report, cidx, total, case, role, sys_eval, base_eval):
     report(f"  │  Response: {repr(sys_eval['text_preview'][:120])}")
     report(f"  │")
     report(f"  │  ── BASELINE (no RAG) ────────────────────────────────────────")
-    report(f"  │  {br_icon} Recall        : {'HIT' if base_eval['recall'] else 'MISS'}"
-           f"  via={base_eval['recall_source']}")
+    bas_recall_text = "N/A (No GT)" if base_eval['recall'] is None else ('HIT' if base_eval['recall'] else 'MISS')
+    report(f"  │  {br_icon} Recall        : {bas_recall_text}")
+    report(f"  │       What was extracted in the final verdict in the origin law case: {case.get('primary_article', 'N/A')}")
+    report(f"  │       The primary law article that the baseline used to generate the response: {', '.join(base_eval.get('recall_cited', [])) or 'None'}")
+    report(f"  │       Source of law document cited: {base_eval.get('recall_source', 'N/A')}")
     report(f"  │  {bh_icon} Hallucination : score={base_eval['hallucination']}")
     report(f"  │  {bro_icon} Role Adherence: {base_eval['role_adherence']}")
     report(f"  └──────────────────────────────────────────────────────────────")
@@ -184,10 +256,10 @@ def _print_running_totals(report, metrics, processed):
 
 def main():
     parser = argparse.ArgumentParser(description="Combined Evaluation Script")
-    parser.add_argument("--dataset",        default="ai-service/scraped_datasets/thesis_eval_1000.json")
-    parser.add_argument("--output",         default="ai-service/evaluation/results/combined_results.jsonl")
-    parser.add_argument("--summary",        default="ai-service/evaluation/results/combined_summary.json")
-    parser.add_argument("--report",         default="ai-service/evaluation/results/combined_report.txt",
+    parser.add_argument("--dataset",        default=str(PROJECT_ROOT / "ai-service/evaluation/thesis_eval_1000.json"))
+    parser.add_argument("--output",         default=str(PROJECT_ROOT / "ai-service/evaluation/results/combined_results.jsonl"))
+    parser.add_argument("--summary",        default=str(PROJECT_ROOT / "ai-service/evaluation/results/combined_summary.json"))
+    parser.add_argument("--report",         default=str(PROJECT_ROOT / "ai-service/evaluation/results/combined_report.txt"),
                         help="Human-readable report file — download this to view results offline.")
     parser.add_argument("--ai-url",         default=os.getenv("AI_SERVICE_URL", "http://localhost:8000"))
     parser.add_argument("--judge-model",    default=os.getenv("LLM_JUDGE_MODEL", "google/gemini-2.5-pro"))
@@ -221,13 +293,14 @@ def main():
     report(f"  Case range    : {args.start} – {'END' if not args.end else args.end}")
     report("=" * 70)
 
-    cases = load_cases(args.dataset)
+    cases = load_all_cases(args.dataset)
     valid_corpus = _valid_article_set(args.dataset)
 
     s_idx = max(0, args.start - 1)
     e_idx = args.end if args.end else len(cases)
     cases = cases[s_idx:e_idx]
-    report(f"Cases to evaluate: {len(cases)}")
+    n_with_primary = sum(1 for c in cases[max(0, args.start-1):(args.end if args.end else len(cases))] if c["primary_num"])
+    report(f"Cases to evaluate: {len(cases[max(0, args.start-1):(args.end if args.end else len(cases))])}  ({n_with_primary} have primary article for recall)")
 
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -239,18 +312,26 @@ def main():
                 except: pass
         report(f"Resume mode: {len(done_urls)} cases already done — skipping.")
 
+    # OpenRouter requires HTTP-Referer and X-Title headers, otherwise some models silently return empty content.
+    or_headers = {
+        "HTTP-Referer": "http://localhost:8000",
+        "X-Title": "VNPLaw Eval"
+    }
+
     oai_judge    = OpenAI(
         api_key=os.getenv("OPENROUTER_LLM_JUDGE_KEY") or os.getenv("OPENROUTER_API_KEY") or "missing",
         base_url="https://openrouter.ai/api/v1",
+        default_headers=or_headers,
     )
     oai_baseline = OpenAI(
         api_key=os.getenv("OPENROUTER_API_KEY") or "missing",
         base_url="https://openrouter.ai/api/v1",
+        default_headers=or_headers,
     )
 
     metrics = {
-        "system":   {"recall_hits": 0, "hallucination_scores": [], "role_scores": []},
-        "baseline": {"recall_hits": 0, "hallucination_scores": [], "role_scores": []},
+        "system":   {"recall_hits": 0, "recall_total": 0, "hallucination_scores": [], "role_scores": []},
+        "baseline": {"recall_hits": 0, "recall_total": 0, "hallucination_scores": [], "role_scores": []},
         "total_evals": 0,
     }
     processed = 0
@@ -287,11 +368,16 @@ def main():
                 row["evaluations"][role] = {"system": sys_eval, "baseline": base_eval}
 
                 metrics["total_evals"] += 1
-                metrics["system"]["recall_hits"]             += int(sys_eval["recall"])
+                if sys_eval["recall"] is not None:
+                    metrics["system"]["recall_hits"] += int(sys_eval["recall"])
+                    metrics["system"]["recall_total"] += 1
+
                 metrics["system"]["hallucination_scores"].append(sys_eval["hallucination"])
                 metrics["system"]["role_scores"].append(sys_eval["role_adherence"])
 
-                metrics["baseline"]["recall_hits"]             += int(base_eval["recall"])
+                if base_eval["recall"] is not None:
+                    metrics["baseline"]["recall_hits"] += int(base_eval["recall"])
+                    metrics["baseline"]["recall_total"] += 1
                 metrics["baseline"]["hallucination_scores"].append(base_eval["hallucination"])
                 metrics["baseline"]["role_scores"].append(base_eval["role_adherence"])
 
@@ -308,10 +394,10 @@ def main():
     def _avg(lst): return round(sum(lst) / len(lst), 4) if lst else 0.0
 
     n_evals    = metrics["total_evals"]
-    sys_recall = round(metrics["system"]["recall_hits"]   / n_evals, 4) if n_evals else 0
+    sys_recall = round(metrics["system"]["recall_hits"]   / metrics["system"]["recall_total"],   4) if metrics["system"]["recall_total"]   else None
     sys_hall   = _avg(metrics["system"]["hallucination_scores"])
     sys_role   = _avg(metrics["system"]["role_scores"])
-    bas_recall = round(metrics["baseline"]["recall_hits"] / n_evals, 4) if n_evals else 0
+    bas_recall = round(metrics["baseline"]["recall_hits"] / metrics["baseline"]["recall_total"], 4) if metrics["baseline"]["recall_total"] else None
     bas_hall   = _avg(metrics["baseline"]["hallucination_scores"])
     bas_role   = _avg(metrics["baseline"]["role_scores"])
 
@@ -324,7 +410,7 @@ def main():
         "system":   {"primary_recall": sys_recall, "hallucination_rate": sys_hall, "role_adherence": sys_role},
         "baseline": {"primary_recall": bas_recall, "hallucination_rate": bas_hall, "role_adherence": bas_role},
         "pass": {
-            "recall":        sys_recall >= 0.90,
+            "recall":        (sys_recall >= 0.90) if sys_recall is not None else None,
             "hallucination": sys_hall   <= 0.10,
             "role":          sys_role   >= 0.85,
         },
@@ -334,6 +420,14 @@ def main():
     with open(sum_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
 
+    def _recall_str(v):
+        return "N/A" if v is None else _pct(v)
+
+    def _pass_str(key):
+        v = summary["pass"][key]
+        if v is None: return "➖ N/A"
+        return "✅ PASS" if v else "❌ FAIL"
+
     # Rich final report block
     report("")
     report("=" * 70)
@@ -341,12 +435,9 @@ def main():
     report("=" * 70)
     report(f"  {'Metric':<22} {'System':>9} {'Baseline':>9}  {'Target':>8}  Pass?")
     report(f"  {'-'*58}")
-    report(f"  {'Primary Recall':<22} {_pct(sys_recall):>9} {_pct(bas_recall):>9}  {'≥90%':>8}  "
-           f"{'✅ PASS' if summary['pass']['recall'] else '❌ FAIL'}")
-    report(f"  {'Hallucination Rate':<22} {_pct(sys_hall):>9} {_pct(bas_hall):>9}  {'≤10%':>8}  "
-           f"{'✅ PASS' if summary['pass']['hallucination'] else '❌ FAIL'}")
-    report(f"  {'Role Adherence':<22} {_pct(sys_role):>9} {_pct(bas_role):>9}  {'≥85%':>8}  "
-           f"{'✅ PASS' if summary['pass']['role'] else '❌ FAIL'}")
+    report(f"  {'Primary Recall':<22} {_recall_str(sys_recall):>9} {_recall_str(bas_recall):>9}  {'≥90%':>8}  {_pass_str('recall')}")
+    report(f"  {'Hallucination Rate':<22} {_pct(sys_hall):>9} {_pct(bas_hall):>9}  {'≤10%':>8}  {_pass_str('hallucination')}")
+    report(f"  {'Role Adherence':<22} {_pct(sys_role):>9} {_pct(bas_role):>9}  {'≥85%':>8}  {_pass_str('role')}")
     report(f"  {'-'*58}")
     report(f"  Detailed JSONL : {out_path}")
     report(f"  Summary JSON   : {sum_path}")

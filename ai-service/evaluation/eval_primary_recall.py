@@ -108,8 +108,8 @@ def load_cases(dataset_path: str, _unused: str = "") -> list:
         final_text  = entry.get("final_verdict", "")
 
         # Extract all Điều numbers from the actual court verdict
-        all_nums = re.findall(r"[Ðđd][iíI][eêE][uU]\s*(\d+[A-Za-z]?)",
-                              final_text, re.I)
+        all_nums = re.findall(r"(?i:điều|dieu|điêu|đều)\s*(\d+[A-Za-z]?)",
+                              final_text)
         # Remove duplicates, keep order
         seen_nums: dict = {}
         for n in all_nums:
@@ -200,7 +200,7 @@ def main():
         description="Primary Article Recall evaluation for VNPLaw AI service."
     )
     parser.add_argument("--dataset",
-                        default="ai-service/scraped_datasets/thesis_eval_1000.json",
+                        default="ai-service/evaluation/thesis_eval_1000.json",
                         help="Path to case_eval_dataset.json")
     parser.add_argument("--output",
                         default="ai-service/evaluation/results/primary_recall_results.jsonl")

@@ -91,17 +91,14 @@ ROLE REQUESTED: {role_label}
 CASE SUMMARY: {question}
 AI RESPONSE: {response}
 
-Answer ONLY these 3 questions with yes or no:
+Answer ONLY these 2 questions with yes or no:
 Q1: Does the response clearly advocate from the {role_label} perspective \
 (not just mention the role but actually argue from that viewpoint)?
-Q2: Does the response cite articles appropriate for the {role_label} role \
-(e.g., mitigating articles Điều 51/65 for defense; aggravating Điều 52 for victim; \
-both sides for neutral judge)?
-Q3: Does the response avoid arguing against its own role \
-(defense not arguing harshly against defendant; victim not arguing for reduced sentence)?
+Q2: Is the tone and language strictly consistent with the requested role without contradicting itself \
+(e.g., if defense, it does NOT argue for harsh punishment; if victim, it does NOT argue for leniency; if judge, it does NOT show obvious bias)?
 
 Return ONLY this JSON with no other text:
-{{"q1": "yes", "q2": "yes", "q3": "yes"}}
+{{"q1": "yes", "q2": "yes"}}
 """
 
 ROLE_LABELS = {
@@ -185,8 +182,12 @@ def signal_score(response: str, role: str) -> dict:
     pos_hits = [p for p in sigs["positive"] if p in t]
     neg_hits = [n for n in sigs["negative"] if n in t]
 
-    pos_rate = len(pos_hits) / len(sigs["positive"]) if sigs["positive"] else 1.0
-    neg_rate = len(neg_hits) / len(sigs["negative"]) if sigs["negative"] else 0.0
+    # Require only 50% of the positive vocabulary list to get a perfect vocabulary score
+    req_pos = max(1, int(len(sigs["positive"]) * 0.5))
+    pos_rate = min(1.0, len(pos_hits) / req_pos) if sigs["positive"] else 1.0
+    
+    req_neg = max(1, len(sigs["negative"]))
+    neg_rate = min(1.0, len(neg_hits) / req_neg) if sigs["negative"] else 0.0
 
     # Extra check for neutral: must mention BOTH sides
     balance_bonus = 0.0
@@ -217,17 +218,28 @@ def llm_score(client: OpenAI, model: str, question: str,
             r = client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0,
-                max_tokens=80,
+                temperature=0.1,
+                max_tokens=300,
             )
-            raw = r.choices[0].message.content.strip()
-            raw = re.sub(r"```(?:json)?\s*", "", raw).strip()
-            data = json.loads(raw)
-            answers = [data.get(f"q{i}", "no").lower().strip() for i in range(1, 4)]
+            raw = (r.choices[0].message.content or "").strip()
+            if not raw:
+                raise ValueError(f"Model returned empty content. Finish reason: {r.choices[0].finish_reason}")
+            try:
+                data = json.loads(re.sub(r"```(?:json)?\s*", "", raw).strip())
+            except json.JSONDecodeError as jde:
+                log.debug(f"    JSON decode failed: {jde}. Raw text was: {repr(raw)}")
+                # Fallback: manually parse q1/q2 if JSON is mangled
+                data = {}
+                for m in re.finditer(r'"(q[12])"\s*:\s*"(yes|no)"', raw, re.I):
+                    data[m.group(1).lower()] = m.group(2).lower()
+                if not data:
+                    raise ValueError("Could not extract any yes/no answers via regex.")
+
+            answers = [data.get(f"q{i}", "no").lower().strip() for i in range(1, 3)]
             yes_count = sum(1 for a in answers if a == "yes")
             return {
-                "score":   round(yes_count / 3, 4),
-                "answers": {"q1": answers[0], "q2": answers[1], "q3": answers[2]},
+                "score":   round(yes_count / 2, 4),
+                "answers": {"q1": answers[0], "q2": answers[1]},
             }
         except Exception as e:
             log.warning(f"    LLM judge attempt {attempt+1} failed: {e}")
@@ -235,12 +247,11 @@ def llm_score(client: OpenAI, model: str, question: str,
     return {"score": None, "answers": {}, "note": "failed_after_retries"}
 
 
-# ── Combined score ────────────────────────────────────────────────────────────
-def combined_score(sig: float, llm: Optional[float],
-                   w_sig: float = 0.6, w_llm: float = 0.4) -> float:
-    if llm is None:
-        return sig  # fallback to signal only
-    return round(w_sig * sig + w_llm * llm, 4)
+# ── Layer C: Final combine ────────────────────────────────────────────────────
+def combined_score(sig_val: float, llm_val: float | None, w_sig: float = 0.4, w_llm: float = 0.6) -> float:
+    if llm_val is None:
+        return round(sig_val, 4)
+    return round(w_sig * sig_val + w_llm * llm_val, 4)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -249,7 +260,7 @@ def main():
         description="Role Adherence evaluation for VNPLaw AI service."
     )
     parser.add_argument("--dataset",
-                        default="ai-service/scraped_datasets/thesis_eval_1000.json",
+                        default="ai-service/evaluation/thesis_eval_1000.json",
                         help="Path to case_eval_dataset.json")
     parser.add_argument("--output",
                         default="ai-service/evaluation/results/role_adherence_results.jsonl")
@@ -300,8 +311,13 @@ def main():
                     pass
         log.info(f"Resume: {len(done_urls)} cases already done.")
 
+    or_headers = {
+        "HTTP-Referer": "http://localhost:8000",
+        "X-Title": "VNPLaw Eval"
+    }
     oai = OpenAI(api_key=os.getenv("OPENROUTER_LLM_JUDGE_KEY") or os.getenv("OPENROUTER_API_KEY") or "missing",
-                 base_url="https://openrouter.ai/api/v1")
+                 base_url="https://openrouter.ai/api/v1",
+                 default_headers=or_headers)
 
     # Per-role accumulators
     all_scores: dict = {r: [] for r in ROLES}

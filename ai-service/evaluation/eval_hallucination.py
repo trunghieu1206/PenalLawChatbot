@@ -399,7 +399,7 @@ def main():
         description="4-Layer hallucination evaluation for VNPLaw AI service."
     )
     parser.add_argument("--dataset",
-                        default="ai-service/scraped_datasets/thesis_eval_1000.json",
+                        default="ai-service/evaluation/thesis_eval_1000.json",
                         help="Path to case_eval_dataset.json")
     parser.add_argument("--output",   default="ai-service/evaluation/results/hallucination_results.jsonl")
     parser.add_argument("--summary",  default="ai-service/evaluation/results/hallucination_summary.json")

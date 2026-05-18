@@ -432,7 +432,10 @@ if "$AI_PYTHON" -c "import fastapi, transformers, langchain, pymilvus" 2>/dev/nu
     skip "AI service requirements already installed."
 else
     "$AI_PYTHON" -m pip install "setuptools>=70.0" --quiet 2>&1 | tail -2 || true
-    grep -v "^torch" "$PROJECT_DIR/ai-service/requirements.txt" > /tmp/requirements_notorch.txt
+    # Exclude torch AND torchvision — we will reinstall the exact matching torchvision below
+    grep -v "^torch" "$PROJECT_DIR/ai-service/requirements.txt" \
+        | grep -v "^torchvision" \
+        > /tmp/requirements_notorch.txt
     "$AI_PYTHON" -m pip install --ignore-installed typing_extensions --quiet -r /tmp/requirements_notorch.txt 2>&1 | tail -5 || \
         error "Failed to install AI dependencies. Check pip output above."
 
@@ -443,11 +446,35 @@ else
     "$AI_PYTHON" -m pip install "FlagEmbedding>=1.2.0" --quiet 2>&1 | tail -2 || true
 fi
 
+# Uninstall torchvision entirely — our AI service does NOT use it.
+# (Jina embeddings + CrossEncoder + Milvus + LangChain have no image processing needs.)
+# transformers imports torchvision only for image features and gracefully skips it when absent.
+# Keeping a mismatched torchvision (e.g. CPU build vs CUDA torch, or wrong cu-tag) causes:
+#   RuntimeError: operator torchvision::nms does not exist
+# The safest fix for any server is to simply remove it.
+info "Removing torchvision (not needed by this AI service, prevents nms crash)..."
+"$AI_PYTHON" -m pip uninstall torchvision -y --quiet 2>&1 | tail -1 || true
+
 # Always enforce pymilvus 2.4.x — pymilvus 3.0 breaks MilvusLite by treating .db file as a directory.
-# This runs every time (outside the skip block) to fix servers with a pre-cached bad version.
+# --force-reinstall: ensure the downgrade happens even if pip thinks it's already installed.
+# --break-system-packages: required on Ubuntu 24.04 (PEP 668) to overwrite system-managed packages.
 info "Enforcing pymilvus<2.5 (required for legacy SQLite VN_law_lora.db)..."
-"$AI_PYTHON" -m pip install "milvus-lite>=2.4.9,<2.5.0" "pymilvus>=2.4.0,<2.5.0" \
-    --quiet 2>&1 | tail -2 || true
+"$AI_PYTHON" -m pip install \
+    "milvus-lite>=2.4.9,<2.5.0" "pymilvus>=2.4.0,<2.5.0" \
+    --force-reinstall --break-system-packages \
+    --quiet 2>&1 | tail -3 || \
+"$AI_PYTHON" -m pip install \
+    "milvus-lite>=2.4.9,<2.5.0" "pymilvus>=2.4.0,<2.5.0" \
+    --force-reinstall \
+    --quiet 2>&1 | tail -3 || true
+
+# Verify the version is actually 2.4.x (fail loudly if not, so we catch silent failures)
+_milvus_ver=$("$AI_PYTHON" -c "import pymilvus; print(pymilvus.__version__)" 2>/dev/null || echo "unknown")
+info "  pymilvus installed version: $_milvus_ver"
+case "$_milvus_ver" in
+    2.4.*) info "  ✅ pymilvus $_milvus_ver — correct (2.4.x)" ;;
+    *)     warn "  ⚠️  pymilvus $_milvus_ver is NOT 2.4.x — MilvusLite may fail. Run manually: pip install 'pymilvus>=2.4.0,<2.5.0' --force-reinstall --break-system-packages" ;;
+esac
 
 # Verify torch CUDA state AFTER all installs.
 # Only fail if CUDA was working BEFORE pip but is now broken (pip downgraded torch).
@@ -467,10 +494,10 @@ info "AI service requirements installed."
 info "Verifying critical imports..."
 "$AI_PYTHON" -c "
 import torch
-from peft import PeftModel
 from transformers import AutoModel, AutoTokenizer
 from sentence_transformers import CrossEncoder
 import peft, transformers, uvicorn, fastapi, langchain_openai, langgraph
+from peft import PeftModel
 print(f'✅ All imports OK | torch={torch.__version__} | peft={peft.__version__} | transformers={transformers.__version__}')
 " || error "Import verification FAILED — check pip installation above."
 
@@ -649,17 +676,29 @@ info "nginx started."
 
 # ── 8. Health checks ──────────────────────────────────────────
 echo ""
-info "Waiting for AI service to be ready (up to 300s — first run downloads/loads models; CPU is slower)..."
+info "Waiting for AI service to be ready (up to 300s)..."
+info "  (First run: model loading takes 60-120s on GPU, 180-300s on CPU)"
 _ai_ready=false
-for _i in $(seq 1 60); do   # 60 × 5s = 300s
-    if curl -sf --max-time 5 "http://localhost:8000/health" > /dev/null 2>&1; then
-        info "  ✅ AI Service is up (after $((_i * 5))s)"
+_ai_elapsed=0
+_ai_last_log=0
+while [ $_ai_elapsed -lt 300 ]; do
+    if curl -sf --max-time 2 "http://localhost:8000/health" > /dev/null 2>&1; then
+        info "  ✅ AI Service is up! (after ${_ai_elapsed}s)"
         _ai_ready=true
         break
     fi
-    sleep 5
+    # Print last 2 lines of AI log every 10 seconds so user can see progress
+    if [ $((_ai_elapsed % 10)) -eq 0 ] && [ $_ai_elapsed -gt 0 ]; then
+        _last_lines=$(tail -2 "$LOG_DIR/ai-service.log" 2>/dev/null | tr '\n' ' ')
+        printf "\r  ⏳ [%3ds] %s\n" "$_ai_elapsed" "$_last_lines"
+    else
+        printf "\r  ⏳ Elapsed: %3ds / 300s — waiting..." "$_ai_elapsed"
+    fi
+    sleep 1
+    _ai_elapsed=$((_ai_elapsed + 1))
 done
-[ "$_ai_ready" = false ] && warn "  ⚠️  AI Service not ready after 180s — check $LOG_DIR/ai-service.log"
+echo ""
+[ "$_ai_ready" = false ] && warn "  ⚠️  AI Service not ready after 300s — check $LOG_DIR/ai-service.log"
 
 info "Waiting for Backend to be ready (up to 60s)..."
 _be_ready=false

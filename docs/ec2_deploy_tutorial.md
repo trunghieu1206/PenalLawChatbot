@@ -55,11 +55,11 @@ scp -i "chatbot-key.pem" \
 
 # Upload eval dataset (create directory on server first)
 ssh -i "chatbot-key.pem" ubuntu@ec2-3-27-24-166.ap-southeast-2.compute.amazonaws.com \
-  "mkdir -p ~/PenalLawChatbot/ai-service/scraped_datasets"
-
-scp -i "chatbot-key.pem" \
-  ai-service/scraped_datasets/thesis_eval_1000.json \
-  ubuntu@ec2-3-27-24-166.ap-southeast-2.compute.amazonaws.com:~/PenalLawChatbot/ai-service/scraped_datasets/
+# thesis_eval_1000.json is now committed inside ai-service/evaluation/ — no manual upload needed after git clone!
+# (If you need to re-upload manually, run:)
+# scp -i "chatbot-key.pem" \
+#   ai-service/evaluation/thesis_eval_1000.json \
+#   ubuntu@ec2-3-27-24-166.ap-southeast-2.compute.amazonaws.com:~/PenalLawChatbot/ai-service/evaluation/
 
 # ── ON SERVER: run the installer ─────────────────────────────────────────────
 # (after SSH into EC2)

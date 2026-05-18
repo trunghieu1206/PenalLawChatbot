@@ -336,7 +336,7 @@ def base_arg_parser(description: str) -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=description)
     p.add_argument(
         "--dataset",
-        default="ai-service/scraped_datasets/thesis_eval_1000.json",
+        default="ai-service/evaluation/thesis_eval_1000.json",
         help="Path to case_eval_dataset.json (case_description / explanation / final_verdict)",
     )
     p.add_argument("--output",  default=None)

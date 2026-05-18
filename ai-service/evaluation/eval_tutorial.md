@@ -28,7 +28,7 @@ All scripts use a single dataset file:
 
 | File | Size | Cases | Crime Types |
 |------|------|-------|-------------|
-| `ai-service/scraped_datasets/thesis_eval_1000.json` | 26 MB | **1,000** | **338** |
+| `ai-service/evaluation/thesis_eval_1000.json` | 26 MB | **1,000** | **338** |
 
 Each entry has three fields the scripts use:
 
@@ -244,7 +244,7 @@ python3 ai-service/evaluation/eval_rubric_victim.py \
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--dataset PATH` | `thesis_eval_1000.json` | Dataset file |
+| `--dataset PATH` | `ai-service/evaluation/thesis_eval_1000.json` | Dataset file |
 | `--start N` | 1 | First case (1-indexed, inclusive) |
 | `--end N` | 0 (all) | Last case (0 = run all) |
 | `--ai-url URL` | `http://localhost:8000` | AI service URL |
@@ -342,3 +342,8 @@ python3 ai-service/evaluation/eval_combined.py \
 ```
 
 **Outputs:** `results/combined_results.jsonl`, `results/combined_summary.json`
+
+
+
+# DOWNLOAD FINAL REPORT
+scp -P 2692 root@n3.ckey.vn:~/PenalLawChatbot/ai-service/evaluation/results/combined_report.txt .
