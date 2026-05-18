@@ -254,9 +254,15 @@ def llm_score(client: OpenAI, model: str, question: str,
         try:
             r = client.chat.completions.create(
                 model=model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                max_tokens=200,   # 4-Q JSON ~50 tokens; 200 handles any code-fence wrapping
+                messages=[
+                    {"role": "system", "content":
+                     "You are a strict JSON classifier. Output ONLY the raw JSON object, "
+                     "no explanation, no markdown fences, no prose."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.0,
+                max_tokens=4096,   # Gemini 2.5 Pro thinking tokens count here; give full budget
+                extra_body={"thinking": {"type": "disabled"}},  # disable extended thinking
             )
             raw = (r.choices[0].message.content or "").strip()
             if not raw:
