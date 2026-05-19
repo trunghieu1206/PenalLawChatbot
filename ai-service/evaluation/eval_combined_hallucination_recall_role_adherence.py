@@ -379,7 +379,7 @@ def _extract_blhs_articles(text: str):
       confidence : 'high' if at least one explicit BLHS marker found, else 'low'
     """
     BLHS_WIN  = 300   # wider — BLHS label may be at end of long citation chain
-    BLTTHS_WIN = 150  # narrower — BLTTHS label must be immediately adjacent
+    BLTTHS_WIN = 160  # narrower — BLTTHS label must be immediately adjacent
 
     t_low = text.lower()
     art_iter = re.finditer(r"(?:đi[eề]u|dieu)\s*(\d+[a-z]?)", t_low)

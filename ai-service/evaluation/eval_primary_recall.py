@@ -94,7 +94,7 @@ def _extract_blhs_articles(text: str):
     This handles long citation chains like:
       'Điều 295; ...Điều 35 Bộ luật hình sự...; ...Điều 136 BLTTHS'"""
     BLHS_WIN   = 300
-    BLTTHS_WIN = 150
+    BLTTHS_WIN = 160
     t_low = text.lower()
     seen: dict = {}
     for m in re.finditer(r"(?:đi[eề]u|dieu)\s*(\d+[a-z]?)", t_low):
