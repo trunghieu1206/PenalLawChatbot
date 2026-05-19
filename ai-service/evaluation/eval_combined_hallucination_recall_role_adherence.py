@@ -314,33 +314,97 @@ _PROCEDURAL = {
     "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "65",
 }
 
+# ── Known BLTTHS article numbers (commonly cited in every verdict for procedure) ──
+# These are definitive BLTTHS-only articles that must never be treated as BLHS crime articles.
+_BLTTHS_ARTICLES = {
+    # BLTTHS 2015 procedural articles most commonly cited in court verdicts:
+    "298", "299", "300", "301", "302", "303", "304", "305",
+    "306", "307", "308", "309", "310", "311", "312", "313",
+    "314", "315", "316", "317", "318", "319", "320", "321",
+    "322", "323", "324", "325", "326", "327", "328", "329", "330",
+    "331", "332", "333", "334", "335", "336", "337", "338", "339",
+    "340", "341", "342", "343", "344", "345", "346", "347", "348",
+    "349", "350", "351", "352", "353", "354", "355", "356", "357",
+    "358", "359", "360", "361", "362", "363", "364", "365",
+    # Lower procedural articles (investigation, prosecution, trial procedure)
+    "155", "156", "157", "158", "159", "160", "161", "162", "163",
+    "165", "170", "172", "176", "179", "185", "195",
+    "248", "249", "250", "252", "255", "256", "258", "259", "260",
+}
+
+# Markers indicating BLTTHS context (to skip those article citations)
+_BLTTHS_MARKERS = [
+    "tố tụng hình sự", "bltths", "b.l.t.t.h.s", "luật tố tụng",
+]
+# Markers indicating BLHS context (to keep those article citations)
+_BLHS_MARKERS = [
+    "bộ luật hình sự", "blhs", "b.l.h.s", "luật hình sự",
+]
+
+
+def _extract_blhs_articles(text: str):
+    """
+    Extract article numbers that are BLHS (Bộ luật Hình sự) crime articles,
+    not BLTTHS (Bộ luật Tố tụng Hình sự) procedural articles.
+
+    Strategy:
+      1. For each 'Điều X' mention, look at a ±150-char window.
+         - If window contains a BLTTHS marker → skip (procedural).
+         - If window contains a BLHS marker   → accept (crime article).
+         - If neither, use known BLTTHS number list + _PROCEDURAL set to decide.
+    Returns (blhs_nums, confidence):
+      blhs_nums  : list of article numbers (str), deduplicated, order-preserving
+      confidence : 'high' if at least one explicit BLHS marker found, else 'low'
+    """
+    t_low = text.lower()
+    art_iter = re.finditer(r"(?:đi[eề]u|dieu)\s*(\d+[a-z]?)", t_low)
+
+    seen: dict = {}
+    has_explicit_blhs = False
+
+    for m in art_iter:
+        num = m.group(1)
+        win_start = max(0, m.start() - 150)
+        win_end   = min(len(t_low), m.end() + 150)
+        window    = t_low[win_start:win_end]
+
+        is_bltths = any(mk in window for mk in _BLTTHS_MARKERS)
+        is_blhs   = any(mk in window for mk in _BLHS_MARKERS)
+
+        if is_bltths:
+            continue  # definitely procedural — drop
+        if is_blhs:
+            has_explicit_blhs = True
+            if num not in seen:
+                seen[num] = None
+            continue
+        # No explicit law marker — use fallback exclusion lists
+        if num in _BLTTHS_ARTICLES or num in _PROCEDURAL:
+            continue
+        if num not in seen:
+            seen[num] = None
+
+    confidence = "high" if has_explicit_blhs else "low"
+    return list(seen.keys()), confidence
+
+
 def load_all_cases(dataset_path: str) -> list:
     """
     Permissive loader — loads ALL cases from the dataset.
-    Attempts to extract primary_article from final_verdict,
-    but does NOT skip cases where extraction fails.
-    (Unlike eval_primary_recall.load_cases which skips them.)
+    Uses BLHS-aware article extractor to avoid picking up BLTTHS procedural articles.
+    Cases where GT confidence is 'low' are flagged for manual review.
     """
-    import re
     with open(dataset_path, encoding="utf-8") as f:
         data = json.load(f)
 
     cases = []
     for entry in data:
         final_text = entry.get("final_verdict", "")
-        all_nums_raw = re.findall(
-            r"(?i:điều|dieu|điêu|đều)\s*(\d+[A-Za-z]?)", final_text
-        )
-        # De-duplicate while preserving order
-        seen: dict = {}
-        for n in all_nums_raw:
-            if n not in seen:
-                seen[n] = None
-        all_gt_nums = list(seen.keys())
+        all_gt_nums, confidence = _extract_blhs_articles(final_text)
 
-        # Primary = first non-procedural article (may be None if verdict is missing/empty)
+        # Primary = first non-procedural BLHS article
         primary_num = next(
-            (n for n in all_gt_nums if n not in _PROCEDURAL), None
+            (n for n in all_gt_nums if n not in _PROCEDURAL and n not in _BLTTHS_ARTICLES), None
         )
 
         cases.append({
@@ -350,9 +414,10 @@ def load_all_cases(dataset_path: str) -> list:
             "question":         entry.get("case_description", ""),
             "final_verdict":    final_text,
             "primary_article":  f"Điều {primary_num}" if primary_num else "N/A",
-            "primary_num":      primary_num,  # may be None — recall skipped for these
+            "primary_num":      primary_num,
             "all_gt_articles":  [f"Điều {n}" for n in all_gt_nums],
-            "explanation":      entry.get("explanation", ""),  # court's Nhận định (for neutral rubric)
+            "explanation":      entry.get("explanation", ""),
+            "gt_confidence":    confidence,  # 'high'=explicit BLHS label found, 'low'=heuristic only
         })
     return cases
 
@@ -441,13 +506,15 @@ def _print_case_report(report, cidx, total, case, role, sys_eval, rubric=None):
     r_icon  = ("✅" if sys_eval["recall"] else "❌") if sys_eval["recall"] is not None else "➖"
     h_icon  = "✅" if sys_eval["hallucination"] == 0        else "⚠️ "
     ro_icon = "✅" if (sys_eval["role_adherence"] or 0) >= 0.7 else "⚠️ "
+    gt_conf = case.get("gt_confidence", "high")
+    gt_flag = "  ⚠️ [GT LOW CONFIDENCE — manual check needed]" if gt_conf == "low" else ""
 
     report(f"  ┌─ [{cidx}/{total}]  Role: {role.upper()}  ──────────────────────────────────────")
     report(f"  │  Crime  : {case.get('crime_type', 'N/A')}")
     report(f"  │")
     sys_recall_text = "N/A (No GT)" if sys_eval['recall'] is None else ('HIT' if sys_eval['recall'] else 'MISS')
-    report(f"  │  {r_icon} Recall        : {sys_recall_text}")
-    report(f"  │       Ground truth article (from court verdict) : {case.get('primary_article', 'N/A')}")
+    report(f"  │  {r_icon} Recall        : {sys_recall_text}{gt_flag}")
+    report(f"  │       Ground truth article (from court verdict) : {case.get('primary_article', 'N/A')}  [GT confidence: {gt_conf}]")
     report(f"  │       Article cited by system                   : {', '.join(sys_eval.get('recall_cited', [])) or 'None'}")
     report(f"  │       Law document source of cited article      : {sys_eval.get('recall_doc', 'N/A')}")
     report(f"  │       Hit method                                : {sys_eval.get('recall_source', 'N/A')}")
@@ -490,15 +557,20 @@ def _print_running_totals(report, metrics, processed):
     s = metrics["system"]
     def _avg(lst): return sum(lst)/len(lst) if lst else 0.0
 
-    sys_recall = s["recall_hits"] / n
+    r_total = s["recall_total"]
+    r_hits  = s["recall_hits"]
+    r_miss  = r_total - r_hits
+    sys_recall = r_hits / r_total if r_total else 0.0
     sys_hall   = _avg(s["hallucination_scores"])
     sys_role   = _avg(s["role_scores"])
+    low_conf   = len(s["low_conf_cases"])
 
     report(f"  📊 Running totals after {processed} case(s)  ({n} role evals)")
     report(f"     {'Metric':<22} {'System':>9}  Target")
     report(f"     {'-'*45}")
     report(f"     {'Primary Recall':<22} {_pct(sys_recall):>9}  ≥90%  "
-           f"{'✅' if sys_recall >= 0.90 else '❌'}")
+           f"{'✅' if sys_recall >= 0.90 else '❌'}  "
+           f"(miss={r_miss}/{r_total}{'  ⚠️ '+str(low_conf)+' low-conf GT' if low_conf else ''})")
     report(f"     {'Hallucination Rate':<22} {_pct(sys_hall):>9}  ≤10%  "
            f"{'✅' if sys_hall <= 0.10 else '❌'}")
     report(f"     {'Role Adherence':<22} {_pct(sys_role):>9}  ≥85%  "
@@ -610,7 +682,12 @@ def main():
         report("  ⚡ --skip-rubric: rubric LLM scoring disabled")
 
     metrics = {
-        "system": {"recall_hits": 0, "recall_total": 0, "hallucination_scores": [], "role_scores": [], "rubric_scores": []},
+        "system": {
+            "recall_hits": 0, "recall_total": 0,
+            "hallucination_scores": [], "role_scores": [], "rubric_scores": [],
+            "recall_misses": [],    # {case_index, url, gt, cited} for manual review
+            "low_conf_cases": [],   # cases where GT article confidence is low
+        },
         "total_evals": 0,
     }
     processed = 0
@@ -662,8 +739,25 @@ def main():
 
                     metrics["total_evals"] += 1
                     if sys_eval["recall"] is not None:
-                        metrics["system"]["recall_hits"] += int(sys_eval["recall"])
+                        hit = sys_eval["recall"]
+                        metrics["system"]["recall_hits"] += int(hit)
                         metrics["system"]["recall_total"] += 1
+                        if not hit:
+                            metrics["system"]["recall_misses"].append({
+                                "case_index": cidx,
+                                "case_url":   url,
+                                "gt_article": case.get("primary_article", "N/A"),
+                                "gt_conf":    case.get("gt_confidence", "?"),
+                                "cited":      sys_eval.get("recall_cited", []),
+                                "role":       role,
+                            })
+                    # Track low-confidence GT cases (only once per case, on neutral role)
+                    if role == "neutral" and case.get("gt_confidence") == "low":
+                        metrics["system"]["low_conf_cases"].append({
+                            "case_index": cidx,
+                            "case_url":   url,
+                            "gt_article": case.get("primary_article", "N/A"),
+                        })
 
                     metrics["system"]["hallucination_scores"].append(sys_eval["hallucination"])
                     metrics["system"]["role_scores"].append(sys_eval["role_adherence"])
@@ -743,6 +837,27 @@ def main():
         if interrupted:
             report(f"  ↺  Resume with: --resume --start {args.start} --end {'END' if not args.end else args.end}")
         report("=" * 70)
+
+        # ── Recall miss list (manual review) ────────────────────────────────
+        misses = metrics["system"]["recall_misses"]
+        low_conf = metrics["system"]["low_conf_cases"]
+        if misses:
+            report("")
+            report(f"  🔴 RECALL MISSES ({len(misses)}) — cases where system cited wrong article:")
+            seen_miss_cases: set = set()
+            for m in misses:
+                key = (m['case_index'], m['gt_article'])
+                if key in seen_miss_cases:
+                    continue
+                seen_miss_cases.add(key)
+                report(f"    [{m['case_index']}] GT={m['gt_article']}  cited={m['cited']}  conf={m['gt_conf']}")
+                report(f"         {m['case_url']}")
+        if low_conf:
+            report("")
+            report(f"  ⚠️  LOW-CONFIDENCE GT ({len(low_conf)}) — no explicit BLHS label found in verdict, manual check recommended:")
+            for lc in low_conf:
+                report(f"    [{lc['case_index']}] GT={lc['gt_article']}  {lc['case_url']}")
+        report("")
 
         report_fh.flush()
         report_fh.close()

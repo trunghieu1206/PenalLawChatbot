@@ -48,6 +48,45 @@ _PROCEDURAL = {
     "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "65",
 }
 
+# Known BLTTHS article numbers — must never be treated as BLHS crime articles
+_BLTTHS_ARTICLES = {
+    "298", "299", "300", "301", "302", "303", "304", "305",
+    "306", "307", "308", "309", "310", "311", "312", "313",
+    "314", "315", "316", "317", "318", "319", "320", "321",
+    "322", "323", "324", "325", "326", "327", "328", "329", "330",
+    "331", "332", "333", "334", "335", "336", "337", "338", "339",
+    "340", "341", "342", "343", "344", "345", "346", "347", "348",
+    "349", "350", "351", "352", "353", "354", "355", "356", "357",
+    "358", "359", "360", "361", "362", "363", "364", "365",
+    "155", "156", "157", "158", "159", "160", "161", "162", "163",
+    "165", "170", "172", "176", "179", "185", "195",
+    "248", "249", "250", "252", "255", "256", "258", "259", "260",
+}
+
+_BLTTHS_MARKERS = ["tố tụng hình sự", "bltths", "b.l.t.t.h.s", "luật tố tụng"]
+_BLHS_MARKERS   = ["bộ luật hình sự", "blhs", "b.l.h.s", "luật hình sự"]
+
+
+def _extract_blhs_articles(text: str):
+    """Extract only BLHS (penal code) article numbers from verdict text,
+    filtering out BLTTHS (procedural code) citations by context analysis."""
+    t_low = text.lower()
+    seen: dict = {}
+    for m in re.finditer(r"(?:đi[eề]u|dieu)\s*(\d+[a-z]?)", t_low):
+        num = m.group(1)
+        win = t_low[max(0, m.start()-150):min(len(t_low), m.end()+150)]
+        if any(mk in win for mk in _BLTTHS_MARKERS):
+            continue
+        if any(mk in win for mk in _BLHS_MARKERS):
+            if num not in seen:
+                seen[num] = None
+            continue
+        if num in _BLTTHS_ARTICLES or num in _PROCEDURAL:
+            continue
+        if num not in seen:
+            seen[num] = None
+    return list(seen.keys())
+
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 from tqdm import tqdm
@@ -80,7 +119,7 @@ def setup_logging(log_file: Optional[str]) -> logging.Logger:
 
 
 # ── Dataset helpers ───────────────────────────────────────────────────────────
-def _article_num(s: str) -> Optional[str]:
+def _article_num(s: str):
     """Extract numeric article identifier, e.g. '173' from 'Điều 173 - BLHS 2015...'"""
     m = re.search(r"(\d+[A-Za-z]?)", str(s))
     return m.group(1) if m else None
@@ -93,13 +132,11 @@ def _extract_nums_from_text(text: str) -> set:
     ))
 
 
+
 def load_cases(dataset_path: str, _unused: str = "") -> list:
     """
-    Build ordered case list from case_eval_dataset.json. Each case has:
-      - case_url
-      - case_description  (sent to /predict)
-      - primary_article   (first non-procedural Điều extracted from final_verdict)
-      - final_verdict     (ground truth)
+    Build ordered case list from case_eval_dataset.json.
+    Uses BLHS-aware article extractor to filter out BLTTHS procedural citations.
     """
     with open(dataset_path, encoding="utf-8") as f:
         data = json.load(f)
@@ -109,19 +146,11 @@ def load_cases(dataset_path: str, _unused: str = "") -> list:
         url         = entry.get("url", "")
         final_text  = entry.get("final_verdict", "")
 
-        # Extract all Điều numbers from the actual court verdict
-        all_nums = re.findall(r"(?i:điều|dieu|điêu|đều)\s*(\d+[A-Za-z]?)",
-                              final_text)
-        # Remove duplicates, keep order
-        seen_nums: dict = {}
-        for n in all_nums:
-            if n not in seen_nums:
-                seen_nums[n] = None
-        all_gt_nums = list(seen_nums.keys())
+        all_gt_nums = _extract_blhs_articles(final_text)
 
-        # Primary = first non-procedural article
+        # Primary = first article not in procedural/BLTTHS lists
         primary_num = next(
-            (n for n in all_gt_nums if n not in _PROCEDURAL), None
+            (n for n in all_gt_nums if n not in _PROCEDURAL and n not in _BLTTHS_ARTICLES), None
         )
         if not primary_num:
             continue  # skip: no identifiable crime article in verdict
