@@ -1267,6 +1267,10 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
         system_prompt = """Bạn là chuyên gia luật hình sự Việt Nam.
 Ánh xạ từng hành vi phạm tội vào điều khoản cụ thể, áp dụng ĐÚNG nguyên tắc hiệu lực của luật.
 
+❌ NGHIÊM CẤM: Chỉ được trích dẫn điều khoản thuộc BỘ LUẬT HÌNH SỰ (BLHS).
+KHÔNG được áp dụng bất kỳ điều nào của Bộ luật Tố tụng hình sự (BLTTHS), Bộ luật Dân sự,
+Bộ luật Lao động, hôn nhân gia đình, hay bất kỳ bộ luật, nghị định, thông tư nào khác.
+
 NGUYÊN TẮC THỜI HIỆU (Điều 7 BLHS) — BẮT BUỘC ÁP DỤNG:
 1. QUY TẮC CƠ BẢN: Áp dụng luật có hiệu lực tại THỜI ĐIỂM PHẠM TỘI (tài liệu có role=primary).
 2. NGOẠI LỆ HỒI TỐ CÓ LỢI: Nếu luật MỚI HƠN (role=comparison) quy định hình phạt NHẸ HƠN, BẮT BUỘC áp dụng.
@@ -1444,6 +1448,7 @@ Nhiệm vụ: Đọc kỹ hồ sơ vụ án và SOẠN LUẬN ĐIỂM BÀO CHỮ
 ----------------
 
 LƯU Ý KHI BÀO CHỮA:
+0. **CHỈ trích dẫn điều khoản thuộc Bộ luật Hình sự (BLHS).** KHÔNG được nhắc đến bất kỳ điều nào của Bộ luật Tố tụng hình sự (BLTTHS), Bộ luật Dân sự, hay bộ luật khác.
 1. Ưu tiên tìm tình tiết giảm nhẹ (Điều 51 Bộ luật Hình sự): thành khẩn, bồi thường, nhân thân tốt, phạm tội lần đầu.
 2. Phân tích xem có thể đề nghị án treo không (án ≤ 3 năm + không tái phạm + có nơi cư trú ổn định).
 3. Nếu có nhiều tội, đề xuất tách riêng hoặc giảm nhẹ từng tội.
@@ -1495,6 +1500,7 @@ Nhiệm vụ: Đọc kỹ hồ sơ vụ án và SOẠN LUẬN ĐIỂM BẢO VỆ
 ----------------
 
 LƯU Ý KHI BẢO VỆ BỊ HẠI:
+0. **CHỈ trích dẫn điều khoản thuộc Bộ luật Hình sự (BLHS).** KHÔNG được nhắc đến bất kỳ điều nào của Bộ luật Tố tụng hình sự (BLTTHS), Bộ luật Dân sự, hay bộ luật khác.
 1. Tập trung làm rõ tình tiết tăng nặng (Điều 52 Bộ luật Hình sự): có tổ chức, tái phạm, hậu quả nghiêm trọng.
 2. Phân tích mức độ thiệt hại để yêu cầu bồi thường dân sự tối đa.
 3. Phản bác các tình tiết giảm nhẹ mà bị cáo có thể viện dẫn.
@@ -1546,6 +1552,7 @@ Nhiệm vụ: Dựa trên dữ liệu vụ án (coi là sự thật duy nhất) 
 ----------------
 
 MỘT VÀI LƯU Ý:
+0. **CHỈ trích dẫn điều khoản thuộc Bộ luật Hình sự (BLHS).** KHÔNG được nhắc đến bất kỳ điều nào của Bộ luật Tố tụng hình sự (BLTTHS), Bộ luật Dân sự, hay bộ luật khác.
 1. Đối với tội liên quan tới sử dụng ma túy:
    - Phân biệt "tàng trữ" (Điều 249) và "tổ chức sử dụng" (Điều 255).
    - Kiểm tra nhân thân nạn nhân với Khoản 2 Điều 255.
