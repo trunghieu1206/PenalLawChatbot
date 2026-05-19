@@ -459,12 +459,25 @@ def evaluate_metrics(response_dict, case, gt_nums, valid_corpus, role,
         extracted_facts = response_dict.get("extracted_facts") or {}
 
     # 1. Primary Recall
+    # Always extract what the system cited — useful for manual review even when GT is N/A
+    _sys_cited = sorted({
+        m.get("article", "").split()[-1]   # "Điều 134" → "134"
+        for m in mapped_laws
+        if m.get("article") and not m.get("_mapping_error")
+    } | _extract_nums_from_text(result_text))
+    _sys_doc = next(
+        (m.get("edition_applied") or m.get("source", "") for m in mapped_laws
+         if m.get("article") and not m.get("_mapping_error")),
+        "N/A"
+    ) or "N/A"
+
     if case.get("primary_num"):
         recall = check_primary_hit(case["primary_num"], mapped_laws, result_text)
         recall_hit, recall_source = recall["hit"], recall["source"]
-        recall_cited, recall_doc  = recall["cited_nums"], recall.get("document_source") or "N/A"
+        recall_cited, recall_doc  = recall["cited_nums"], recall.get("document_source") or _sys_doc
     else:
-        recall_hit, recall_source, recall_cited, recall_doc = None, "n/a", [], "N/A"
+        recall_hit, recall_source = None, "n/a"
+        recall_cited, recall_doc  = _sys_cited, _sys_doc  # show what system cited even with no GT
 
     # 2. Hallucination L1-L3 (deterministic — instant)
     l1 = layer1_article_existence(mapped_laws, gt_nums, valid_corpus)
