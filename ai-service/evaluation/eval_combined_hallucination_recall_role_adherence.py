@@ -631,51 +631,30 @@ def main():
 
             row = {"case_index": cidx, "case_url": url, "evaluations": {}}
 
-            # ── Step 1: Fetch all 3 system + 3 baseline responses in parallel ──
             roles = ["neutral", "defense", "victim"]
-            report(f"  ⏳ Fetching system responses (3 roles in parallel)...")
-            t0 = time.time()
-            with ThreadPoolExecutor(max_workers=3) as ex:
-                sys_futures  = {ex.submit(call_system, args.ai_url, case["case_description"],
-                                          r, args.timeout, log): r for r in roles}
-                base_futures = {ex.submit(call_baseline, oai_baseline, args.baseline_model,
-                                          case["case_description"], ROLE_LABELS[r], log): r for r in roles}
-                sys_preds  = {}
-                base_texts = {}
-                for f in as_completed(list(sys_futures) + list(base_futures)):
-                    if f in sys_futures:
-                        sys_preds[sys_futures[f]]   = f.result()
-                    else:
-                        base_texts[base_futures[f]] = f.result()
-            report(f"  ✅ Responses fetched in {time.time()-t0:.1f}s")
 
-            # ── Step 2: Evaluate metrics per role (parallel for LLM judge calls) ──
-            def _eval_role(role):
-                sys_pred  = sys_preds.get(role, {})
-                base_text = base_texts.get(role, "")
+            for role in roles:
+                report(f"  ┌─ ⏳ Processing Role: {role.upper()} ───────────────────────")
+                
+                # 1. Fetch Responses (sequential)
+                t_fetch = time.time()
+                sys_pred  = call_system(args.ai_url, case["case_description"], role, args.timeout, log)
+                base_text = call_baseline(oai_baseline, args.baseline_model, case["case_description"], ROLE_LABELS[role], log)
                 base_pred = {"text": base_text}
-                sys_eval  = evaluate_metrics(sys_pred,  case, gt_nums, valid_corpus, role,
-                                             oai_judge, args.judge_model,
-                                             is_baseline=False, log=log, skip_llm=skip_llm)
-                base_eval = evaluate_metrics(base_pred, case, gt_nums, valid_corpus, role,
-                                             oai_judge, args.judge_model,
-                                             is_baseline=True,  log=log, skip_llm=skip_llm)
-                sys_text  = sys_pred.get("result", "") if sys_pred else ""
-                rubric    = ({} if skip_rubric else
-                             call_rubric_judge(oai_judge, args.judge_model, role, case,
-                                               sys_text, base_text, log))
-                return role, sys_eval, base_eval, rubric, sys_text, base_text
+                report(f"  │  ✅ Fetched in {time.time()-t_fetch:.1f}s")
 
-            report(f"  ⏳ Scoring metrics{'(signal only)' if skip_llm else '(+LLM judge)'}...")
-            t1 = time.time()
-            with ThreadPoolExecutor(max_workers=3) as ex:
-                role_results = list(ex.map(_eval_role, roles))
-            report(f"  ✅ Scoring done in {time.time()-t1:.1f}s")
+                # 2. Score Metrics
+                t_score = time.time()
+                sys_eval  = evaluate_metrics(sys_pred, case, gt_nums, valid_corpus, role, oai_judge, args.judge_model, is_baseline=False, log=log, skip_llm=skip_llm)
+                base_eval = evaluate_metrics(base_pred, case, gt_nums, valid_corpus, role, oai_judge, args.judge_model, is_baseline=True, log=log, skip_llm=skip_llm)
+                
+                # 3. LLM Judge Rubric
+                sys_text = sys_pred.get("result", "") if sys_pred else ""
+                rubric = {} if skip_rubric else call_rubric_judge(oai_judge, args.judge_model, role, case, sys_text, base_text, log)
+                report(f"  │  ✅ Scored in {time.time()-t_score:.1f}s")
 
-            for role, sys_eval, base_eval, rubric, sys_text, base_text in role_results:
-
-                _print_case_report(report, cidx, total, case, role, sys_eval, base_eval,
-                                   rubric if rubric else None)
+                # 4. Print & Save
+                _print_case_report(report, cidx, total, case, role, sys_eval, base_eval, rubric if rubric else None)
                 row["evaluations"][role] = {"system": sys_eval, "baseline": base_eval, "rubric": rubric}
 
                 metrics["total_evals"] += 1
