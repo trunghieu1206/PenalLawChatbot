@@ -241,6 +241,7 @@ def call_rubric_judge(client, model: str, role: str, case: dict,
                     ],
                     temperature=0.0, max_tokens=4096,
                     extra_body={"thinking": {"type": "disabled"}},  # disable Gemini 2.5 Pro thinking
+                    timeout=120.0,
                 )
                 raw = (r.choices[0].message.content or "").strip()
                 if not raw:

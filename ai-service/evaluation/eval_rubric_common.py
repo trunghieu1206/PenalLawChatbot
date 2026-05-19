@@ -145,6 +145,7 @@ def call_baseline(client: OpenAI, model: str, question: str,
             ],
             temperature=0,
             max_tokens=1200,
+            timeout=120.0,
         )
         return r.choices[0].message.content.strip()
     except Exception as e:
@@ -168,6 +169,7 @@ def call_judge(client: OpenAI, model: str, prompt: str,
                 temperature=0,
                 max_tokens=4096,  # Gemini 2.5 Pro thinking tokens count here; give full budget
                 extra_body={"thinking": {"type": "disabled"}},  # disable extended thinking
+                timeout=120.0,
             )
             raw = (r.choices[0].message.content or "").strip()
             if not raw:

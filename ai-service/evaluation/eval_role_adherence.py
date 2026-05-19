@@ -263,6 +263,7 @@ def llm_score(client: OpenAI, model: str, question: str,
                 temperature=0.0,
                 max_tokens=4096,   # Gemini 2.5 Pro thinking tokens count here; give full budget
                 extra_body={"thinking": {"type": "disabled"}},  # disable extended thinking
+                timeout=120.0,
             )
             raw = (r.choices[0].message.content or "").strip()
             if not raw:
