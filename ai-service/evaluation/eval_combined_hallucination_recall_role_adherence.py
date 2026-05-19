@@ -693,12 +693,50 @@ def main():
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     done_urls = set()
+    preloaded = {          # metrics pre-aggregated from already-completed cases in JSONL
+        "recall_hits": 0, "recall_total": 0,
+        "hallucination_scores": [], "role_scores": [],
+        "clarification_skipped": 0, "timeout_skipped": 0,
+        "recall_misses": [], "low_conf_cases": [],
+    }
     if args.resume and out_path.exists():
         with open(out_path, encoding="utf-8") as f:
             for line in f:
-                try: done_urls.add(json.loads(line)["case_url"])
-                except: pass
-        report(f"Resume mode: {len(done_urls)} cases already done — skipping.")
+                try:
+                    row = json.loads(line)
+                    done_urls.add(row["case_url"])
+                    for role, ev in row.get("evaluations", {}).items():
+                        sys_ev = ev.get("system", {})
+                        if sys_ev.get("_skipped_clarification"):
+                            preloaded["clarification_skipped"] += 1
+                            continue
+                        if sys_ev.get("_skipped_timeout"):
+                            preloaded["timeout_skipped"] += 1
+                            continue
+                        rec = sys_ev.get("recall")
+                        if rec is not None:
+                            preloaded["recall_hits"]  += int(rec)
+                            preloaded["recall_total"] += 1
+                            if not rec:
+                                preloaded["recall_misses"].append({
+                                    "case_index": row.get("case_index"),
+                                    "case_url":   row["case_url"],
+                                    "gt_article": sys_ev.get("gt_article", "N/A"),
+                                    "role":       role,
+                                })
+                        h = sys_ev.get("hallucination")
+                        if h is not None:
+                            preloaded["hallucination_scores"].append(h)
+                        ra = sys_ev.get("role_adherence")
+                        if ra is not None:
+                            preloaded["role_scores"].append(ra)
+                except Exception:
+                    pass
+        n_done = len(done_urls)
+        report(f"Resume mode: {n_done} cases already done — skipping.")
+        rh = preloaded["recall_hits"]; rt = preloaded["recall_total"]
+        nh = len(preloaded["hallucination_scores"]); nr = len(preloaded["role_scores"])
+        report(f"  Pre-loaded from JSONL: recall={rh}/{rt}  hall_evals={nh}  role_evals={nr}")
 
     # OpenRouter requires HTTP-Referer and X-Title headers, otherwise some models silently return empty content.
     or_headers = {
@@ -744,12 +782,16 @@ def main():
 
     metrics = {
         "system": {
-            "recall_hits": 0, "recall_total": 0,
-            "hallucination_scores": [], "role_scores": [], "rubric_scores": [],
-            "recall_misses": [],    # {case_index, url, gt, cited} for manual review
-            "low_conf_cases": [],   # cases where GT article confidence is low
-            "clarification_skipped": 0,  # evals skipped: system asked for more info
-            "timeout_skipped": 0,        # evals skipped: /predict timed out
+            # Seeded with preloaded values when --resume is used (otherwise all zeros/empty)
+            "recall_hits":           preloaded["recall_hits"],
+            "recall_total":          preloaded["recall_total"],
+            "hallucination_scores":  list(preloaded["hallucination_scores"]),
+            "role_scores":           list(preloaded["role_scores"]),
+            "rubric_scores":         [],
+            "recall_misses":         list(preloaded["recall_misses"]),
+            "low_conf_cases":        list(preloaded["low_conf_cases"]),
+            "clarification_skipped": preloaded["clarification_skipped"],
+            "timeout_skipped":       preloaded["timeout_skipped"],
         },
         "total_evals": 0,
     }
