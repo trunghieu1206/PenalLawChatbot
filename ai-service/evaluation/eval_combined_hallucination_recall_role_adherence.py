@@ -6,6 +6,16 @@ Compares System (RAG) vs Baseline (gemini-2.5-flash) to reduce LLM calls threefo
 L4 Hallucination is removed per request to minimize LLM judge cost.
 
 HOW TO RUN EXAMPLES:
+  # start a new tmux session (survives SSH disconnect)
+    tmux new -s eval
+    # → run your python command inside tmux
+    # → detach (leave running): Ctrl+B then D
+    # → re-attach from any new SSH session:
+    tmux attach -t eval
+
+  # check if process is running
+    ps aux | grep eval_combined | grep -v grep
+
   # Run from anywhere — paths are resolved automatically
   python3 /root/PenalLawChatbot/ai-service/evaluation/eval_combined_hallucination_recall_role_adherence.py \
     --start 1 \
@@ -20,6 +30,14 @@ HOW TO RUN EXAMPLES:
   python3 /root/PenalLawChatbot/ai-service/evaluation/eval_combined_hallucination_recall_role_adherence.py \
     --start 1 \
     --end 10 \
+    --skip-rubric \
+    --log-file /root/PenalLawChatbot/ai-service/logs/eval_combined_1_100.txt
+
+  #### resume
+  python3 /root/PenalLawChatbot/ai-service/evaluation/eval_combined_hallucination_recall_role_adherence.py \
+    --start 1 \
+    --end 20 \
+    --resume \
     --skip-rubric \
     --log-file /root/PenalLawChatbot/ai-service/logs/eval_combined_1_100.txt
 
@@ -43,9 +61,9 @@ HOW TO RUN EXAMPLES:
 
 
 OUTPUTS:
-  combined_results.jsonl  — full raw data per case (for programmatic analysis)
-  combined_summary.json   — final aggregated scores (JSON)
-  combined_report.txt     — human-readable report with per-case details + final %
+  /root/PenalLawChatbot/ai-service/evaluation/results/combined_results.jsonl  — full raw data per case (for programmatic analysis)
+  /root/PenalLawChatbot/ai-service/evaluation/results/combined_summary.json   — final aggregated scores (JSON)
+  /root/PenalLawChatbot/ai-service/evaluation/results/combined_report.txt     — human-readable report with per-case details + final %
                             (download this file to review results offline)
 """
 
@@ -793,9 +811,10 @@ def main():
             "clarification_skipped": preloaded["clarification_skipped"],
             "timeout_skipped":       preloaded["timeout_skipped"],
         },
-        "total_evals": 0,
+        "total_evals": len(preloaded["hallucination_scores"]),  # seeded from prior role evals
     }
-    processed = 0
+    processed   = len(done_urls)  # seeded from preloaded case count
+    n_preloaded = len(done_urls)  # for summary: "N preloaded + M new"
 
     interrupted = False
     try:
@@ -947,7 +966,9 @@ def main():
         if n_clarif:  skip_parts.append(f"{n_clarif} clarification")
         if n_timeout: skip_parts.append(f"{n_timeout} timeout")
         skipped_note = f"  ({', '.join(skip_parts)} excluded)" if skip_parts else ""
-        report(f"  {'⚠️  PARTIAL ' if interrupted else ''}RESULTS — {processed} cases  ({n_evals} role evals)  [{status}]{skipped_note}")
+        new_cases = processed - n_preloaded
+        resume_note = f" ({n_preloaded} preloaded + {new_cases} new)" if n_preloaded else ""
+        report(f"  {'⚠️  PARTIAL ' if interrupted else ''}RESULTS — {processed} cases{resume_note}  ({n_evals} role evals)  [{status}]{skipped_note}")
         report("=" * 70)
         report(f"  {'Metric':<22} {'System':>9}  {'Target':>8}  Pass?")
         report(f"  {'-'*50}")
