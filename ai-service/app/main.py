@@ -689,6 +689,17 @@ def cleanup_response(text: str) -> str:
 # ===========================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import logging
+
+    # Suppress the harmless "Invalid HTTP request received" noise emitted by
+    # uvicorn/httptools when stale keep-alive TCP sockets, TLS probes, or
+    # connection-pool cleanup frames arrive on the plain-HTTP port.
+    # Applied here (not just __main__) so it works with `python -m uvicorn` too.
+    class _SuppressInvalidHTTP(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            return "Invalid HTTP request received" not in record.getMessage()
+    logging.getLogger("uvicorn.error").addFilter(_SuppressInvalidHTTP())
+
     print("🚀 SERVER STARTUP: Initializing...")
 
     # Authenticate HuggingFace
@@ -2053,5 +2064,15 @@ OUTPUT: CHỈ JSON."""
 
 
 if __name__ == "__main__":
-    import uvicorn
+    import uvicorn, logging
+
+    # Suppress the harmless "Invalid HTTP request received" warning that uvicorn/httptools
+    # emits when stale keep-alive connections, TLS probes, or malformed TCP frames arrive.
+    # These are NOT application bugs — they are noise from connection pool cleanup.
+    class _SuppressInvalidHTTP(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            return "Invalid HTTP request received" not in record.getMessage()
+
+    logging.getLogger("uvicorn.error").addFilter(_SuppressInvalidHTTP())
+
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)

@@ -332,6 +332,7 @@ def call_system(ai_url, question, role, timeout, log):
         r = requests.post(
             f"{ai_url.rstrip('/')}/predict",
             json={"case_content": question, "role": role, "conversation_history": []},
+            headers={"Connection": "close"},  # prevent urllib3 keep-alive → stops uvicorn 'Invalid HTTP request' warnings
             timeout=timeout,
         )
         r.raise_for_status()
