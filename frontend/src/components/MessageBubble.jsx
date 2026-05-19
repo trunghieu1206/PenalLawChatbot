@@ -7,20 +7,45 @@ import { adminApi } from '../services/api.js';
 // Regex to match Vietnamese law article citations like "Điều 51", "Điều 255"
 const LAW_SPLIT_REGEX = /(Điều\s+\d+[A-Z]?(?:\s+(?:Bộ\s+luật\s+Hình\s+sự|BLHS|BLTTHS|BL[A-Z]+)(?:\s+\d{4})?(?:\s+\(sửa\s+đổi\s+\d{4}\))?)?)/g;
 
+// Maps abbreviated edition labels found in citation text to full edition strings
+const EDITION_ALIAS_MAP = {
+  '2025':                     'BLHS 2015 (sửa đổi 2025)',
+  '2017':                     'BLHS 2015 (sửa đổi 2017)',
+  '2015':                     'BLHS 2015 (sửa đổi 2017)',
+  '2009':                     'BLHS 1999 (sửa đổi 2009)',
+  '1999':                     'BLHS 1999',
+  'blhs 2015 (sửa đổi 2025)': 'BLHS 2015 (sửa đổi 2025)',
+  'blhs 2015 (sửa đổi 2017)': 'BLHS 2015 (sửa đổi 2017)',
+  'blhs 1999 (sửa đổi 2009)': 'BLHS 1999 (sửa đổi 2009)',
+  'blhs 1999':                'BLHS 1999',
+};
+
+function parseEditionFromCitation(rawText) {
+  // Try to extract edition from e.g. 'Điều 46 BLHS 1999 (sửa đổi 2009)'
+  const lower = rawText.toLowerCase();
+  // Full match first
+  for (const [k, v] of Object.entries(EDITION_ALIAS_MAP)) {
+    if (lower.includes(k)) return v;
+  }
+  return null;
+}
+
 function highlightLawCitations(text, onLawClick, crimeDate) {
   if (!text) return text;
   const parts = text.split(LAW_SPLIT_REGEX);
   return parts.map((part, i) => {
     if (!/^Điều\s+\d+/.test(part)) return part;
     if (onLawClick) {
-      const baseArticle = part.replace(/\s+(?:BLHS|BLTTHS|BL[A-Z]+|Bộ\s+luật\s+Hình\s+sự).*$/i, '').trim();
+      const baseArticle = part.replace(/\s+(?:BLHS|BLTTHS|BL[A-Z]+|Bộ\s+luật\s+Hình\s+sự).*/i, '').trim();
+      // Parse the edition directly from the citation text so the correct BLHS version is fetched
+      const editionSource = parseEditionFromCitation(part);
       return (
         <button
           key={i}
           className={`law-citation ${styles.inlineLawBtn}`}
           title={`Tra cứu ${part}`}
           type="button"
-          onClick={() => onLawClick({ article: baseArticle }, crimeDate)}
+          onClick={() => onLawClick({ article: baseArticle }, crimeDate, editionSource)}
         >
           {part}
         </button>

@@ -751,7 +751,8 @@ async def lifespan(app: FastAPI):
             for r in results:
                 ch  = r['entity'].get('chapter', '?')
                 art = r['entity'].get('article_number', '?')
-                print(f"    ID={r['id']}  score={r['distance']:.4f}  | Chương: {ch}  Điều: {art}")
+                src = r['entity'].get('source', '?')
+                print(f"    ID={r['id']}  score={r['distance']:.4f}  | Chương: {ch}  Điều: {art}  [{src}]")
             # -------------------------
             docs = []
             for r in results:
@@ -1070,6 +1071,8 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
                     continue
                 key = (art_no, edition)
                 if key in seen_ids:
+                    # Same article+edition already retrieved semantically — skip
+                    print(f"  [PINNED] Điều {art_no} ({purpose}) from {edition!r} — already in results")
                     continue
                 try:
                     hits = milvus_client.query(
@@ -1707,21 +1710,19 @@ TIÊU CHÍ (100 điểm):
 
         if is_greeting:
             reply = (
-                "Xin chào! Tôi là **Trợ lý Pháp luật Hình sự AI** 🏛️\n\n"
+                "Xin chào! Tôi là **Trợ lý Pháp luật Hình sự VNPLaw**\n\n"
                 "Tôi được xây dựng chuyên biệt để hỗ trợ **phân tích và tra cứu pháp luật hình sự Việt Nam**. "
                 "Dưới đây là những gì tôi có thể làm cho bạn:\n\n"
-                "⚖️ **Phân tích vụ án hình sự**\n"
-                "   Định tội danh, xác định khung hình phạt, lượng hình cụ thể theo BLHS\n\n"
-                "🧑‍⚖️ **Phân tích đa chiều theo vai trò**\n"
+                " **Phân tích vụ án hình sự**\n"
+                "   Định tội danh, xác định khung hình phạt, lượng hình cụ thể theo Bộ luật Hình sự\n\n"
+                " **Phân tích đa chiều theo vai trò**\n"
                 "   • *Thẩm phán* — nhận định trung lập, khách quan\n"
                 "   • *Luật sư bào chữa* — lập luận giảm nhẹ, bảo vệ bị cáo\n"
                 "   • *Luật sư bị hại* — yêu cầu xử nghiêm, bồi thường tối đa\n\n"
-                "📖 **Tra cứu & giải thích điều luật**\n"
+                " **Tra cứu & giải thích điều luật**\n"
                 "   Trích dẫn chính xác điều khoản BLHS 2015 (sửa đổi 2017/2025), giải thích tình tiết tăng nặng/giảm nhẹ\n\n"
-                "🔍 **Kiểm tra hiệu lực hồi tố (Điều 7 BLHS)**\n"
-                "   Tự động xác định phiên bản luật áp dụng theo ngày phạm tội\n\n"
                 "---\n"
-                "💡 **Cách dùng:** Dán toàn bộ nội dung hồ sơ vụ án vào đây — tôi sẽ phân tích ngay.\n"
+                "💡 **Cách dùng:** Dán toàn bộ nội dung hồ sơ vụ án và tôi sẽ bắt đầu phân tích.\n"
                 "*Ví dụ: \"Ngày 15/3/2023, Nguyễn Văn A dùng dao đe dọa lấy tài sản của bị hại...\"*"
             )
         else:
