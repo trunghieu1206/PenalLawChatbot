@@ -456,14 +456,17 @@ def call_system(ai_url, question, role, timeout, log):
         r = requests.post(
             f"{ai_url.rstrip('/')}/predict",
             json={"case_content": question, "role": role, "conversation_history": []},
-            headers={"Connection": "close"},  # prevent urllib3 keep-alive → stops uvicorn 'Invalid HTTP request' warnings
+            headers={"Connection": "close"},
             timeout=timeout,
         )
         r.raise_for_status()
         return r.json()
+    except requests.exceptions.Timeout:
+        log.warning(f"  /predict TIMEOUT after {timeout}s — skipping this role eval")
+        return {"_timeout": True}   # sentinel: distinguishable from clarification
     except Exception as e:
         log.warning(f"  /predict failed: {e}")
-        return {}
+        return {"_error": True, "_error_msg": str(e)}
 
 def composite_hallucination(l1, l2, l3):
     score = 0.0
@@ -543,14 +546,14 @@ def evaluate_metrics(response_dict, case, gt_nums, valid_corpus, role,
 
 def _is_clarification(pred: dict) -> bool:
     """Return True if the system returned a clarification request instead of a legal analysis.
-    Detected by: empty mapped_laws AND response text contains the clarification marker."""
-    if not pred:
-        return True
+    Detected by: non-empty response with empty mapped_laws AND clarification marker text.
+    NOTE: timeout/error responses ({"_timeout": True} or {"_error": True}) are NOT clarifications."""
+    if not pred or pred.get("_timeout") or pred.get("_error"):
+        return False  # timeout/error — handled separately, not a clarification
     mapped = pred.get("mapped_laws") or []
     result = pred.get("result", "")
-    # Clarification responses always start with this string (Vietnamese: 'To analyse correctly...')
     is_clarification_text = (
-        "\u2139\ufe0f" in result[:30]  # ℹ️ emoji at the very start
+        "\u2139\ufe0f" in result[:30]
         or "\u24d8" in result[:30]
         or result.strip().startswith("Để phân tích chính xác")
     )
@@ -644,7 +647,7 @@ def main():
     parser.add_argument("--ai-url",         default=os.getenv("AI_SERVICE_URL", "http://localhost:8000"))
     parser.add_argument("--judge-model",    default=os.getenv("LLM_JUDGE_MODEL", "google/gemini-2.5-pro"))
     parser.add_argument("--baseline-model", default=os.getenv("LLM_MODEL", "google/gemini-2.5-flash"))
-    parser.add_argument("--timeout",        type=int,   default=300,
+    parser.add_argument("--timeout",        type=int,   default=600,
                         help="/predict request timeout in seconds (default: 300s to handle severe OpenRouter rate-limiting backoffs)")
     parser.add_argument("--skip-rubric",    action="store_true",
                         help="Skip rubric LLM scoring (saves ~6 OpenRouter calls per case). Run eval_rubric_*.py separately for rubric.")
@@ -745,7 +748,8 @@ def main():
             "hallucination_scores": [], "role_scores": [], "rubric_scores": [],
             "recall_misses": [],    # {case_index, url, gt, cited} for manual review
             "low_conf_cases": [],   # cases where GT article confidence is low
-            "clarification_skipped": 0,  # evals skipped because system asked for more info
+            "clarification_skipped": 0,  # evals skipped: system asked for more info
+            "timeout_skipped": 0,        # evals skipped: /predict timed out
         },
         "total_evals": 0,
     }
@@ -798,7 +802,15 @@ def main():
 
                     metrics["total_evals"] += 1
 
-                    # ── Skip clarification responses from all metrics ─────────────
+                    # ── Skip timeout / error responses ─────────────────────────────
+                    if sys_pred.get("_timeout") or sys_pred.get("_error"):
+                        metrics["system"]["timeout_skipped"] += 1
+                        reason = "TIMEOUT" if sys_pred.get("_timeout") else "ERROR"
+                        report(f"  ⚠️  [{reason}] Role {role.upper()} — /predict did not respond in time. Excluded from metrics.")
+                        time.sleep(args.delay)
+                        continue
+
+                    # ── Skip clarification responses ───────────────────────────────
                     if _is_clarification(sys_pred):
                         metrics["system"]["clarification_skipped"] += 1
                         report(f"  ⤼ [SKIP] Role {role.upper()} returned a clarification request — excluded from metrics.")
@@ -887,8 +899,12 @@ def main():
 
         report("")
         report("=" * 70)
-        n_clarif = metrics["system"]["clarification_skipped"]
-        skipped_note = f"  ({n_clarif} clarification responses excluded)" if n_clarif else ""
+        n_clarif  = metrics["system"]["clarification_skipped"]
+        n_timeout = metrics["system"]["timeout_skipped"]
+        skip_parts = []
+        if n_clarif:  skip_parts.append(f"{n_clarif} clarification")
+        if n_timeout: skip_parts.append(f"{n_timeout} timeout")
+        skipped_note = f"  ({', '.join(skip_parts)} excluded)" if skip_parts else ""
         report(f"  {'⚠️  PARTIAL ' if interrupted else ''}RESULTS — {processed} cases  ({n_evals} role evals)  [{status}]{skipped_note}")
         report("=" * 70)
         report(f"  {'Metric':<22} {'System':>9}  {'Target':>8}  Pass?")
