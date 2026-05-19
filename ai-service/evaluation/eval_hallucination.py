@@ -181,26 +181,14 @@ def _article_num(s: str) -> Optional[str]:
 def layer1_article_existence(mapped_laws: list, gt_nums: set,
                               valid_corpus: set) -> dict:
     """
-    Flag articles cited by the system that are:
-      - NOT in the full BLHS corpus (hard hallucination, always flagged), OR
-      - NOT in the ground-truth verdict AND not within +/-10 of any GT article
-        (soft hallucination -- article exists but is unrelated to the case).
+    L1: Did the system cite an article that does NOT exist in the BLHS corpus?
+    This is the only check -- a pure fabrication detector.
 
-    Tolerance: articles within +/-10 of any GT article number are NOT flagged.
-    These are comparative citations within the same crime chapter
-    (e.g. system cites Dieu 135 alongside Dieu 134 = same crime group, not hallucination).
-
-    When gt_nums is empty (low-confidence GT), only the corpus-existence check runs.
+    gt_nums is intentionally ignored here: we do NOT penalise the system for citing
+    correct articles that the court happened not to mention (that is Recall's job).
+    Only articles whose number is completely absent from the valid corpus are flagged.
     """
-    gt_numeric = set()
-    for n in gt_nums:
-        try:
-            gt_numeric.add(int(re.sub(r'[^0-9]', '', n)))
-        except ValueError:
-            pass
-
     false_arts = []
-    no_gt = len(gt_nums) == 0
     for law in mapped_laws:
         if law.get("_mapping_error"):
             continue
@@ -210,24 +198,10 @@ def layer1_article_existence(mapped_laws: list, gt_nums: set,
         if num in _ALWAYS_VALID:
             continue
         if num not in valid_corpus:
-            # Article does not exist in BLHS corpus at all -- hard hallucination
             false_arts.append({
                 "article": law.get("article", ""),
                 "reason": "not_in_corpus",
             })
-        elif not no_gt and num not in gt_nums:
-            # Article exists in BLHS but not cited by the court.
-            # Allow if within +/-10 of any GT article (same crime chapter / comparative)
-            try:
-                n_int = int(re.sub(r'[^0-9]', '', num))
-                near_gt = any(abs(n_int - g) <= 10 for g in gt_numeric)
-            except ValueError:
-                near_gt = False
-            if not near_gt:
-                false_arts.append({
-                    "article": law.get("article", ""),
-                    "reason": "not_in_verdict",
-                })
     flagged = len(false_arts) > 0
     return {"triggered": flagged, "flagged": flagged, "false_articles": false_arts}
 
