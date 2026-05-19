@@ -42,6 +42,8 @@ from dotenv import load_dotenv
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 load_dotenv(dotenv_path=_PROJECT_ROOT / ".env", override=False)
 
+_RESULTS_DIR = Path(__file__).resolve().parent / "results"
+
 # ── Articles that are procedural/supporting — never the primary crime article ──
 _PROCEDURAL = {
     "7",  "28", "32", "34", "42", "45", "46", "47", "48", "49", "50",
@@ -246,12 +248,12 @@ def main():
         description="Primary Article Recall evaluation for VNPLaw AI service."
     )
     parser.add_argument("--dataset",
-                        default="ai-service/evaluation/thesis_eval_unique.json",
+                        default=str(_PROJECT_ROOT / "ai-service/evaluation/thesis_eval_unique.json"),
                         help="Path to case_eval_dataset.json")
     parser.add_argument("--output",
-                        default="ai-service/evaluation/results/primary_recall_results.jsonl")
+                        default=str(_RESULTS_DIR / "primary_recall_results.jsonl"))
     parser.add_argument("--summary",
-                        default="ai-service/evaluation/results/primary_recall_summary.json")
+                        default=str(_RESULTS_DIR / "primary_recall_summary.json"))
     parser.add_argument("--ai-url",
                         default=os.getenv("AI_SERVICE_URL", "http://localhost:8000"))
     parser.add_argument("--timeout",  type=int, default=120,
