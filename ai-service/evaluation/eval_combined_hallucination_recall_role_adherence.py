@@ -404,6 +404,10 @@ def evaluate_metrics(response_dict, case, gt_nums, valid_corpus, role,
         "hall_l3":          l3.get("triggered", False) if l3 else False,
         "role_adherence":   role_score,
         "role_sig_score":   sig["score"],
+        "role_d1":          round(sig.get("d1_article",  sig["score"]), 3),
+        "role_d2":          round(sig.get("d2_sentence", sig["score"]), 3),
+        "role_d3":          round(sig.get("d3_vocab",    sig["score"]), 3),
+        "role_d4":          round(sig.get("d4_struct",   sig["score"]), 3),
         "role_llm_score":   llm_result.get("score"),
         "role_llm_answers": llm_result.get("answers", {}),
         "text_preview":     result_text[:300],
@@ -412,19 +416,15 @@ def evaluate_metrics(response_dict, case, gt_nums, valid_corpus, role,
 def _pct(val):
     return f"{val * 100:.1f}%"
 
-def _print_case_report(report, cidx, total, case, role, sys_eval, base_eval, rubric=None):
+def _print_case_report(report, cidx, total, case, role, sys_eval, rubric=None):
     """Write a nicely formatted block for one case+role to both terminal and report file."""
     r_icon  = ("✅" if sys_eval["recall"] else "❌") if sys_eval["recall"] is not None else "➖"
     h_icon  = "✅" if sys_eval["hallucination"] == 0        else "⚠️ "
     ro_icon = "✅" if (sys_eval["role_adherence"] or 0) >= 0.7 else "⚠️ "
-    br_icon  = ("✅" if base_eval["recall"] else "❌") if base_eval["recall"] is not None else "➖"
-    bh_icon  = "✅" if base_eval["hallucination"] == 0        else "⚠️ "
-    bro_icon = "✅" if (base_eval["role_adherence"] or 0) >= 0.7 else "⚠️ "
 
     report(f"  ┌─ [{cidx}/{total}]  Role: {role.upper()}  ──────────────────────────────────────")
     report(f"  │  Crime  : {case.get('crime_type', 'N/A')}")
     report(f"  │")
-    report(f"  │  ── SYSTEM (RAG) ─────────────────────────────────────────────")
     sys_recall_text = "N/A (No GT)" if sys_eval['recall'] is None else ('HIT' if sys_eval['recall'] else 'MISS')
     report(f"  │  {r_icon} Recall        : {sys_recall_text}")
     report(f"  │       Ground truth article (from court verdict) : {case.get('primary_article', 'N/A')}")
@@ -434,25 +434,8 @@ def _print_case_report(report, cidx, total, case, role, sys_eval, base_eval, rub
     report(f"  │  {h_icon} Hallucination : score={sys_eval['hallucination']}"
            f"  L1={sys_eval['hall_l1']}  L2={sys_eval['hall_l2']}  L3={sys_eval['hall_l3']}")
     report(f"  │  {ro_icon} Role Adherence: {sys_eval['role_adherence']:.3f}"
-           f"  (signal={sys_eval['role_sig_score']:.3f}  llm={sys_eval['role_llm_score']})")
-    sys_ans = sys_eval.get('role_llm_answers', {})
-    for qi in range(1, 5):
-        report(f"  │       Q{qi}: {sys_ans.get(f'q{qi}', 'n/a').upper()}")
+           f"  (d1_art={sys_eval.get('role_d1', '?')}  d2_sent={sys_eval.get('role_d2', '?')}  d3_voc={sys_eval.get('role_d3', '?')}  d4_cit={sys_eval.get('role_d4', '?')})")
     report(f"  │  Response: {repr(sys_eval['text_preview'][:120])}")
-    report(f"  │")
-    report(f"  │  ── BASELINE (no RAG) ────────────────────────────────────────")
-    bas_recall_text = "N/A (No GT)" if base_eval['recall'] is None else ('HIT' if base_eval['recall'] else 'MISS')
-    report(f"  │  {br_icon} Recall        : {bas_recall_text}")
-    report(f"  │       Ground truth article (from court verdict) : {case.get('primary_article', 'N/A')}")
-    report(f"  │       Article cited by baseline                 : {', '.join(base_eval.get('recall_cited', [])) or 'None'}")
-    report(f"  │       Law document source of cited article      : {base_eval.get('recall_doc', 'N/A')}")
-    report(f"  │       Hit method                                : {base_eval.get('recall_source', 'N/A')}")
-    report(f"  │  {bh_icon} Hallucination : score={base_eval['hallucination']}")
-    report(f"  │  {bro_icon} Role Adherence: {base_eval['role_adherence']}"
-           f"  (signal={base_eval['role_sig_score']}  llm={base_eval['role_llm_score']})")
-    base_ans = base_eval.get('role_llm_answers', {})
-    for qi in range(1, 5):
-        report(f"  │       Q{qi}: {base_ans.get(f'q{qi}', 'n/a').upper()}")
     # ── METRIC B: Rubric Quality Assessment ──────────────────────────────────
     if rubric:
         s_rub = rubric.get("sys",  {})
@@ -485,31 +468,21 @@ def _print_running_totals(report, metrics, processed):
     if n == 0:
         return
     s = metrics["system"]
-    b = metrics["baseline"]
     def _avg(lst): return sum(lst)/len(lst) if lst else 0.0
 
     sys_recall = s["recall_hits"] / n
     sys_hall   = _avg(s["hallucination_scores"])
     sys_role   = _avg(s["role_scores"])
-    bas_recall = b["recall_hits"] / n
-    bas_hall   = _avg(b["hallucination_scores"])
-    bas_role   = _avg(b["role_scores"])
-    sys_rub    = _avg(s["rubric_scores"])
-    bas_rub    = _avg(b["rubric_scores"])
-    rub_delta  = round(sys_rub - bas_rub, 2) if s["rubric_scores"] and b["rubric_scores"] else None
 
     report(f"  📊 Running totals after {processed} case(s)  ({n} role evals)")
-    report(f"     {'Metric':<22} {'System':>9} {'Baseline':>9}  Target")
-    report(f"     {'-'*60}")
-    report(f"     {'Primary Recall':<22} {_pct(sys_recall):>9} {_pct(bas_recall):>9}  ≥90%  "
+    report(f"     {'Metric':<22} {'System':>9}  Target")
+    report(f"     {'-'*45}")
+    report(f"     {'Primary Recall':<22} {_pct(sys_recall):>9}  ≥90%  "
            f"{'✅' if sys_recall >= 0.90 else '❌'}")
-    report(f"     {'Hallucination Rate':<22} {_pct(sys_hall):>9} {_pct(bas_hall):>9}  ≤10%  "
+    report(f"     {'Hallucination Rate':<22} {_pct(sys_hall):>9}  ≤10%  "
            f"{'✅' if sys_hall <= 0.10 else '❌'}")
-    report(f"     {'Role Adherence':<22} {_pct(sys_role):>9} {_pct(bas_role):>9}  ≥85%  "
+    report(f"     {'Role Adherence':<22} {_pct(sys_role):>9}  ≥85%  "
            f"{'✅' if sys_role >= 0.85 else '❌'}")
-    if rub_delta is not None:
-        report(f"     {'Rubric (0–5 norm)':<22} {sys_rub:>9.2f} {bas_rub:>9.2f}  Δ≥+0.5  "
-               f"{'✅' if rub_delta >= 0.5 else '❌'}  (Δ={rub_delta:+.2f})")
 
 def main():
     parser = argparse.ArgumentParser(description="Combined Evaluation Script")
@@ -617,8 +590,7 @@ def main():
         report("  ⚡ --skip-rubric: rubric LLM scoring disabled")
 
     metrics = {
-        "system":   {"recall_hits": 0, "recall_total": 0, "hallucination_scores": [], "role_scores": [], "rubric_scores": []},
-        "baseline": {"recall_hits": 0, "recall_total": 0, "hallucination_scores": [], "role_scores": [], "rubric_scores": []},
+        "system": {"recall_hits": 0, "recall_total": 0, "hallucination_scores": [], "role_scores": [], "rubric_scores": []},
         "total_evals": 0,
     }
     processed = 0
@@ -644,26 +616,27 @@ def main():
             for role in roles:
                 report(f"  ┌─ ⏳ Processing Role: {role.upper()} ───────────────────────")
                 
-                # 1. Fetch Responses (sequential)
+                # 1. Fetch RAG system response
                 t_fetch = time.time()
                 sys_pred  = call_system(args.ai_url, case["case_description"], role, args.timeout, log)
-                base_text = call_baseline(oai_baseline, args.baseline_model, case["case_description"], ROLE_LABELS[role], log)
-                base_pred = {"text": base_text}
                 report(f"  │  ✅ Fetched in {time.time()-t_fetch:.1f}s")
 
-                # 2. Score Metrics
+                # 2. Score Metrics (system only — deterministic, free)
                 t_score = time.time()
                 sys_eval  = evaluate_metrics(sys_pred, case, gt_nums, valid_corpus, role, oai_judge, args.judge_model, is_baseline=False, log=log, skip_llm=True)
-                base_eval = evaluate_metrics(base_pred, case, gt_nums, valid_corpus, role, oai_judge, args.judge_model, is_baseline=True,  log=log, skip_llm=True)
                 
-                # 3. LLM Judge Rubric
-                sys_text = sys_pred.get("result", "") if sys_pred else ""
-                rubric = {} if skip_rubric else call_rubric_judge(oai_judge, args.judge_model, role, case, sys_text, base_text, log)
+                # 3. LLM Judge Rubric (system vs baseline — only if not skipped)
+                sys_text  = sys_pred.get("result", "") if sys_pred else ""
+                if not skip_rubric:
+                    base_text = call_baseline(oai_baseline, args.baseline_model, case["case_description"], ROLE_LABELS[role], log)
+                    rubric = call_rubric_judge(oai_judge, args.judge_model, role, case, sys_text, base_text, log)
+                else:
+                    rubric = {}
                 report(f"  │  ✅ Scored in {time.time()-t_score:.1f}s")
 
                 # 4. Print & Save
-                _print_case_report(report, cidx, total, case, role, sys_eval, base_eval, rubric if rubric else None)
-                row["evaluations"][role] = {"system": sys_eval, "baseline": base_eval, "rubric": rubric}
+                _print_case_report(report, cidx, total, case, role, sys_eval, rubric if rubric else None)
+                row["evaluations"][role] = {"system": sys_eval, "rubric": rubric}
 
                 metrics["total_evals"] += 1
                 if sys_eval["recall"] is not None:
@@ -674,14 +647,6 @@ def main():
                 metrics["system"]["role_scores"].append(sys_eval["role_adherence"])
                 if rubric.get("sys", {}).get("normalized") is not None:
                     metrics["system"]["rubric_scores"].append(rubric["sys"]["normalized"])
-
-                if base_eval["recall"] is not None:
-                    metrics["baseline"]["recall_hits"] += int(base_eval["recall"])
-                    metrics["baseline"]["recall_total"] += 1
-                metrics["baseline"]["hallucination_scores"].append(base_eval["hallucination"])
-                metrics["baseline"]["role_scores"].append(base_eval["role_adherence"])
-                if rubric.get("base", {}).get("normalized") is not None:
-                    metrics["baseline"]["rubric_scores"].append(rubric["base"]["normalized"])
 
                 time.sleep(args.delay)
 
@@ -696,21 +661,18 @@ def main():
     def _avg(lst): return round(sum(lst) / len(lst), 4) if lst else 0.0
 
     n_evals    = metrics["total_evals"]
-    sys_recall = round(metrics["system"]["recall_hits"]   / metrics["system"]["recall_total"],   4) if metrics["system"]["recall_total"]   else None
+    sys_recall = round(metrics["system"]["recall_hits"] / metrics["system"]["recall_total"], 4) if metrics["system"]["recall_total"] else None
     sys_hall   = _avg(metrics["system"]["hallucination_scores"])
     sys_role   = _avg(metrics["system"]["role_scores"])
-    bas_recall = round(metrics["baseline"]["recall_hits"] / metrics["baseline"]["recall_total"], 4) if metrics["baseline"]["recall_total"] else None
-    bas_hall   = _avg(metrics["baseline"]["hallucination_scores"])
-    bas_role   = _avg(metrics["baseline"]["role_scores"])
+    sys_rub    = _avg(metrics["system"]["rubric_scores"])
 
     summary = {
         "meta": {
-            "n_cases_evaluated":    processed,
+            "n_cases_evaluated":      processed,
             "total_role_evaluations": n_evals,
             "case_range": f"{args.start}–{'END' if not args.end else args.end}",
         },
-        "system":   {"primary_recall": sys_recall, "hallucination_rate": sys_hall, "role_adherence": sys_role},
-        "baseline": {"primary_recall": bas_recall, "hallucination_rate": bas_hall, "role_adherence": bas_role},
+        "system": {"primary_recall": sys_recall, "hallucination_rate": sys_hall, "role_adherence": sys_role},
         "pass": {
             "recall":        (sys_recall >= 0.90) if sys_recall is not None else None,
             "hallucination": sys_hall   <= 0.10,
@@ -735,12 +697,14 @@ def main():
     report("=" * 70)
     report(f"  FINAL RESULTS — {processed} cases  ({n_evals} role evaluations)")
     report("=" * 70)
-    report(f"  {'Metric':<22} {'System':>9} {'Baseline':>9}  {'Target':>8}  Pass?")
-    report(f"  {'-'*58}")
-    report(f"  {'Primary Recall':<22} {_recall_str(sys_recall):>9} {_recall_str(bas_recall):>9}  {'≥90%':>8}  {_pass_str('recall')}")
-    report(f"  {'Hallucination Rate':<22} {_pct(sys_hall):>9} {_pct(bas_hall):>9}  {'≤10%':>8}  {_pass_str('hallucination')}")
-    report(f"  {'Role Adherence':<22} {_pct(sys_role):>9} {_pct(bas_role):>9}  {'≥85%':>8}  {_pass_str('role')}")
-    report(f"  {'-'*58}")
+    report(f"  {'Metric':<22} {'System':>9}  {'Target':>8}  Pass?")
+    report(f"  {'-'*50}")
+    report(f"  {'Primary Recall':<22} {_recall_str(sys_recall):>9}  {'≥90%':>8}  {_pass_str('recall')}")
+    report(f"  {'Hallucination Rate':<22} {_pct(sys_hall):>9}  {'≤10%':>8}  {_pass_str('hallucination')}")
+    report(f"  {'Role Adherence':<22} {_pct(sys_role):>9}  {'≥85%':>8}  {_pass_str('role')}")
+    if sys_rub:
+        report(f"  {'Rubric Score (avg)':<22} {sys_rub:>9.2f}  {'(0–5)':>8}  (run eval_rubric_*.py for Δ vs baseline)")
+    report(f"  {'-'*50}")
     report(f"  Detailed JSONL : {out_path}")
     report(f"  Summary JSON   : {sum_path}")
     report(f"  Human report   : {report_path}  ← download this file for offline review")
