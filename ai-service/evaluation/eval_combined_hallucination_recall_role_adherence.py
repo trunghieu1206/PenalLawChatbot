@@ -342,22 +342,45 @@ _BLHS_MARKERS = [
 ]
 
 
+def _nearest_marker_dist(t_low: str, art_mid: int, markers: list, window: int) -> int:
+    """Return the character distance from art_mid to the nearest occurrence of any marker.
+    Returns window+1 (i.e. 'not found') if no marker is within the window."""
+    best = window + 1
+    lo, hi = max(0, art_mid - window), min(len(t_low), art_mid + window)
+    region = t_low[lo:hi]
+    for mk in markers:
+        idx = 0
+        while True:
+            pos = region.find(mk, idx)
+            if pos == -1:
+                break
+            abs_pos = lo + pos
+            dist = abs(abs_pos - art_mid)
+            if dist < best:
+                best = dist
+            idx = pos + 1
+    return best
+
+
 def _extract_blhs_articles(text: str):
     """
     Extract article numbers that are BLHS (Bộ luật Hình sự) crime articles,
     not BLTTHS (Bộ luật Tố tụng Hình sự) procedural articles.
 
     Strategy:
-      1. For each 'Điều X' mention, look at a ±300-char window.
-         - If window contains a BLTTHS marker → skip (procedural).
-         - If window contains a BLHS marker   → accept (crime article).
-         - If neither, use known BLTTHS number list + _PROCEDURAL set to decide.
-      Window is 300 chars (not 150) to handle long multi-article citation lines:
-        'Điều 134; điểm b,e,s khoản 1,2 Điều 51; Điều 38 Bộ luật hình sự'
+      1. For each 'Điều X', measure the distance to the nearest BLHS and BLTTHS marker.
+         - Only BLHS marker found within ±300 chars  → accept (crime article)
+         - Only BLTTHS marker found within ±150 chars → reject (procedural)
+         - Both found → the CLOSEST marker wins
+           (handles 'Điều 295; ...Điều 35 Bộ luật hình sự...; ...Điều 136 BLTTHS')
+         - Neither found → fall back to known-number exclusion lists.
     Returns (blhs_nums, confidence):
       blhs_nums  : list of article numbers (str), deduplicated, order-preserving
       confidence : 'high' if at least one explicit BLHS marker found, else 'low'
     """
+    BLHS_WIN  = 300   # wider — BLHS label may be at end of long citation chain
+    BLTTHS_WIN = 150  # narrower — BLTTHS label must be immediately adjacent
+
     t_low = text.lower()
     art_iter = re.finditer(r"(?:đi[eề]u|dieu)\s*(\d+[a-z]?)", t_low)
 
@@ -365,26 +388,33 @@ def _extract_blhs_articles(text: str):
     has_explicit_blhs = False
 
     for m in art_iter:
-        num = m.group(1)
-        win_start = max(0, m.start() - 300)
-        win_end   = min(len(t_low), m.end() + 300)
-        window    = t_low[win_start:win_end]
+        num     = m.group(1)
+        art_mid = (m.start() + m.end()) // 2
 
-        is_bltths = any(mk in window for mk in _BLTTHS_MARKERS)
-        is_blhs   = any(mk in window for mk in _BLHS_MARKERS)
+        blhs_dist   = _nearest_marker_dist(t_low, art_mid, _BLHS_MARKERS,   BLHS_WIN)
+        bltths_dist = _nearest_marker_dist(t_low, art_mid, _BLTTHS_MARKERS, BLTTHS_WIN)
 
-        if is_bltths:
-            continue  # definitely procedural — drop
-        if is_blhs:
+        found_blhs   = blhs_dist   <= BLHS_WIN
+        found_bltths = bltths_dist <= BLTTHS_WIN
+
+        if found_blhs and found_bltths:
+            # Both markers present — closest one determines the law
+            if blhs_dist <= bltths_dist:
+                has_explicit_blhs = True
+                if num not in seen:
+                    seen[num] = None
+            # else: BLTTHS is closer → procedural, skip
+        elif found_blhs:
             has_explicit_blhs = True
             if num not in seen:
                 seen[num] = None
-            continue
-        # No explicit law marker — use fallback exclusion lists
-        if num in _BLTTHS_ARTICLES or num in _PROCEDURAL:
-            continue
-        if num not in seen:
-            seen[num] = None
+        elif found_bltths:
+            pass  # definitely procedural — skip
+        else:
+            # No explicit law marker — use fallback exclusion lists
+            if num not in _BLTTHS_ARTICLES and num not in _PROCEDURAL:
+                if num not in seen:
+                    seen[num] = None
 
     confidence = "high" if has_explicit_blhs else "low"
     return list(seen.keys()), confidence

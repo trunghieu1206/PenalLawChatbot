@@ -69,26 +69,53 @@ _BLTTHS_MARKERS = ["tố tụng hình sự", "bltths", "b.l.t.t.h.s", "luật t�
 _BLHS_MARKERS   = ["bộ luật hình sự", "blhs", "b.l.h.s", "luật hình sự"]
 
 
+def _nearest_marker_dist(t_low: str, art_mid: int, markers: list, window: int) -> int:
+    """Return character distance from art_mid to the nearest marker within window. Returns window+1 if not found."""
+    best = window + 1
+    lo, hi = max(0, art_mid - window), min(len(t_low), art_mid + window)
+    region = t_low[lo:hi]
+    for mk in markers:
+        idx = 0
+        while True:
+            pos = region.find(mk, idx)
+            if pos == -1:
+                break
+            dist = abs((lo + pos) - art_mid)
+            if dist < best:
+                best = dist
+            idx = pos + 1
+    return best
+
+
 def _extract_blhs_articles(text: str):
-    """Extract only BLHS (penal code) article numbers from verdict text,
-    filtering out BLTTHS (procedural code) citations by context analysis.
-    Window is ±300 chars to handle long multi-article citation lines like:
-      'Điều 134; điểm b,e,s khoản 1,2 Điều 51; Điều 38 Bộ luật hình sự'"""
+    """Extract only BLHS (penal code) article numbers from verdict text.
+    Uses nearest-marker distance: BLHS win=300, BLTTHS win=150.
+    When both markers appear, the closest one determines the law.
+    This handles long citation chains like:
+      'Điều 295; ...Điều 35 Bộ luật hình sự...; ...Điều 136 BLTTHS'"""
+    BLHS_WIN   = 300
+    BLTTHS_WIN = 150
     t_low = text.lower()
     seen: dict = {}
     for m in re.finditer(r"(?:đi[eề]u|dieu)\s*(\d+[a-z]?)", t_low):
-        num = m.group(1)
-        win = t_low[max(0, m.start()-300):min(len(t_low), m.end()+300)]
-        if any(mk in win for mk in _BLTTHS_MARKERS):
-            continue
-        if any(mk in win for mk in _BLHS_MARKERS):
+        num     = m.group(1)
+        art_mid = (m.start() + m.end()) // 2
+        blhs_dist   = _nearest_marker_dist(t_low, art_mid, _BLHS_MARKERS,   BLHS_WIN)
+        bltths_dist = _nearest_marker_dist(t_low, art_mid, _BLTTHS_MARKERS, BLTTHS_WIN)
+        found_blhs   = blhs_dist   <= BLHS_WIN
+        found_bltths = bltths_dist <= BLTTHS_WIN
+        if found_blhs and found_bltths:
+            if blhs_dist <= bltths_dist and num not in seen:
+                seen[num] = None
+        elif found_blhs:
             if num not in seen:
                 seen[num] = None
-            continue
-        if num in _BLTTHS_ARTICLES or num in _PROCEDURAL:
-            continue
-        if num not in seen:
-            seen[num] = None
+        elif found_bltths:
+            pass  # procedural — skip
+        else:
+            if num not in _BLTTHS_ARTICLES and num not in _PROCEDURAL:
+                if num not in seen:
+                    seen[num] = None
     return list(seen.keys())
 
 
