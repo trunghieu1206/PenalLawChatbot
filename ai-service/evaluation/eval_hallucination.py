@@ -187,6 +187,7 @@ def layer1_article_existence(mapped_laws: list, gt_nums: set,
       - NOT in the full BLHS corpus (i.e., article doesn't exist at all)
     """
     false_arts = []
+    no_gt = len(gt_nums) == 0  # GT is empty/low-confidence — relax L1 to corpus-only check
     for law in mapped_laws:
         if law.get("_mapping_error"):
             continue
@@ -195,13 +196,15 @@ def layer1_article_existence(mapped_laws: list, gt_nums: set,
             continue
         if num in _ALWAYS_VALID:
             continue
-        if num not in gt_nums and num not in valid_corpus:
+        if num not in valid_corpus:
+            # Article doesn't exist in BLHS corpus at all — always a hallucination
             false_arts.append({
                 "article": law.get("article",""),
                 "reason": "not_in_corpus",
             })
-        elif num not in gt_nums and num in valid_corpus:
-            # Article exists in BLHS but court didn't apply it → weaker hallucination
+        elif not no_gt and num not in gt_nums:
+            # Article exists in BLHS but court didn't apply it — weaker hallucination
+            # (skip this check entirely when GT is empty/low-confidence to avoid false positives)
             false_arts.append({
                 "article": law.get("article",""),
                 "reason": "not_in_verdict",
