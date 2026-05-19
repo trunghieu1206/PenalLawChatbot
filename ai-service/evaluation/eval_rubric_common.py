@@ -239,13 +239,17 @@ def run_rubric_eval(
     # Two separate OpenRouter clients:
     #   oai_judge    — gemini-2.5-pro via OPENROUTER_LLM_JUDGE_KEY  (scores responses)
     #   oai_baseline — gemini-2.5-flash via OPENROUTER_API_KEY       (plain LLM, no RAG)
+    # OpenRouter requires HTTP-Referer + X-Title headers — missing headers cause silent empty responses
+    or_headers = {"HTTP-Referer": "http://localhost:8000", "X-Title": "VNPLaw Eval"}
     oai_judge = OpenAI(
         api_key=os.getenv("OPENROUTER_LLM_JUDGE_KEY") or os.getenv("OPENROUTER_API_KEY") or "missing",
         base_url="https://openrouter.ai/api/v1",
+        default_headers=or_headers,
     )
     oai_baseline = OpenAI(
         api_key=os.getenv("OPENROUTER_API_KEY") or "missing",
         base_url="https://openrouter.ai/api/v1",
+        default_headers=or_headers,
     )
     baseline_model = os.getenv("LLM_MODEL", "google/gemini-2.5-flash")
 
@@ -360,10 +364,11 @@ def run_rubric_eval(
 # ── Shared arg parser ─────────────────────────────────────────────────────────
 def base_arg_parser(description: str) -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=description)
+    _DEFAULT_DATASET = str(Path(__file__).resolve().parent / "thesis_eval_unique.json")
     p.add_argument(
         "--dataset",
-        default="ai-service/evaluation/thesis_eval_unique.json",
-        help="Path to case_eval_dataset.json (case_description / explanation / final_verdict)",
+        default=_DEFAULT_DATASET,
+        help="Path to eval dataset JSON (default: thesis_eval_unique.json beside this script)",
     )
     p.add_argument("--output",  default=None)
     p.add_argument("--summary", default=None)

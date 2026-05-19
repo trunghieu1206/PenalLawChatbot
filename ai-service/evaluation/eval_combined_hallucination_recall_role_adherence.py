@@ -16,12 +16,30 @@ HOW TO RUN EXAMPLES:
   python3 /root/PenalLawChatbot/ai-service/evaluation/eval_combined_hallucination_recall_role_adherence.py \
     --start 1 --end 50 --resume --log-file /root/PenalLawChatbot/ai-service/logs/eval_chunk_1_50.txt
 
-  # skip rubric
+  #### skip rubric (USE THIS)
   python3 /root/PenalLawChatbot/ai-service/evaluation/eval_combined_hallucination_recall_role_adherence.py \
     --start 1 \
-    --end 1 \
+    --end 100 \
     --skip-rubric \
-    --log-file /root/PenalLawChatbot/ai-service/logs/eval_chunk_1_10.txt
+    --log-file /root/PenalLawChatbot/ai-service/logs/eval_combined_1_100.txt
+
+
+  #### RUBRIC ONLY 
+  python3 /root/PenalLawChatbot/ai-service/evaluation/eval_rubric_neutral.py \
+    --start 1 \
+    --end 100 \
+    --log-file /root/PenalLawChatbot/ai-service/logs/eval_rubric_neutral_1_100.txt
+
+  python3 /root/PenalLawChatbot/ai-service/evaluation/eval_rubric_defense.py \
+    --start 1 \
+    --end 100 \
+    --log-file /root/PenalLawChatbot/ai-service/logs/eval_rubric_defense_1_100.txt
+
+  python3 /root/PenalLawChatbot/ai-service/evaluation/eval_rubric_victim.py \
+    --start 1 \
+    --end 100 \
+    --log-file /root/PenalLawChatbot/ai-service/logs/eval_rubric_victim_1_100.txt
+
 
 
 OUTPUTS:
@@ -77,7 +95,9 @@ def setup_logging(log_file):
         log.addHandler(fh)
     return log
 
-# --- Imports from existing scripts ---
+# --- Imports from existing scripts (add eval dir to path so imports work from any cwd) ---
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
 from eval_primary_recall import check_primary_hit, _extract_nums_from_text
 from eval_hallucination import _valid_article_set, layer1_article_existence, layer2_edition, layer3_sentencing, _gt_nums
 from eval_role_adherence import ROLE_SIGNALS, ROLE_LABELS, signal_score, llm_score, combined_score
@@ -534,8 +554,8 @@ def main():
     s_idx = max(0, args.start - 1)
     e_idx = args.end if args.end else len(cases)
     cases = cases[s_idx:e_idx]
-    n_with_primary = sum(1 for c in cases[max(0, args.start-1):(args.end if args.end else len(cases))] if c["primary_num"])
-    report(f"Cases to evaluate: {len(cases[max(0, args.start-1):(args.end if args.end else len(cases))])}  ({n_with_primary} have primary article for recall)")
+    n_with_primary = sum(1 for c in cases if c["primary_num"])
+    report(f"Cases to evaluate: {len(cases)}  ({n_with_primary} have primary article for recall)")
 
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)

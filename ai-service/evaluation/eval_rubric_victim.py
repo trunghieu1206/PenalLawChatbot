@@ -12,6 +12,7 @@ RUN:
   python3 eval_rubric_victim.py --start 1 --end 100 --skip-judge  # responses only
 """
 import sys, os, logging
+from pathlib import Path
 sys.path.insert(0, os.path.dirname(__file__))
 from eval_rubric_common import setup_logging, run_rubric_eval, base_arg_parser
 
@@ -84,10 +85,11 @@ def build_prompt(question: str, case: dict, ctx: dict,
 def main():
     parser = base_arg_parser("RUBRIC evaluation — Victim's lawyer (bị hại) role.")
     args = parser.parse_args()
+    _results_dir = Path(__file__).resolve().parent / "results"
     if not args.output:
-        args.output  = "ai-service/evaluation/results/rubric_victim_results.jsonl"
+        args.output  = str(_results_dir / "rubric_victim_results.jsonl")
     if not args.summary:
-        args.summary = "ai-service/evaluation/results/rubric_victim_summary.json"
+        args.summary = str(_results_dir / "rubric_victim_summary.json")
 
     log = setup_logging(args.log_file, "rubric_victim")
     log.info("=" * 70)
