@@ -524,9 +524,7 @@ def main():
     parser.add_argument("--timeout",        type=int,   default=300,
                         help="/predict request timeout in seconds (default: 300s to handle severe OpenRouter rate-limiting backoffs)")
     parser.add_argument("--skip-rubric",    action="store_true",
-                        help="Skip rubric LLM scoring (saves ~6 OpenRouter calls per case)")
-    parser.add_argument("--skip-llm",       action="store_true",
-                        help="Skip role-adherence LLM judge, use signal only (saves ~6 calls per case)")
+                        help="Skip rubric LLM scoring (saves ~6 OpenRouter calls per case). Run eval_rubric_*.py separately for rubric.")
     parser.add_argument("--judge-timeout",  type=float, default=60.0,
                         help="OpenRouter API call timeout in seconds (default: 60)")
     parser.add_argument("--start",          type=int,   default=1)
@@ -612,11 +610,11 @@ def main():
     )
 
     skip_rubric = args.skip_rubric
-    skip_llm    = args.skip_llm
+    # Role adherence always uses the deterministic 4-dim signal scorer (no LLM).
+    # Run eval_rubric_*.py separately if you want LLM-based rubric scoring.
+    report("  ⚡ Role adherence: 4-dim deterministic scorer (zero LLM calls)")
     if skip_rubric:
         report("  ⚡ --skip-rubric: rubric LLM scoring disabled")
-    if skip_llm:
-        report("  ⚡ --skip-llm: role adherence using signal scoring only")
 
     metrics = {
         "system":   {"recall_hits": 0, "recall_total": 0, "hallucination_scores": [], "role_scores": [], "rubric_scores": []},
@@ -655,8 +653,8 @@ def main():
 
                 # 2. Score Metrics
                 t_score = time.time()
-                sys_eval  = evaluate_metrics(sys_pred, case, gt_nums, valid_corpus, role, oai_judge, args.judge_model, is_baseline=False, log=log, skip_llm=skip_llm)
-                base_eval = evaluate_metrics(base_pred, case, gt_nums, valid_corpus, role, oai_judge, args.judge_model, is_baseline=True, log=log, skip_llm=skip_llm)
+                sys_eval  = evaluate_metrics(sys_pred, case, gt_nums, valid_corpus, role, oai_judge, args.judge_model, is_baseline=False, log=log, skip_llm=True)
+                base_eval = evaluate_metrics(base_pred, case, gt_nums, valid_corpus, role, oai_judge, args.judge_model, is_baseline=True,  log=log, skip_llm=True)
                 
                 # 3. LLM Judge Rubric
                 sys_text = sys_pred.get("result", "") if sys_pred else ""
