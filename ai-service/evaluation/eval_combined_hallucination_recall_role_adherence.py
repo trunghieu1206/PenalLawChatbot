@@ -511,8 +511,8 @@ def main():
     parser.add_argument("--ai-url",         default=os.getenv("AI_SERVICE_URL", "http://localhost:8000"))
     parser.add_argument("--judge-model",    default=os.getenv("LLM_JUDGE_MODEL", "google/gemini-2.5-pro"))
     parser.add_argument("--baseline-model", default=os.getenv("LLM_MODEL", "google/gemini-2.5-flash"))
-    parser.add_argument("--timeout",        type=int,   default=30,
-                        help="/predict request timeout in seconds (GPU server: 30s is generous)")
+    parser.add_argument("--timeout",        type=int,   default=120,
+                        help="/predict request timeout in seconds (default: 120s — 3 parallel requests queue on single GPU: ~40s wait + ~15s inference per slot)")
     parser.add_argument("--skip-rubric",    action="store_true",
                         help="Skip rubric LLM scoring (saves ~6 OpenRouter calls per case)")
     parser.add_argument("--skip-llm",       action="store_true",
