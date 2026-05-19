@@ -498,6 +498,22 @@ def evaluate_metrics(response_dict, case, gt_nums, valid_corpus, role,
         "text_preview":     result_text[:300],
     }
 
+
+def _is_clarification(pred: dict) -> bool:
+    """Return True if the system returned a clarification request instead of a legal analysis.
+    Detected by: empty mapped_laws AND response text contains the clarification marker."""
+    if not pred:
+        return True
+    mapped = pred.get("mapped_laws") or []
+    result = pred.get("result", "")
+    # Clarification responses always start with this string (Vietnamese: 'To analyse correctly...')
+    is_clarification_text = (
+        "\u2139\ufe0f" in result[:30]  # ℹ️ emoji at the very start
+        or "\u24d8" in result[:30]
+        or result.strip().startswith("Để phân tích chính xác")
+    )
+    return (not mapped) and is_clarification_text
+
 def _pct(val):
     return f"{val * 100:.1f}%"
 
@@ -687,6 +703,7 @@ def main():
             "hallucination_scores": [], "role_scores": [], "rubric_scores": [],
             "recall_misses": [],    # {case_index, url, gt, cited} for manual review
             "low_conf_cases": [],   # cases where GT article confidence is low
+            "clarification_skipped": 0,  # evals skipped because system asked for more info
         },
         "total_evals": 0,
     }
@@ -738,6 +755,15 @@ def main():
                     row["evaluations"][role] = {"system": sys_eval, "rubric": rubric}
 
                     metrics["total_evals"] += 1
+
+                    # ── Skip clarification responses from all metrics ─────────────
+                    if _is_clarification(sys_pred):
+                        metrics["system"]["clarification_skipped"] += 1
+                        report(f"  ⤼ [SKIP] Role {role.upper()} returned a clarification request — excluded from metrics.")
+                        time.sleep(args.delay)
+                        continue
+                    # ─────────────────────────────────────────────────────────────
+
                     if sys_eval["recall"] is not None:
                         hit = sys_eval["recall"]
                         metrics["system"]["recall_hits"] += int(hit)
@@ -763,8 +789,6 @@ def main():
                     metrics["system"]["role_scores"].append(sys_eval["role_adherence"])
                     if rubric.get("sys", {}).get("normalized") is not None:
                         metrics["system"]["rubric_scores"].append(rubric["sys"]["normalized"])
-
-                    time.sleep(args.delay)
 
                 out_f.write(json.dumps(row, ensure_ascii=False) + "\n")
                 out_f.flush()
@@ -821,7 +845,9 @@ def main():
 
         report("")
         report("=" * 70)
-        report(f"  {'⚠️  PARTIAL ' if interrupted else ''}RESULTS — {processed} cases  ({n_evals} role evals)  [{status}]")
+        n_clarif = metrics["system"]["clarification_skipped"]
+        skipped_note = f"  ({n_clarif} clarification responses excluded)" if n_clarif else ""
+        report(f"  {'⚠️  PARTIAL ' if interrupted else ''}RESULTS — {processed} cases  ({n_evals} role evals)  [{status}]{skipped_note}")
         report("=" * 70)
         report(f"  {'Metric':<22} {'System':>9}  {'Target':>8}  Pass?")
         report(f"  {'-'*50}")
