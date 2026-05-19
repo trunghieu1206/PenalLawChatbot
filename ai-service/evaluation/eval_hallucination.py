@@ -109,12 +109,13 @@ def load_cases(dataset_path: str, _unused: str = "") -> list:
 def _valid_article_set(dataset_path: str, _unused: str = "") -> set:
     """All BLHS article numbers cited in final_verdict texts — treated as known-valid corpus.
     Uses BLHS-aware extraction to exclude BLTTHS procedural articles."""
-    from eval_primary_recall import _extract_blhs_articles
+    from eval_primary_recall import _extract_blhs_articles as _recall_extract
     with open(dataset_path, encoding="utf-8") as f:
         data = json.load(f)
     nums: set = set()
     for entry in data:
-        arts, _ = _extract_blhs_articles(entry.get("final_verdict", ""))
+        # eval_primary_recall._extract_blhs_articles returns a plain list (no confidence tuple)
+        arts = _recall_extract(entry.get("final_verdict", ""))
         nums.update(arts)
     return nums
 
@@ -501,9 +502,8 @@ def main():
             extracted_facts = pred.get("extracted_facts") or {}
 
             # Ground-truth BLHS article numbers (BLTTHS procedural articles excluded)
-            from eval_primary_recall import _extract_blhs_articles
-            gt_list, _ = _extract_blhs_articles(case["final_verdict"])
-            gt = set(gt_list)
+            from eval_primary_recall import _extract_blhs_articles as _recall_extract
+            gt = set(_recall_extract(case["final_verdict"]))
 
             # Run layers
             l1 = layer1_article_existence(mapped_laws, gt, valid_corpus)
