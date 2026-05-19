@@ -13,51 +13,55 @@ from pathlib import Path
 from typing import Optional, List, Callable
 from collections import defaultdict
 
+import httpx
 import requests
 from openai import OpenAI
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from project root (eval/ → ai-service/ → PenalLawChatbot/)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+load_dotenv(dotenv_path=_PROJECT_ROOT / ".env", override=False)
 
 # ── Nhận định index (neutral role only) ──────────────────────────────────────
+# Now reads directly from case_eval_dataset.json — the `explanation` field IS
+# the court's Nhận định, already extracted by build_case_eval_dataset.py.
 _NHAN_DINH_INDEX: dict = {}
-_ND_KW = ["nhận định của tòa án", "nhận định của hội đồng", "nhận định", "xét thấy"]
-_QD_KW = ["quyết định", "nay quyết"]
-
-def _find_kw(text: str, kws: list) -> int:
-    lc = text.lower()
-    for kw in kws:
-        i = lc.find(kw)
-        if i != -1:
-            return i
-    return -1
 
 def build_nhan_dinh_index(path: str) -> None:
+    """Populate URL→explanation map from case_eval_dataset.json."""
     global _NHAN_DINH_INDEX
     if not Path(path).exists():
         return
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
-    for crime in data:
-        for case in crime.get("cases", []):
-            url  = case.get("url", "")
-            text = case.get("case_text", "")
-            ns   = _find_kw(text, _ND_KW)
-            qs   = _find_kw(text, _QD_KW)
-            if ns != -1:
-                end = qs if qs > ns else ns + 3000
-                _NHAN_DINH_INDEX[url] = text[ns:end][:3000].strip()
+    for case in data:
+        url = case.get("url", "")
+        if url:
+            _NHAN_DINH_INDEX[url] = case.get("explanation", "")[:3000].strip()
 
 def get_nhan_dinh(url: str) -> str:
     return _NHAN_DINH_INDEX.get(url, "(Nhận định không có trong dữ liệu)")
 
 # ── Logging ───────────────────────────────────────────────────────────────────
+from tqdm import tqdm
+
+class TqdmLoggingHandler(logging.Handler):
+    def __init__(self, level=logging.NOTSET):
+        super().__init__(level)
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            tqdm.write(msg)
+            self.flush()
+        except Exception:
+            self.handleError(record)
+
 def setup_logging(log_file: Optional[str], name: str) -> logging.Logger:
     log = logging.getLogger(name)
     log.setLevel(logging.DEBUG)
     fmt = logging.Formatter("%(asctime)s  %(levelname)-8s  %(message)s",
                             datefmt="%Y-%m-%d %H:%M:%S")
-    ch = logging.StreamHandler(sys.stdout)
+    ch = TqdmLoggingHandler()
     ch.setFormatter(fmt)
     log.addHandler(ch)
     if log_file:
@@ -68,56 +72,47 @@ def setup_logging(log_file: Optional[str], name: str) -> logging.Logger:
     return log
 
 # ── Dataset loader ────────────────────────────────────────────────────────────
-_PROCEDURAL = {
-    "7","28","32","34","42","45","46","47","48","49","50",
-    "51","52","53","54","55","56","57","58","59","60","65",
-}
-_MITIGATING  = {"51", "54", "65"}
-_AGGRAVATING = {"52"}
+# Reads the new case_eval_dataset.json produced by build_case_eval_dataset.py.
+# Each entry has: crime_type, url, case_description, explanation, final_verdict.
+#
+# Fields used by eval scripts:
+#   case_url        ← entry["url"]
+#   case_description← entry["case_description"]  → sent to /predict as input
+#   explanation     ← entry["explanation"]        → court's Nhận định (ground truth)
+#   final_verdict   ← entry["final_verdict"]      → court's Quyết định (ground truth)
+#   crime_type      ← entry["crime_type"]         → metadata / logging
 
 def _art_num(s: str) -> Optional[str]:
     m = re.search(r"(\d+[A-Za-z]?)", str(s))
     return m.group(1) if m else None
 
-def load_cases(test_path: str, full_path: str) -> list:
-    with open(test_path, encoding="utf-8") as f:
-        test_data = json.load(f)
-    with open(full_path, encoding="utf-8") as f:
-        full_data = json.load(f)
+def load_cases(dataset_path: str, _unused: str = "") -> list:
+    """Load cases from case_eval_dataset.json.
 
-    test_by_url: dict = defaultdict(list)
-    for e in test_data:
-        test_by_url[e["link_to_case"]].append(e)
-    full_by_url: dict = defaultdict(list)
-    for e in full_data:
-        full_by_url[e["link_to_case"]].append(e)
-
-    seen: dict = {}
-    for e in test_data:
-        url = e["link_to_case"]
-        if url not in seen:
-            seen[url] = len(seen)
+    The second argument (_unused) is kept for backward-compatible call sites
+    that still pass two paths; it is ignored.
+    """
+    with open(dataset_path, encoding="utf-8") as f:
+        data = json.load(f)
 
     cases = []
-    for url, _ in sorted(seen.items(), key=lambda x: x[1]):
-        te = test_by_url[url]
-        fe = full_by_url.get(url, te)
-
-        all_gt = [e["expected_article"] for e in fe]
-        primary = next((a for a in all_gt if _art_num(a) not in _PROCEDURAL), None)
-        mitigating  = [a for a in all_gt if _art_num(a) in _MITIGATING]
-        aggravating = [a for a in all_gt if _art_num(a) in _AGGRAVATING]
-        contents = {e["expected_article"]: e.get("article_content", "")
-                    for e in te if e.get("article_content")}
-
+    for entry in data:
+        url = entry.get("url", "")
         cases.append({
             "case_url":          url,
-            "question":          max(te, key=lambda e: len(e["question"]))["question"],
-            "all_gt_articles":   all_gt,
-            "primary_article":   primary or "",
-            "mitigating_arts":   mitigating,
-            "aggravating_arts":  aggravating,
-            "article_contents":  contents,
+            "crime_type":        entry.get("crime_type", ""),
+            # Input to /predict — the full case facts up to Nhận định
+            "case_description":  entry.get("case_description", ""),
+            # Ground truth — what the real court said
+            "explanation":       entry.get("explanation", ""),
+            "final_verdict":     entry.get("final_verdict", ""),
+            # Backward-compat aliases used by rubric prompts
+            "question":          entry.get("case_description", ""),
+            "all_gt_articles":   [],   # not available in new dataset
+            "primary_article":   "",
+            "mitigating_arts":   [],
+            "aggravating_arts":  [],
+            "article_contents":  {},
         })
     return cases
 
@@ -141,8 +136,9 @@ _BASELINE_SYSTEM = "Bạn là chuyên gia pháp lý Việt Nam, am hiểu Bộ l
 
 def call_baseline(client: OpenAI, model: str, question: str,
                   role_label: str, log: logging.Logger) -> str:
+    _timeout = httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=5.0)
     try:
-        r = client.chat.completions.create(
+        r = client.with_options(timeout=_timeout).chat.completions.create(
             model=model,
             messages=[
                 {"role": "system", "content": _BASELINE_SYSTEM},
@@ -161,17 +157,39 @@ def call_baseline(client: OpenAI, model: str, question: str,
 def call_judge(client: OpenAI, model: str, prompt: str,
                dimensions: list, log: logging.Logger,
                retries: int = 3) -> Optional[dict]:
+    _timeout = httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=5.0)
     for attempt in range(retries):
         try:
-            r = client.chat.completions.create(
+            r = client.with_options(timeout=_timeout).chat.completions.create(
                 model=model,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {"role": "system", "content":
+                     "You are a strict JSON evaluator. Output ONLY a single compact "
+                     "JSON object with no explanation, no markdown, no extra text."},
+                    {"role": "user", "content": prompt},
+                ],
                 temperature=0,
-                max_tokens=300,
+                max_tokens=512,  # rubric JSON is tiny — 512 tokens is plenty
+                extra_body={"thinking": {"type": "disabled"}},  # disable extended thinking
             )
-            raw = r.choices[0].message.content.strip()
-            raw = re.sub(r"```(?:json)?\s*", "", raw).strip()
-            data = json.loads(raw)
+            raw = (r.choices[0].message.content or "").strip()
+            if not raw:
+                raise ValueError(f"Empty response. finish={r.choices[0].finish_reason}")
+            # Step 1: strip markdown fences (opening AND closing)
+            clean = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+            # Step 2: extract outermost {...} block — greedy so multiline JSON works
+            brace_m = re.search(r"\{.*\}", clean, re.DOTALL)
+            if brace_m:
+                clean = brace_m.group(0)
+            try:
+                data = json.loads(clean)
+            except json.JSONDecodeError:
+                # Fallback: regex-scan raw for "DX_..." int pairs (survives truncation)
+                data = {}
+                for m in re.finditer(r'"(D\d_\w+)"\s*:\s*(\d)', raw):
+                    data[m.group(1)] = int(m.group(2))
+                if not data:
+                    raise ValueError(f"No dims parsed: {repr(raw[:120])}")
             total = sum(data.get(d, 0) for d in dimensions)
             data["total"]      = total
             data["normalized"] = round(total / 30 * 5, 2)
@@ -195,12 +213,12 @@ def run_rubric_eval(
     Generic evaluation runner used by all 3 RUBRIC scripts.
     Calls system + baseline, scores both with LLM judge, writes results.
     """
-    cases = load_cases(args.test_dataset, args.full_dataset)
+    cases = load_cases(args.dataset)
     log.info(f"Cases loaded: {len(cases)}")
 
     if role == "neutral" and not args.skip_judge:
-        log.info(f"Building Nhận định index from {args.scraped_texts} ...")
-        build_nhan_dinh_index(args.scraped_texts)
+        log.info(f"Building Nhận định index from {args.dataset} ...")
+        build_nhan_dinh_index(args.dataset)
         log.info(f"Nhận định index: {len(_NHAN_DINH_INDEX)} entries")
 
     s_idx = max(0, args.start - 1)
@@ -218,8 +236,25 @@ def run_rubric_eval(
                 except Exception: pass
         log.info(f"Resume: {len(done_urls)} cases already done.")
 
-    oai = OpenAI(api_key=os.getenv("OPENROUTER_API_KEY") or "missing",
-                 base_url="https://openrouter.ai/api/v1")
+    # Two separate OpenRouter clients:
+    #   oai_judge    — gemini-2.5-pro via OPENROUTER_LLM_JUDGE_KEY  (scores responses)
+    #   oai_baseline — gemini-2.5-flash via OPENROUTER_API_KEY       (plain LLM, no RAG)
+    # OpenRouter requires HTTP-Referer + X-Title headers — missing headers cause silent empty responses
+    or_headers = {"HTTP-Referer": "http://localhost:8000", "X-Title": "VNPLaw Eval"}
+    oai_judge = OpenAI(
+        api_key=os.getenv("OPENROUTER_LLM_JUDGE_KEY") or os.getenv("OPENROUTER_API_KEY") or "missing",
+        base_url="https://openrouter.ai/api/v1",
+        default_headers=or_headers,
+    )
+    oai_baseline = OpenAI(
+        api_key=os.getenv("OPENROUTER_API_KEY") or "missing",
+        base_url="https://openrouter.ai/api/v1",
+        default_headers=or_headers,
+    )
+    baseline_model = os.getenv("LLM_MODEL", "google/gemini-2.5-flash")
+
+    log.info(f"  Inference model  (system + baseline) : {baseline_model}")
+    log.info(f"  Judge model      (rubric scoring)    : {args.model}")
 
     sys_scores, base_scores_all = [], []
     dim_sys_acc:  dict = {d: [] for d in dimensions}
@@ -227,7 +262,7 @@ def run_rubric_eval(
     processed = 0
 
     with open(out_path, "a", encoding="utf-8") as out_f:
-        for i, case in enumerate(cases):
+        for i, case in enumerate(tqdm(cases, desc="Evaluating", unit="case")):
             url  = case["case_url"]
             cidx = s_idx + i + 1
             if url in done_urls:
@@ -237,11 +272,11 @@ def run_rubric_eval(
 
             ctx = build_context_fn(case)
 
-            # System response
+            # System response — via /predict (RAG + gemini-2.5-flash)
             sys_resp = call_predict(args.ai_url, case["question"], role,
                                     args.timeout, log)
-            # Baseline response
-            base_resp = call_baseline(oai, args.model, case["question"],
+            # Baseline response — direct gemini-2.5-flash call, no RAG
+            base_resp = call_baseline(oai_baseline, baseline_model, case["question"],
                                       role_label, log)
 
             row = {
@@ -258,7 +293,7 @@ def run_rubric_eval(
                 # Score system
                 sys_prompt = build_prompt_fn(case["question"], case, ctx,
                                              sys_resp, base_resp)
-                s = call_judge(oai, args.model, sys_prompt, dimensions, log)
+                s = call_judge(oai_judge, args.model, sys_prompt, dimensions, log)
                 if s:
                     sys_scores.append(s["normalized"])
                     for d in dimensions:
@@ -270,7 +305,7 @@ def run_rubric_eval(
                 # Score baseline
                 base_prompt = build_prompt_fn(case["question"], case, ctx,
                                               base_resp, sys_resp)
-                b = call_judge(oai, args.model, base_prompt, dimensions, log)
+                b = call_judge(oai_judge, args.model, base_prompt, dimensions, log)
                 if b:
                     base_scores_all.append(b["normalized"])
                     for d in dimensions:
@@ -329,13 +364,16 @@ def run_rubric_eval(
 # ── Shared arg parser ─────────────────────────────────────────────────────────
 def base_arg_parser(description: str) -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=description)
-    p.add_argument("--test-dataset",  default="ai-service/scraped_datasets/toaan_gov_test_datasets.json")
-    p.add_argument("--full-dataset",  default="ai-service/scraped_datasets/toaan_gov_datasets.json")
-    p.add_argument("--scraped-texts", default="ai-service/scraped_datasets/scraped_texts.json")
+    _DEFAULT_DATASET = str(Path(__file__).resolve().parent / "thesis_eval_unique.json")
+    p.add_argument(
+        "--dataset",
+        default=_DEFAULT_DATASET,
+        help="Path to eval dataset JSON (default: thesis_eval_unique.json beside this script)",
+    )
     p.add_argument("--output",  default=None)
     p.add_argument("--summary", default=None)
     p.add_argument("--ai-url",  default=os.getenv("AI_SERVICE_URL", "http://localhost:8000"))
-    p.add_argument("--model",   default=os.getenv("LLM_MODEL", "google/gemini-2.5-flash"))
+    p.add_argument("--model",   default=os.getenv("LLM_JUDGE_MODEL", "google/gemini-2.5-pro"))
     p.add_argument("--timeout", type=int, default=120)
     p.add_argument("--start",   type=int, default=1)
     p.add_argument("--end",     type=int, default=0)

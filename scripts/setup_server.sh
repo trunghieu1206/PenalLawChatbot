@@ -13,6 +13,9 @@
 # =============================================================
 set -euo pipefail
 
+# Bypass PEP 668 on Ubuntu 24.04 for global pip installs
+export PIP_BREAK_SYSTEM_PACKAGES=1
+
 LOG="/root/penallaw_setup.log"
 exec > >(tee -a "$LOG") 2>&1
 
@@ -115,7 +118,6 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     software-properties-common apt-transport-https \
     net-tools nginx \
     python3 python3-venv python3-dev python3-pip \
-    python3.10 python3.10-venv python3.10-dev \
     2>&1 | tail -10 || true
 
 if ! command -v python3 &>/dev/null; then
@@ -166,7 +168,7 @@ if [ "$PY_MAJOR" -lt 3 ] || ([ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]); t
 else
     skip "Python $PY_VERSION — skipping PPA install"
 fi
-"$PYTHON_BIN" -m pip install -q --upgrade pip
+"$PYTHON_BIN" -m pip install -q --upgrade pip 2>/dev/null || true
 info "Python: $("$PYTHON_BIN" --version)"
 export PYTHON_BIN
 
@@ -236,7 +238,7 @@ fi
 
 # ── 5. GPU check ─────────────────────────────────────────────
 info "Verifying GPU availability..."
-if command -v nvidia-smi &>/dev/null; then
+if command -v nvidia-smi &>/dev/null && nvidia-smi &>/dev/null; then
     GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || echo "unknown")
     CUDA_DRIVER_VER=$(nvidia-smi 2>/dev/null | grep -oP "CUDA Version:\s*\K[0-9]+\.[0-9]+" | head -1 || echo "unknown")
     info "✅ GPU: $GPU_NAME  |  CUDA driver: $CUDA_DRIVER_VER"
@@ -259,17 +261,21 @@ _TORCH_ALREADY=false
 "$PYTHON_BIN" -c "import torch" 2>/dev/null && _TORCH_ALREADY=true
 
 if [ "$_TORCH_ALREADY" = "false" ]; then
-    if command -v nvidia-smi &>/dev/null; then
+    if command -v nvidia-smi &>/dev/null && nvidia-smi &>/dev/null; then
         # Detect driver and select the highest compatible cu-tag
         _DRV_MAJOR=$(nvidia-smi 2>/dev/null | grep -oP 'Driver Version: \K[0-9]+' | head -1 || echo "0")
-        if   [ "$_DRV_MAJOR" -ge 550 ]; then _CU_TAG="cu124"; _TORCH_VER="2.5.1"; _TV_VER="0.20.1"
-        elif [ "$_DRV_MAJOR" -ge 530 ]; then _CU_TAG="cu121"; _TORCH_VER="2.5.1"; _TV_VER="0.20.1"
-        else                                  _CU_TAG="cu118"; _TORCH_VER="2.4.1"; _TV_VER="0.19.1"; fi
+        if   [ "$_DRV_MAJOR" -ge 550 ]; then _CU_TAG="cu124"; _TORCH_VER="2.5.1"
+        elif [ "$_DRV_MAJOR" -ge 525 ]; then _CU_TAG="cu121"; _TORCH_VER="2.5.1"
+        elif [ "$_DRV_MAJOR" -ge 520 ]; then _CU_TAG="cu118"; _TORCH_VER="2.4.1"
+        else                                  _CU_TAG="cu118"; _TORCH_VER="2.4.1"; fi
         info "  GPU R${_DRV_MAJOR} → installing torch==${_TORCH_VER}+${_CU_TAG}..."
 
         _GPU_TORCH_OK=false
-        # Try preferred version first, fall back to 2.4.1 (last cu118-compatible release)
-        for _TB in "$_TORCH_VER" "2.4.1"; do
+        _fallback_bases=("$_TORCH_VER")
+        [ "$_TORCH_VER" != "2.5.1" ] && _fallback_bases+=("2.5.1")
+        [ "$_CU_TAG" = "cu118" ]     && _fallback_bases+=("2.4.1")
+
+        for _TB in "${_fallback_bases[@]}"; do
             _TVB=$(python3 -c "p='$_TB'.split('.')[:2]; print(f'0.{int(p[0])*10+int(p[1])-5}.1')" 2>/dev/null || echo "0.19.1")
             if "$PYTHON_BIN" -m pip install \
                     "torch==${_TB}+${_CU_TAG}" "torchvision==${_TVB}+${_CU_TAG}" \

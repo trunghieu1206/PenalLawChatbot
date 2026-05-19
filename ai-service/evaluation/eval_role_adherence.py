@@ -7,13 +7,11 @@ TWO-LAYER SCORING PER CASE:
     Each role has positive signals (should appear) and negative signals (should NOT appear).
     signal_score = positive_hit_rate - 0.5 * negative_hit_rate   (clamped to 0–1)
 
-  Layer B — LLM Judge (3 targeted yes/no questions, ~60 tokens per call)
-    Q1: Does it clearly adopt the requested role perspective?
-    Q2: Does it cite role-appropriate articles?
-    Q3: Does it avoid arguing against its role?
-    llm_score = yes_count / 3
+  Layer B — LLM Judge (4 targeted yes/no questions per role)
+    Q1–Q4: Role-specific questions (see _JUDGE_PROMPTS below for each role)
+    llm_score = yes_count / 4
 
-  final_score = 0.6 * signal_score + 0.4 * llm_score
+  final_score = 0.3 * signal_score + 0.7 * llm_score
   Pass: mean(final_score) >= 0.85
 
 RUN ON GPU SERVER:
@@ -26,83 +24,264 @@ from pathlib import Path
 from typing import Optional
 from collections import defaultdict
 
+import httpx
 import requests
 from openai import OpenAI
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from project root (eval/ → ai-service/ → PenalLawChatbot/)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+load_dotenv(dotenv_path=_PROJECT_ROOT / ".env", override=False)
 
 ROLES = ["neutral", "defense", "victim"]
 
-# ── Role signals ─────────────────────────────────────────────────────────────
-# Each entry: list of lowercase Vietnamese phrases to search in response text.
-ROLE_SIGNALS = {
+# ═══════════════════════════════════════════════════════════════════════════════
+# DETERMINISTIC ROLE-ADHERENCE SCORING  (4 weighted dimensions, zero API cost)
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# D1 Article alignment   (30 %) — cites the articles expected for the role
+# D2 Sentencing direction (30 %) — argues toward the outcome expected for the role
+# D3 Vocabulary stance    (25 %) — role-specific language density
+# D4 Citation structure   (15 %) — proper legal citation format present
+#
+# Final score = weighted sum, clamped to [0, 1].
+
+# D1 — article sets (lowercase) per role
+_ART_ALIGN = {
+    # Defense cites mitigating/mercy articles; victim cites aggravating; neutral both
+    "defense": {
+        "positive": ["điều 51", "điều 54", "điều 65", "điều 59", "điều 62", "điều 63"],  # mitigating/suspended sentence
+        "negative": ["điều 52"],   # aggravating articles belong to prosecution, not defense
+    },
+    "victim": {
+        "positive": ["điều 52", "điều 48"],   # aggravating circumstances
+        "negative": ["điều 54", "điều 65"],   # suspended sentence / below-min articles
+    },
+    "neutral": {
+        "positive": [],   # neutral is graded on balance, not which side
+        "negative": [],
+    },
+}
+
+# D2 — sentencing direction phrases (lowercase)
+_SENT_DIR = {
+    "defense": {
+        "toward": [  # argues for lighter outcome
+            "án treo", "cải tạo không giam giữ", "dưới mức thấp nhất",
+            "đề nghị giảm", "xin giảm nhẹ", "mức án thấp nhất", "khoan hồng",
+            "không cần thiết giam giữ", "không tái phạm",
+        ],
+        "against": [  # argues for heavier outcome — wrong direction for defense
+            "mức án cao nhất", "phạt tù dài hạn", "không cho hưởng án treo",
+            "tước quyền", "tịch thu",
+        ],
+    },
+    "victim": {
+        "toward": [  # argues for heavier/maximum outcome
+            "mức án cao nhất", "hình phạt nghiêm khắc", "không cho hưởng án treo",
+            "không áp dụng án treo", "tước quyền", "bồi thường thiệt hại",
+            "yêu cầu bồi thường", "đề nghị phạt nặng",
+        ],
+        "against": [  # argues for lighter outcome — wrong direction for victim's lawyer
+            "đề nghị án treo", "xin miễn", "giảm nhẹ hình phạt",
+            "nên áp dụng án treo", "không đáng bị phạt",
+        ],
+    },
+    "neutral": {
+        "toward": [  # balanced judicial language
+            "căn cứ", "nhận định", "xem xét", "cân nhắc", "theo quy định",
+            "hội đồng xét xử", "quy định tại",
+        ],
+        "against": [  # one-sided advocacy — neutral should avoid
+            "kiên quyết đề nghị", "nhất định phải phạt",
+            "bảo vệ bị cáo bằng mọi giá", "phải trả giá",
+        ],
+    },
+}
+
+# D3 — vocabulary stance (role identity language)
+_VOCAB = {
     "defense": {
         "positive": [
-            "giảm nhẹ", "tình tiết giảm nhẹ", "án treo",
-            "cải tạo không giam giữ", "thành khẩn", "ăn năn", "hối cải",
+            "giảm nhẹ", "tình tiết giảm nhẹ", "thành khẩn", "ăn năn", "hối cải",
             "lần đầu phạm tội", "phạm tội lần đầu", "nhân thân tốt",
             "bồi thường", "khắc phục hậu quả", "hoàn cảnh khó khăn",
-            "đề nghị giảm", "xin giảm nhẹ",
-            "điều 51", "điều 54", "điều 65",
+            "bào chữa", "bảo vệ bị cáo", "thân chủ",
         ],
         "negative": [
-            "tình tiết tăng nặng", "tăng nặng trách nhiệm",
-            "mức án cao nhất", "đề nghị mức án cao",
-            "không có khả năng cải tạo", "nguy hiểm cho xã hội",
+            "tăng nặng trách nhiệm", "không có khả năng cải tạo",
+            "nguy hiểm cho xã hội", "cần xử lý nghiêm",
         ],
     },
     "victim": {
         "positive": [
             "tình tiết tăng nặng", "tăng nặng", "hậu quả nghiêm trọng",
-            "bồi thường thiệt hại", "bồi thường dân sự", "thiệt hại",
-            "mức án cao nhất", "hình phạt nghiêm khắc", "đề nghị phạt",
+            "bồi thường thiệt hại", "thiệt hại", "bị hại",
             "tiền án", "tái phạm", "có tổ chức", "dùng hung khí",
-            "điều 52", "điều 48",
+            "bảo vệ quyền lợi bị hại", "đại diện bị hại",
         ],
         "negative": [
             "đề nghị án treo", "xin miễn", "giảm nhẹ hình phạt",
-            "không đáng bị phạt", "nên áp dụng án treo",
-            "cải tạo không giam giữ",
+            "không đáng bị phạt",
         ],
     },
     "neutral": {
         "positive": [
-            "giảm nhẹ", "tăng nặng",          # must mention BOTH sides
+            "giảm nhẹ", "tăng nặng",     # must mention BOTH sides
             "nhận định", "xem xét", "cân nhắc",
-            "theo quy định", "căn cứ",
+            "theo quy định", "căn cứ", "pháp luật quy định",
         ],
         "negative": [
-            # One-sided language — neutral should not exclusively advocate
             "kiên quyết đề nghị", "nhất định phải phạt",
             "bảo vệ bị cáo bằng mọi giá",
         ],
     },
 }
 
-# For neutral role, BOTH "giảm nhẹ" AND "tăng nặng" must appear
-NEUTRAL_BALANCE_TERMS = ["giảm nhẹ", "tăng nặng"]
+# For neutral: both mitigating AND aggravating language must appear
+_NEUTRAL_BALANCE_REQUIRED = ["giảm nhẹ", "tăng nặng"]
 
-# ── LLM judge prompt ──────────────────────────────────────────────────────────
-_JUDGE_PROMPT = """\
-You are evaluating whether an AI legal assistant correctly adopted the requested role.
 
-ROLE REQUESTED: {role_label}
+# ── D4: Citation structure patterns ──────────────────────────────────────────
+import re as _re
+_CITATION_PAT  = _re.compile(r"điều\s*\d+[a-z]?(?:\s*(?:khoản|điểm)\s*[\d\w]+)?", _re.I | _re.U)
+_CONCLUSION_PAT = _re.compile(
+    r"(đề nghị|kiến nghị|kết luận|nhận định|quyết định|xử phạt|tuyên|yêu cầu)",
+    _re.I | _re.U
+)
+
+
+def _d1_article_alignment(text: str, role: str) -> float:
+    """D1: Are the cited articles appropriate for this role? (0–1)"""
+    if role == "neutral":
+        # Neutral is scored on balance — does it cite articles from BOTH sides?
+        has_mitigating = any(a in text for a in ["điều 51", "điều 54", "điều 65"])
+        has_aggravating = any(a in text for a in ["điều 52", "điều 48"])
+        has_primary     = bool(_CITATION_PAT.search(text))  # cites at least one article
+        score = 0.0
+        if has_primary:     score += 0.4
+        if has_mitigating:  score += 0.3
+        if has_aggravating: score += 0.3
+        return min(1.0, score)
+    cfg = _ART_ALIGN[role]
+    pos_hits = sum(1 for a in cfg["positive"] if a in text)
+    neg_hits = sum(1 for a in cfg["negative"] if a in text)
+    req = max(1, len(cfg["positive"]))
+    pos_rate = min(1.0, pos_hits / req) if cfg["positive"] else 0.5
+    penalty  = 0.3 * min(1.0, neg_hits / max(1, len(cfg["negative"])))
+    return max(0.0, pos_rate - penalty)
+
+
+def _d2_sentencing_direction(text: str, role: str) -> float:
+    """D2: Does the response argue toward the correct sentencing direction? (0–1)"""
+    cfg = _SENT_DIR[role]
+    toward_hits = sum(1 for p in cfg["toward"]  if p in text)
+    against_hits = sum(1 for p in cfg["against"] if p in text)
+    req = max(1, int(len(cfg["toward"]) * 0.4))  # need 40% of toward phrases
+    toward_rate  = min(1.0, toward_hits / req)  if cfg["toward"]  else 0.5
+    against_pen  = 0.4 * min(1.0, against_hits / max(1, len(cfg["against"]))) if cfg["against"] else 0.0
+    return max(0.0, toward_rate - against_pen)
+
+
+def _d3_vocabulary_stance(text: str, role: str) -> float:
+    """D3: Role-specific vocabulary density (0–1)"""
+    cfg = _VOCAB[role]
+    pos_hits = [p for p in cfg["positive"] if p in text]
+    neg_hits = [n for n in cfg["negative"]  if n in text]
+    req_pos  = max(1, int(len(cfg["positive"]) * 0.4))  # need 40% positive vocab
+    pos_rate = min(1.0, len(pos_hits) / req_pos) if cfg["positive"] else 1.0
+    neg_rate = min(1.0, len(neg_hits) / max(1, len(cfg["negative"]))) if cfg["negative"] else 0.0
+    bonus = 0.0
+    if role == "neutral":
+        both = all(t in text for t in _NEUTRAL_BALANCE_REQUIRED)
+        bonus = 0.15 if both else -0.15
+    return max(0.0, min(1.0, pos_rate - 0.5 * neg_rate + bonus))
+
+
+def _d4_citation_structure(text: str) -> float:
+    """D4: Is there proper legal citation format AND a conclusion/recommendation? (0–1)"""
+    cit_count  = len(_CITATION_PAT.findall(text))
+    has_concl  = bool(_CONCLUSION_PAT.search(text))
+    cit_score  = min(1.0, cit_count / 3)  # 3+ citations → full score
+    return round(0.6 * cit_score + 0.4 * float(has_concl), 4)
+
+
+def signal_score(response: str, role: str) -> dict:
+    """4-dimension deterministic role-adherence scorer. Zero API cost."""
+    t = response.lower()
+    d1 = _d1_article_alignment(t, role)
+    d2 = _d2_sentencing_direction(t, role)
+    d3 = _d3_vocabulary_stance(t, role)
+    d4 = _d4_citation_structure(t)
+    score = round(0.30 * d1 + 0.30 * d2 + 0.25 * d3 + 0.15 * d4, 4)
+    return {
+        "score":       score,
+        "d1_article":  round(d1, 4),
+        "d2_sentence": round(d2, 4),
+        "d3_vocab":    round(d3, 4),
+        "d4_struct":   round(d4, 4),
+        # legacy fields kept for backward compatibility
+        "pos_hits":    [p for p in _VOCAB[role]["positive"] if p in t],
+        "neg_hits":    [n for n in _VOCAB[role]["negative"]  if n in t],
+        "pos_rate":    round(d3, 4),
+        "neg_rate":    0.0,
+    }
+
+# ── Legacy compatibility alias ────────────────────────────────────────────────
+ROLE_SIGNALS = _VOCAB   # kept so any external import still resolves
+NEUTRAL_BALANCE_TERMS = _NEUTRAL_BALANCE_REQUIRED
+
+# ── LLM judge prompts (role-specific, 4 yes/no questions each) ──────────────────────
+# 4 questions → LLM score ∈ {0.00, 0.25, 0.50, 0.75, 1.00}
+# Combined formula: 0.3 × signal + 0.7 × llm_yes_rate
+
+_JUDGE_PROMPTS = {
+    "neutral": """\
+You are evaluating whether an AI legal assistant correctly adopted the NEUTRAL JUDGE role.
+
 CASE SUMMARY: {question}
 AI RESPONSE: {response}
 
-Answer ONLY these 3 questions with yes or no:
-Q1: Does the response clearly advocate from the {role_label} perspective \
-(not just mention the role but actually argue from that viewpoint)?
-Q2: Does the response cite articles appropriate for the {role_label} role \
-(e.g., mitigating articles Điều 51/65 for defense; aggravating Điều 52 for victim; \
-both sides for neutral judge)?
-Q3: Does the response avoid arguing against its own role \
-(defense not arguing harshly against defendant; victim not arguing for reduced sentence)?
+Answer ONLY these 4 questions with yes or no:
+Q1: Does the response cite legally relevant articles appropriate for this case?
+Q2: Is the response balanced, without clearly advocating for either prosecution or defense?
+Q3: Does it provide clear legal reasoning that links case facts to applicable articles?
+Q4: Does it address sentencing with a legally grounded basis (not just a vague recommendation)?
 
 Return ONLY this JSON with no other text:
-{{"q1": "yes", "q2": "yes", "q3": "yes"}}
-"""
+{{"q1": "yes", "q2": "yes", "q3": "yes", "q4": "yes"}}
+""",
+    "defense": """\
+You are evaluating whether an AI legal assistant correctly adopted the DEFENSE LAWYER role.
+
+CASE SUMMARY: {question}
+AI RESPONSE: {response}
+
+Answer ONLY these 4 questions with yes or no:
+Q1: Does the response argue from the defendant's perspective throughout (not neutral or prosecution)?
+Q2: Does it identify mitigating circumstances or cite mitigating articles (Điều 51, 54, or 65)?
+Q3: Does it argue for the lightest possible sentence (reduced penalty, suspended sentence, or below-minimum)?
+Q4: Does it avoid citing aggravating factors or evidence that would harm the defendant's case?
+
+Return ONLY this JSON with no other text:
+{{"q1": "yes", "q2": "yes", "q3": "yes", "q4": "yes"}}
+""",
+    "victim": """\
+You are evaluating whether an AI legal assistant correctly adopted the VICTIM'S LAWYER role.
+
+CASE SUMMARY: {question}
+AI RESPONSE: {response}
+
+Answer ONLY these 4 questions with yes or no:
+Q1: Does the response advocate strongly for the victim's interests throughout?
+Q2: Does it identify aggravating circumstances or cite aggravating articles (Điều 52)?
+Q3: Does it argue for the harshest applicable sentence against the defendant?
+Q4: Does it address civil compensation (bồi thường thiệt hại) for the victim?
+
+Return ONLY this JSON with no other text:
+{{"q1": "yes", "q2": "yes", "q3": "yes", "q4": "yes"}}
+""",
+}
 
 ROLE_LABELS = {
     "neutral": "Thẩm phán trung lập (neutral judge)",
@@ -112,12 +291,25 @@ ROLE_LABELS = {
 
 
 # ── Logging ───────────────────────────────────────────────────────────────────
+from tqdm import tqdm
+
+class TqdmLoggingHandler(logging.Handler):
+    def __init__(self, level=logging.NOTSET):
+        super().__init__(level)
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            tqdm.write(msg)
+            self.flush()
+        except Exception:
+            self.handleError(record)
+
 def setup_logging(log_file: Optional[str]) -> logging.Logger:
     log = logging.getLogger("role_adherence")
     log.setLevel(logging.DEBUG)
     fmt = logging.Formatter("%(asctime)s  %(levelname)-8s  %(message)s",
                             datefmt="%Y-%m-%d %H:%M:%S")
-    ch = logging.StreamHandler(sys.stdout)
+    ch = TqdmLoggingHandler()
     ch.setFormatter(fmt)
     log.addHandler(ch)
     if log_file:
@@ -129,32 +321,21 @@ def setup_logging(log_file: Optional[str]) -> logging.Logger:
 
 
 # ── Dataset loader ────────────────────────────────────────────────────────────
-def load_cases(test_path: str, full_path: str) -> list:
-    with open(test_path, encoding="utf-8") as f:
-        test_data = json.load(f)
-    with open(full_path, encoding="utf-8") as f:
-        full_data = json.load(f)
-
-    full_by_url: dict = defaultdict(list)
-    for e in full_data:
-        full_by_url[e["link_to_case"]].append(e)
-
-    seen: dict = {}
-    test_by_url: dict = defaultdict(list)
-    for e in test_data:
-        url = e["link_to_case"]
-        test_by_url[url].append(e)
-        if url not in seen:
-            seen[url] = len(seen)
-
+def load_cases(dataset_path: str, _unused: str = "") -> list:
+    """Load from case_eval_dataset.json."""
+    with open(dataset_path, encoding="utf-8") as f:
+        data = json.load(f)
     cases = []
-    for url, _ in sorted(seen.items(), key=lambda x: x[1]):
-        te = test_by_url[url]
-        fe = full_by_url.get(url, te)
+    for entry in data:
         cases.append({
-            "case_url": url,
-            "question": max(te, key=lambda e: len(e["question"]))["question"],
-            "ground_truth_articles": [e["expected_article"] for e in fe],
+            "case_url":          entry.get("url", ""),
+            "crime_type":        entry.get("crime_type", ""),
+            "case_description":  entry.get("case_description", ""),
+            # backward-compat alias — signal scoring uses case["question"]
+            "question":          entry.get("case_description", ""),
+            "explanation":       entry.get("explanation", ""),
+            "final_verdict":     entry.get("final_verdict", ""),
+            "ground_truth_articles": [],
         })
     return cases
 
@@ -176,56 +357,61 @@ def call_predict(ai_url: str, question: str, role: str,
         return ""
 
 
-# ── Layer A: Signal scoring ───────────────────────────────────────────────────
-def signal_score(response: str, role: str) -> dict:
-    t = response.lower()
-    sigs = ROLE_SIGNALS[role]
-    pos_hits = [p for p in sigs["positive"] if p in t]
-    neg_hits = [n for n in sigs["negative"] if n in t]
 
-    pos_rate = len(pos_hits) / len(sigs["positive"]) if sigs["positive"] else 1.0
-    neg_rate = len(neg_hits) / len(sigs["negative"]) if sigs["negative"] else 0.0
-
-    # Extra check for neutral: must mention BOTH sides
-    balance_bonus = 0.0
-    if role == "neutral":
-        both_present = all(term in t for term in NEUTRAL_BALANCE_TERMS)
-        balance_bonus = 0.2 if both_present else -0.2
-
-    score = max(0.0, min(1.0, pos_rate - 0.5 * neg_rate + balance_bonus))
-    return {
-        "score":    round(score, 4),
-        "pos_hits": pos_hits,
-        "neg_hits": neg_hits,
-        "pos_rate": round(pos_rate, 4),
-        "neg_rate": round(neg_rate, 4),
-    }
-
-
-# ── Layer B: LLM judge ────────────────────────────────────────────────────────
+# ── Layer B: LLM judge ──────────────────────────────────────────────────────────────────
 def llm_score(client: OpenAI, model: str, question: str,
               response: str, role: str, log: logging.Logger) -> dict:
-    prompt = _JUDGE_PROMPT.format(
-        role_label=ROLE_LABELS[role],
+    """
+    4 role-specific yes/no questions → score ∈ {0.00, 0.25, 0.50, 0.75, 1.00}.
+    Each role has different questions targeting its specific failure modes.
+    """
+    prompt = _JUDGE_PROMPTS[role].format(
         question=question[:800],
         response=response[:1500],
     )
+    _timeout = httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=5.0)
     for attempt in range(3):
         try:
-            r = client.chat.completions.create(
+            r = client.with_options(timeout=_timeout).chat.completions.create(
                 model=model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0,
-                max_tokens=80,
+                messages=[
+                    {"role": "system", "content":
+                     "You are a strict JSON classifier. Output ONLY the raw JSON object, "
+                     "no explanation, no markdown fences, no prose."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.0,
+                max_tokens=512,   # Role adherence is 4 yes/no answers — 512 is more than enough
+                extra_body={"thinking": {"type": "disabled"}},  # disable extended thinking
             )
-            raw = r.choices[0].message.content.strip()
-            raw = re.sub(r"```(?:json)?\s*", "", raw).strip()
-            data = json.loads(raw)
-            answers = [data.get(f"q{i}", "no").lower().strip() for i in range(1, 4)]
-            yes_count = sum(1 for a in answers if a == "yes")
+            raw = (r.choices[0].message.content or "").strip()
+            if not raw:
+                raise ValueError(f"Model returned empty content. Finish reason: {r.choices[0].finish_reason}")
+
+            # ── Step 1: strip markdown fences (opening AND closing) ──────────
+            clean = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+
+            # ── Step 2: extract first {...} block (handles extra prose) ──────
+            brace_m = re.search(r"\{[^}]+\}", clean, re.DOTALL)
+            if brace_m:
+                clean = brace_m.group(0)
+
+            try:
+                data = json.loads(clean)
+            except json.JSONDecodeError as jde:
+                log.debug(f"    JSON decode failed: {jde}. Raw text was: {repr(raw[:120])}")
+                # Fallback: regex-parse any q1–q4 key-value pairs from the raw text
+                data = {}
+                for m in re.finditer(r'"(q[1-4])"\s*:\s*"(yes|no)"', raw, re.I):
+                    data[m.group(1).lower()] = m.group(2).lower()
+                if not data:
+                    raise ValueError("Could not extract any yes/no answers via regex.")
+
+            answers = {f"q{i}": data.get(f"q{i}", "no").lower().strip() for i in range(1, 5)}
+            yes_count = sum(1 for a in answers.values() if a == "yes")
             return {
-                "score":   round(yes_count / 3, 4),
-                "answers": {"q1": answers[0], "q2": answers[1], "q3": answers[2]},
+                "score":   round(yes_count / 4, 4),
+                "answers": answers,
             }
         except Exception as e:
             log.warning(f"    LLM judge attempt {attempt+1} failed: {e}")
@@ -233,12 +419,12 @@ def llm_score(client: OpenAI, model: str, question: str,
     return {"score": None, "answers": {}, "note": "failed_after_retries"}
 
 
-# ── Combined score ────────────────────────────────────────────────────────────
-def combined_score(sig: float, llm: Optional[float],
-                   w_sig: float = 0.6, w_llm: float = 0.4) -> float:
-    if llm is None:
-        return sig  # fallback to signal only
-    return round(w_sig * sig + w_llm * llm, 4)
+# ── Layer C: Final combine ────────────────────────────────────────────────────
+def combined_score(sig_val: float, llm_val: float | None, w_sig: float = 0.3, w_llm: float = 0.7) -> float:
+    """Combine signal (Layer A) and LLM (Layer B) scores. Default: 0.3 signal + 0.7 LLM."""
+    if llm_val is None:
+        return round(sig_val, 4)
+    return round(w_sig * sig_val + w_llm * llm_val, 4)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -246,10 +432,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="Role Adherence evaluation for VNPLaw AI service."
     )
-    parser.add_argument("--test-dataset",
-                        default="ai-service/scraped_datasets/toaan_gov_test_datasets.json")
-    parser.add_argument("--full-dataset",
-                        default="ai-service/scraped_datasets/toaan_gov_datasets.json")
+    parser.add_argument("--dataset",
+                        default="ai-service/evaluation/thesis_eval_unique.json",
+                        help="Path to case_eval_dataset.json")
     parser.add_argument("--output",
                         default="ai-service/evaluation/results/role_adherence_results.jsonl")
     parser.add_argument("--summary",
@@ -257,7 +442,7 @@ def main():
     parser.add_argument("--ai-url",
                         default=os.getenv("AI_SERVICE_URL", "http://localhost:8000"))
     parser.add_argument("--model",
-                        default=os.getenv("LLM_MODEL", "google/gemini-2.5-flash"))
+                        default=os.getenv("LLM_JUDGE_MODEL", "google/gemini-2.5-pro"))
     parser.add_argument("--timeout",  type=int, default=120)
     parser.add_argument("--start",    type=int, default=1,
                         help="First case (1-indexed, inclusive)")
@@ -279,7 +464,7 @@ def main():
     log.info(f"  Pass goal  : mean score >= 0.85")
     log.info("=" * 70)
 
-    cases = load_cases(args.test_dataset, args.full_dataset)
+    cases = load_cases(args.dataset)
     log.info(f"Total unique cases loaded: {len(cases)}")
 
     s_idx = max(0, args.start - 1)
@@ -299,8 +484,13 @@ def main():
                     pass
         log.info(f"Resume: {len(done_urls)} cases already done.")
 
-    oai = OpenAI(api_key=os.getenv("OPENROUTER_API_KEY") or "missing",
-                 base_url="https://openrouter.ai/api/v1")
+    or_headers = {
+        "HTTP-Referer": "http://localhost:8000",
+        "X-Title": "VNPLaw Eval"
+    }
+    oai = OpenAI(api_key=os.getenv("OPENROUTER_LLM_JUDGE_KEY") or os.getenv("OPENROUTER_API_KEY") or "missing",
+                 base_url="https://openrouter.ai/api/v1",
+                 default_headers=or_headers)
 
     # Per-role accumulators
     all_scores: dict = {r: [] for r in ROLES}
@@ -309,7 +499,7 @@ def main():
     processed = 0
 
     with open(out_path, "a", encoding="utf-8") as out_f:
-        for i, case in enumerate(cases):
+        for i, case in enumerate(tqdm(cases, desc="Evaluating", unit="case")):
             url  = case["case_url"]
             cidx = s_idx + i + 1
             if url in done_urls:
@@ -325,7 +515,7 @@ def main():
             case_combined = []
 
             for role in ROLES:
-                response = call_predict(args.ai_url, case["question"],
+                response = call_predict(args.ai_url, case["case_description"],
                                         role, args.timeout, log)
                 if not response:
                     log.debug(f"  [{role}] empty response — skipping role")
@@ -382,11 +572,11 @@ def main():
             "n_cases":    processed,
             "case_range": f"{args.start}–{'END' if not args.end else args.end}",
             "llm_used":   not args.skip_llm,
-            "weights":    {"layer_a_signal": 0.6, "layer_b_llm": 0.4},
+            "weights":    {"layer_a_signal": 0.3, "layer_b_llm": 0.7},
             "scoring": {
                 "layer_a": "signal_rate - 0.5*negative_rate (+ balance bonus for neutral)",
-                "layer_b": "yes_count/3 across 3 targeted yes/no questions",
-                "final":   "0.6 * layer_a + 0.4 * layer_b",
+                "layer_b": "yes_count/4 across 4 role-specific yes/no questions",
+                "final":   "0.3 * layer_a + 0.7 * layer_b",
             },
         },
         "overall": {

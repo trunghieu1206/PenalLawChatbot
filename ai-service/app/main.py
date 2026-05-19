@@ -689,6 +689,17 @@ def cleanup_response(text: str) -> str:
 # ===========================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import logging
+
+    # Suppress the harmless "Invalid HTTP request received" noise emitted by
+    # uvicorn/httptools when stale keep-alive TCP sockets, TLS probes, or
+    # connection-pool cleanup frames arrive on the plain-HTTP port.
+    # Applied here (not just __main__) so it works with `python -m uvicorn` too.
+    class _SuppressInvalidHTTP(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            return "Invalid HTTP request received" not in record.getMessage()
+    logging.getLogger("uvicorn.error").addFilter(_SuppressInvalidHTTP())
+
     print("🚀 SERVER STARTUP: Initializing...")
 
     # Authenticate HuggingFace
@@ -751,7 +762,8 @@ async def lifespan(app: FastAPI):
             for r in results:
                 ch  = r['entity'].get('chapter', '?')
                 art = r['entity'].get('article_number', '?')
-                print(f"    ID={r['id']}  score={r['distance']:.4f}  | Chương: {ch}  Điều: {art}")
+                src = r['entity'].get('source', '?')
+                print(f"    ID={r['id']}  score={r['distance']:.4f}  | Chương: {ch}  Điều: {art}  [{src}]")
             # -------------------------
             docs = []
             for r in results:
@@ -1070,11 +1082,13 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
                     continue
                 key = (art_no, edition)
                 if key in seen_ids:
+                    # Same article+edition already retrieved semantically — skip
+                    print(f"  [PINNED] Điều {art_no} ({purpose}) from {edition!r} — already in results")
                     continue
                 try:
                     hits = milvus_client.query(
                         collection_name=COLLECTION_NAME,
-                        filter=f'article_number == "{art_no}" AND source == "{edition}"',
+                        filter=f'article_number == "{art_no}" and source == "{edition}"',
                         output_fields=_OUTPUT_FIELDS,
                         limit=1,
                     )
@@ -1129,9 +1143,20 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
         newer  = []
         always = []
 
+        all_known_editions = {e[0] for e in _EDITION_RANGES}
+        relevant_editions = set(crime_editions)
+        if trial_edition:
+            relevant_editions.add(trial_edition)
+
         for d in docs:
             art_no     = str(d.metadata.get("article_number", ""))
             src        = d.metadata.get("source", "")
+            
+            # BUG FIX: Discard documents from BLHS editions that are completely irrelevant
+            # to the case's temporal context (e.g. dropping BLHS 1999 if case is in 2022).
+            if src in all_known_editions and src not in relevant_editions:
+                continue
+
             always_keep = _ALWAYS_KEEP_BY_EDITION.get(src, set())
 
             if art_no in always_keep:
@@ -1144,7 +1169,7 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
                     if di.get("crime_edition") == src
                 ] or ["all"]
                 tagged.append(d)
-            elif needs_comparison:
+            elif needs_comparison and src == trial_edition:
                 d.metadata["_temporal_role"] = "comparison"
                 newer.append(d)
 
@@ -1167,13 +1192,25 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
             else (state.get("full_case_content") or state["question"])
         )
 
-        pinned_docs   = [d for d in docs if d.metadata.get("_pinned")]
-        semantic_docs = [d for d in docs if not d.metadata.get("_pinned")]
+        # Separate into 3 buckets:
+        #   pinned    = explicitly fetched by pinned step (_pinned=True)
+        #   always    = adjustment-role docs (Điều 51/52/55/7 etc) — semantically
+        #               retrieved but should always survive like pinned
+        #   semantic  = normal semantic docs → scored by cross-encoder
+        pinned_docs    = [d for d in docs if d.metadata.get("_pinned")]
+        adjustment_docs = [
+            d for d in docs
+            if not d.metadata.get("_pinned")
+            and d.metadata.get("_temporal_role") == "adjustment"
+        ]
+        semantic_docs  = [
+            d for d in docs
+            if not d.metadata.get("_pinned")
+            and d.metadata.get("_temporal_role") != "adjustment"
+        ]
 
         if semantic_docs:
-            # Direct AutoModel reranker — no wrapper dependency.
-            # Returns raw logits; higher = more relevant.
-            _q = query[:512]  # cap query to ~130 tokens, leave room for full doc
+            _q = query[:512]
             pairs  = [(_q, d.page_content) for d in semantic_docs]
             scores = _rerank_scores(pairs)
             ranked_semantic = sorted(zip(scores, semantic_docs), key=lambda x: x[0], reverse=True)
@@ -1182,19 +1219,25 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
             ranked_semantic = []
             top_semantic    = []
 
-        top_docs = top_semantic + pinned_docs
+        # Merge: semantic (cross-encoder top-K) + adjustment (always-keep) + pinned
+        top_docs = top_semantic + adjustment_docs + pinned_docs
 
         if not top_docs:
             return {"documents": [], "is_relevant": False}
 
         print(f"  [RERANK] query[:80]: {query[:80]!r}")
         print(f"  [RERANK] {len(docs)} → {len(top_docs)} docs "
-              f"(semantic_kept={len(top_semantic)}/{len(semantic_docs)}, pinned={len(pinned_docs)})")
+              f"(semantic_kept={len(top_semantic)}/{len(semantic_docs)}, "
+              f"adjustment_kept={len(adjustment_docs)}, pinned={len(pinned_docs)})")
         for score, doc in ranked_semantic[:_MAX_SEMANTIC_DOCS]:
             art  = doc.metadata.get("article_number", "?")
             src  = doc.metadata.get("source", "?")
             role = doc.metadata.get("_temporal_role", "?")
             print(f"    [sem] score={score:.4f}  Điều {art} | {src} | {role}")
+        for doc in adjustment_docs:
+            art = doc.metadata.get("article_number", "?")
+            src = doc.metadata.get("source", "?")
+            print(f"    [adj] Điều {art} | {src} | always-keep")
         for doc in pinned_docs:
             art     = doc.metadata.get("article_number", "?")
             src     = doc.metadata.get("source", "?")
@@ -1234,6 +1277,10 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
 
         system_prompt = """Bạn là chuyên gia luật hình sự Việt Nam.
 Ánh xạ từng hành vi phạm tội vào điều khoản cụ thể, áp dụng ĐÚNG nguyên tắc hiệu lực của luật.
+
+❌ NGHIÊM CẤM: Chỉ được trích dẫn điều khoản thuộc BỘ LUẬT HÌNH SỰ (BLHS).
+KHÔNG được áp dụng bất kỳ điều nào của Bộ luật Tố tụng hình sự (BLTTHS), Bộ luật Dân sự,
+Bộ luật Lao động, hôn nhân gia đình, hay bất kỳ bộ luật, nghị định, thông tư nào khác.
 
 NGUYÊN TẮC THỜI HIỆU (Điều 7 BLHS) — BẮT BUỘC ÁP DỤNG:
 1. QUY TẮC CƠ BẢN: Áp dụng luật có hiệu lực tại THỜI ĐIỂM PHẠM TỘI (tài liệu có role=primary).
@@ -1412,6 +1459,7 @@ Nhiệm vụ: Đọc kỹ hồ sơ vụ án và SOẠN LUẬN ĐIỂM BÀO CHỮ
 ----------------
 
 LƯU Ý KHI BÀO CHỮA:
+0. **CHỈ trích dẫn điều khoản thuộc Bộ luật Hình sự (BLHS).** KHÔNG được nhắc đến bất kỳ điều nào của Bộ luật Tố tụng hình sự (BLTTHS), Bộ luật Dân sự, hay bộ luật khác.
 1. Ưu tiên tìm tình tiết giảm nhẹ (Điều 51 Bộ luật Hình sự): thành khẩn, bồi thường, nhân thân tốt, phạm tội lần đầu.
 2. Phân tích xem có thể đề nghị án treo không (án ≤ 3 năm + không tái phạm + có nơi cư trú ổn định).
 3. Nếu có nhiều tội, đề xuất tách riêng hoặc giảm nhẹ từng tội.
@@ -1463,6 +1511,7 @@ Nhiệm vụ: Đọc kỹ hồ sơ vụ án và SOẠN LUẬN ĐIỂM BẢO VỆ
 ----------------
 
 LƯU Ý KHI BẢO VỆ BỊ HẠI:
+0. **CHỈ trích dẫn điều khoản thuộc Bộ luật Hình sự (BLHS).** KHÔNG được nhắc đến bất kỳ điều nào của Bộ luật Tố tụng hình sự (BLTTHS), Bộ luật Dân sự, hay bộ luật khác.
 1. Tập trung làm rõ tình tiết tăng nặng (Điều 52 Bộ luật Hình sự): có tổ chức, tái phạm, hậu quả nghiêm trọng.
 2. Phân tích mức độ thiệt hại để yêu cầu bồi thường dân sự tối đa.
 3. Phản bác các tình tiết giảm nhẹ mà bị cáo có thể viện dẫn.
@@ -1514,6 +1563,7 @@ Nhiệm vụ: Dựa trên dữ liệu vụ án (coi là sự thật duy nhất) 
 ----------------
 
 MỘT VÀI LƯU Ý:
+0. **CHỈ trích dẫn điều khoản thuộc Bộ luật Hình sự (BLHS).** KHÔNG được nhắc đến bất kỳ điều nào của Bộ luật Tố tụng hình sự (BLTTHS), Bộ luật Dân sự, hay bộ luật khác.
 1. Đối với tội liên quan tới sử dụng ma túy:
    - Phân biệt "tàng trữ" (Điều 249) và "tổ chức sử dụng" (Điều 255).
    - Kiểm tra nhân thân nạn nhân với Khoản 2 Điều 255.
@@ -1707,19 +1757,29 @@ TIÊU CHÍ (100 điểm):
 
         if is_greeting:
             reply = (
-                "Xin chào! Tôi là **Trợ lý Pháp luật Hình sự AI**.\n\n"
-                "Tôi có thể giúp bạn:\n"
-                "- **Phân tích vụ án hình sự** — định tội danh, lượng hình\n"
-                "- **Nhận định của tòa án** hoặc lập luận theo vai trò **bào chữa / bị hại**\n"
-                "- **Trích dẫn Bộ luật Hình sự** điều khoản liên quan\n"
-                "- **Giải thích chi tiết** bất kỳ điểm nào trong phân tích\n\n"
-                "Hãy dán nội dung hồ sơ vụ án hoặc đặt câu hỏi pháp lý để bắt đầu!"
+                "Xin chào! Tôi là **Trợ lý Pháp luật Hình sự VNPLaw**\n\n"
+                "Tôi được xây dựng chuyên biệt để hỗ trợ **phân tích và tra cứu pháp luật hình sự Việt Nam**. "
+                "Dưới đây là những gì tôi có thể làm cho bạn:\n\n"
+                " **Phân tích vụ án hình sự**\n"
+                "   Định tội danh, xác định khung hình phạt, lượng hình cụ thể theo Bộ luật Hình sự\n\n"
+                " **Phân tích đa chiều theo vai trò**\n"
+                "   • *Thẩm phán* — nhận định trung lập, khách quan\n"
+                "   • *Luật sư bào chữa* — lập luận giảm nhẹ, bảo vệ bị cáo\n"
+                "   • *Luật sư bị hại* — yêu cầu xử nghiêm, bồi thường tối đa\n\n"
+                " **Tra cứu & giải thích điều luật**\n"
+                "   Trích dẫn chính xác điều khoản BLHS 2015 (sửa đổi 2017/2025), giải thích tình tiết tăng nặng/giảm nhẹ\n\n"
+                "---\n"
+                "💡 **Cách dùng:** Dán toàn bộ nội dung hồ sơ vụ án và tôi sẽ bắt đầu phân tích.\n"
+                "*Ví dụ: \"Ngày 15/3/2023, Nguyễn Văn A dùng dao đe dọa lấy tài sản của bị hại...\"*"
             )
         else:
             reply = (
-                "Xin lỗi, tôi chỉ có thể hỗ trợ các vấn đề liên quan đến **pháp luật hình sự Việt Nam**.\n\n"
-                "Nếu bạn có hồ sơ vụ án hoặc câu hỏi về tội danh, khung hình phạt, "
-                "hay tình tiết tăng nặng/giảm nhẹ, hãy cho tôi biết nhé!"
+                "Xin lỗi, lĩnh vực này nằm ngoài phạm vi hỗ trợ của tôi. 🙏\n\n"
+                "Tôi chuyên về **pháp luật hình sự Việt Nam** — nếu bạn có:\n"
+                "- Hồ sơ vụ án cần phân tích tội danh và hình phạt\n"
+                "- Câu hỏi về điều khoản BLHS, tình tiết tăng nặng/giảm nhẹ\n"
+                "- Cần lập luận theo góc độ thẩm phán, luật sư bào chữa hoặc luật sư bị hại\n\n"
+                "Hãy chia sẻ và tôi sẽ hỗ trợ ngay! ⚖️"
             )
 
         return {"messages": [AIMessage(content=reply)]}
@@ -2022,5 +2082,15 @@ OUTPUT: CHỈ JSON."""
 
 
 if __name__ == "__main__":
-    import uvicorn
+    import uvicorn, logging
+
+    # Suppress the harmless "Invalid HTTP request received" warning that uvicorn/httptools
+    # emits when stale keep-alive connections, TLS probes, or malformed TCP frames arrive.
+    # These are NOT application bugs — they are noise from connection pool cleanup.
+    class _SuppressInvalidHTTP(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            return "Invalid HTTP request received" not in record.getMessage()
+
+    logging.getLogger("uvicorn.error").addFilter(_SuppressInvalidHTTP())
+
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)

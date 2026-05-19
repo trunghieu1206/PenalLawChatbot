@@ -22,6 +22,9 @@
 # =============================================================
 set -euo pipefail
 
+# Bypass PEP 668 on Ubuntu 24.04 for global pip installs
+export PIP_BREAK_SYSTEM_PACKAGES=1
+
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 info()  { echo -e "${GREEN}[INFO]${NC}  $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
@@ -159,7 +162,7 @@ POSTGRES_PASSWORD=postgres
 ENVEOF
     fi
     warn ">>> Edit .env — fill in OPENROUTER_API_KEY and HF_TOKEN <<<"
-    warn "    nano /root/PenalLawChatbot/.env"
+    warn "    sudo nano $PROJECT_DIR/.env"
     echo ""
     read -rp "Press ENTER after editing .env..." _
 fi
@@ -209,11 +212,25 @@ su -c "cd /tmp && psql -c \"ALTER USER $DB_USER WITH PASSWORD '$DB_PASS';\"" pos
 su -c "cd /tmp && createdb $DB_NAME" postgres 2>/dev/null || true   # silently fails if exists
 info "Database '$DB_NAME' ready."
 
-# Auto-restore backup if DB is empty
+# Auto-restore backup if DB is empty OR if laws table has no data.
+# BUG-FIX: The old guard (TABLE_COUNT > 0 → skip) was too naive.
+# Hibernate ddl-auto=update creates empty tables on first boot BEFORE this
+# restore check runs. This caused the restore to be skipped even though laws
+# had 0 rows. We now check the laws row count directly.
 BACKUP_DIR="$PROJECT_DIR/database/backups"
 TABLE_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM information_schema.tables WHERE table_schema='public';\"" postgres 2>/dev/null || echo "0")
+LAWS_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM laws;\"" postgres 2>/dev/null || echo "0")
 
-if [ "${TABLE_COUNT:-0}" -eq 0 ] && [ -d "$BACKUP_DIR" ]; then
+if [ "${LAWS_COUNT:-0}" -gt 0 ]; then
+    skip "DB already populated — laws: ${LAWS_COUNT:-0} articles in $TABLE_COUNT tables — skipping restore."
+elif [ -d "$BACKUP_DIR" ]; then
+    # Laws is empty (0 rows) — restore regardless of whether tables exist.
+    if [ "${TABLE_COUNT:-0}" -gt 0 ]; then
+        info "DB has $TABLE_COUNT tables but laws is empty — forcing restore (Hibernate may have created empty tables)."
+    else
+        info "DB is empty — restoring from backup..."
+    fi
+
     if [ -f "$BACKUP_DIR/penallaw_combined_backup.sql" ]; then
         LATEST_BACKUP="$BACKUP_DIR/penallaw_combined_backup.sql"
     else
@@ -221,7 +238,7 @@ if [ "${TABLE_COUNT:-0}" -eq 0 ] && [ -d "$BACKUP_DIR" ]; then
     fi
 
     if [ -n "$LATEST_BACKUP" ] && [ -f "$LATEST_BACKUP" ]; then
-        info "DB is empty — restoring from: $(basename "$LATEST_BACKUP")..."
+        info "Restoring from: $(basename "$LATEST_BACKUP")..."
         su -c "cd /tmp && dropdb --if-exists $DB_NAME" postgres 2>/dev/null || true
         su -c "cd /tmp && createdb $DB_NAME" postgres 2>/dev/null || true
         TEMP_BACKUP="/tmp/penallaw_restore_$$.sql"
@@ -237,9 +254,6 @@ if [ "${TABLE_COUNT:-0}" -eq 0 ] && [ -d "$BACKUP_DIR" ]; then
     else
         info "No backup found — starting with empty database (Spring Boot will auto-create tables)."
     fi
-elif [ "${TABLE_COUNT:-0}" -gt 0 ]; then
-    LAWS_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM laws;\"" postgres 2>/dev/null || echo "0")
-    skip "DB already has $TABLE_COUNT tables (laws: ${LAWS_COUNT:-0}) — skipping restore."
 fi
 
 # Idempotent schema migration for sentencing_data column
@@ -281,12 +295,18 @@ if command -v nvidia-smi &>/dev/null; then
     _TORCH_CU=$("$AI_PYTHON" -c "import torch; v=torch.__version__; print(v.split('+')[1] if '+' in v else 'cpu')" 2>/dev/null || echo "cpu")
     info "  Driver CUDA cap: ${_DRIVER_CUDA}.x  |  torch cu-tag: $_TORCH_CU"
 
-    # Select the highest compatible cu tag for this driver.
-    # Use the driver *major version number* (e.g. 525, 550, 535) directly.
+    # Map driver version to the HIGHEST compatible PyTorch cu-tag.
+    # PyTorch cu-tag compatibility:
+    #   cu124 → CUDA 12.4 → requires driver >= R550 (550.x)
+    #   cu121 → CUDA 12.1 → requires driver >= R525 (525.x)  ← RTX 2080 R525 goes here
+    #   cu118 → CUDA 11.8 → requires driver >= R520 (520.x)
+    # Rule: pick the HIGHEST cu-tag that the driver can support.
+    # torch 2.5.x does NOT have a cu118 wheel — min is cu121 for torch>=2.4.
     _DRV_MAJOR=$(nvidia-smi 2>/dev/null | grep -oP 'Driver Version: \K[0-9]+' | head -1 || echo "0")
     if   [ "$_DRV_MAJOR" -ge 550 ]; then _NEED_CU="cu124"   # CUDA 12.4+ (RTX 40xx, A100 new)
-    elif [ "$_DRV_MAJOR" -ge 530 ]; then _NEED_CU="cu121"   # CUDA 12.1
-    else                                  _NEED_CU="cu118"; fi # CUDA 11.8 — works from R520
+    elif [ "$_DRV_MAJOR" -ge 525 ]; then _NEED_CU="cu121"   # CUDA 12.1 — RTX 2080/3080 with R525+
+    elif [ "$_DRV_MAJOR" -ge 520 ]; then _NEED_CU="cu118"   # CUDA 11.8 — older R520 drivers
+    else                                  _NEED_CU="cu118"; fi # last resort
     info "  Driver major: R${_DRV_MAJOR} → selecting $_NEED_CU"
 
     if [ "$_TORCH_CU" != "$_NEED_CU" ] && [ "$_TORCH_CU" != "cpu" ]; then
@@ -298,10 +318,16 @@ if command -v nvidia-smi &>/dev/null; then
             python3 -c "p='$1'.split('.')[:2]; print(f'0.{int(p[0])*10+int(p[1])-5}.0')" 2>/dev/null || echo "0.20.0"
         }
 
-        # Try the exact torch version first; if that fails (e.g. 2.5.x has no cu118 wheel),
-        # fall back to 2.4.1+cu118 which is the last cu118-compatible release.
+        # Try the exact torch version first.
+        # Fallback order: same base with target cu-tag, then 2.5.1, then 2.4.1.
+        # Note: torch 2.5.x has cu121 and cu124 wheels but NOT cu118.
+        #       torch 2.4.x has cu118, cu121, cu124 wheels.
         _REINSTALL_OK=false
-        for _TBASE in "$_TORCH_BASE" "2.4.1"; do
+        _fallback_bases=("$_TORCH_BASE")
+        [ "$_TORCH_BASE" != "2.5.1" ] && _fallback_bases+=("2.5.1")
+        [ "$_NEED_CU" = "cu118" ]     && _fallback_bases+=("2.4.1")  # 2.5.x has no cu118
+
+        for _TBASE in "${_fallback_bases[@]}"; do
             _TVBASE=$(_calc_tv "$_TBASE")
             info "  Trying torch==${_TBASE}+${_NEED_CU} torchvision==${_TVBASE}+${_NEED_CU}..."
             if "$AI_PYTHON" -m pip install \
@@ -315,7 +341,9 @@ if command -v nvidia-smi &>/dev/null; then
             fi
             warn "  torch ${_TBASE}+${_NEED_CU} unavailable — trying fallback..."
         done
-        [ "$_REINSTALL_OK" = false ] && warn "  torch cu-tag reinstall failed — CUDA may not work (will run on CPU)."
+        if [ "$_REINSTALL_OK" = false ]; then
+            warn "  torch cu-tag reinstall failed — will try to fix device nodes and test CUDA."
+        fi
         TORCH_VER=$("$AI_PYTHON" -c "import torch; print(torch.__version__)" 2>/dev/null)
         info "  torch after fix: $TORCH_VER"
     fi
@@ -329,39 +357,66 @@ if command -v nvidia-smi &>/dev/null; then
     if [ ! -e /dev/nvidia-uvm ]; then
         info "  /dev/nvidia-uvm missing — attempting fix..."
 
-        # Strategy 1: modprobe (works on bare metal, fails in containers)
-        if modprobe nvidia-uvm 2>/dev/null; then
+        # Strategy 1: nvidia-modprobe (the official tool — creates /dev/nvidia* nodes).
+        # Install it first if missing (it's in the nvidia driver package).
+        if ! command -v nvidia-modprobe &>/dev/null; then
+            info "  Installing nvidia-modprobe..."
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                nvidia-modprobe 2>/dev/null || true
+        fi
+        if command -v nvidia-modprobe &>/dev/null && nvidia-modprobe -u -c 0 2>/dev/null; then
+            info "  ✅ /dev/nvidia-uvm created via nvidia-modprobe."
+
+        # Strategy 2: modprobe (bare metal; fails inside containers)
+        elif modprobe nvidia-uvm 2>/dev/null; then
             info "  ✅ nvidia-uvm loaded via modprobe."
             grep -qxF "nvidia-uvm" /etc/modules 2>/dev/null || echo "nvidia-uvm" >> /etc/modules
 
-        # Strategy 2: mknod (works in containers/LXC where modprobe is blocked,
-        # as long as the host kernel already has the nvidia-uvm module loaded)
+        # Strategy 3: mknod (container/LXC — host kernel has module, but modprobe is blocked;
+        # works if nvidia-uvm *major number* is listed in /proc/devices)
         elif _UVM_MAJOR=$(awk '/nvidia-uvm/{print $1}' /proc/devices 2>/dev/null) && [ -n "$_UVM_MAJOR" ]; then
             info "  modprobe blocked (container) — creating device nodes via mknod (major=$_UVM_MAJOR)..."
             mknod /dev/nvidia-uvm       c "$_UVM_MAJOR" 0 2>/dev/null && \
             mknod /dev/nvidia-uvm-tools c "$_UVM_MAJOR" 1 2>/dev/null || true
             chmod 666 /dev/nvidia-uvm /dev/nvidia-uvm-tools 2>/dev/null || true
             [ -e /dev/nvidia-uvm ] && info "  ✅ /dev/nvidia-uvm created via mknod." || \
-                warn "  mknod failed — CUDA may not work."
+                warn "  mknod failed — /dev/nvidia-uvm still absent."
 
         else
-            warn "  Both modprobe and mknod failed. nvidia-uvm not in /proc/devices."
-            warn "  The host kernel may not have the GPU driver loaded."
+            warn "  All strategies failed — nvidia-uvm not in /proc/devices."
+            warn "  GPU is visible but kernel UVM module is not loaded."
         fi
     fi
 
     _TORCH_CUDA=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
     if [ "$_TORCH_CUDA" = "True" ]; then
         _GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || echo "unknown")
-        info "✅ GPU ready: $_GPU_NAME | torch CUDA: True"
+        _GPU_MEM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader 2>/dev/null | head -1 || echo "?")
+        info "✅ GPU ready: $_GPU_NAME ($_GPU_MEM) | torch CUDA: True"
     else
         echo ""
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        warn "GPU detected but CUDA unavailable — falling back to CPU."
-        warn "This is likely a cloud provider issue (nvidia-uvm not in /proc/devices)."
-        warn "Contact your provider to enable CUDA compute access on this instance."
-        warn "The AI service will run on CPU (slower but fully functional)."
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo -e "${RED}[ERR]${NC}   GPU detected (nvidia-smi OK) but CUDA is NOT available."
+        echo -e "${RED}[ERR]${NC}   torch.cuda.is_available() = False"
+        echo ""
+        echo -e "${YELLOW}[HELP]${NC}  This is a driver/kernel issue — NOT a PyTorch issue."
+        echo -e "${YELLOW}[HELP]${NC}  Likely cause: the GPU container is missing CUDA device files."
+        echo ""
+        echo -e "${YELLOW}[HELP]${NC}  Try these steps on the HOST (not inside the container):"
+        echo -e "${YELLOW}[HELP]${NC}    1. nvidia-modprobe -u    # load nvidia-uvm kernel module"
+        echo -e "${YELLOW}[HELP]${NC}    2. ls /dev/nvidia*       # should show nvidia0, nvidia-uvm, etc."
+        echo -e "${YELLOW}[HELP]${NC}    3. Re-run this script."
+        echo ""
+        echo -e "${YELLOW}[HELP]${NC}  If on a rental server: contact your provider to enable"
+        echo -e "${YELLOW}[HELP]${NC}  'CUDA compute access' or to run nvidia-modprobe on the host."
+        echo -e "${YELLOW}[HELP]${NC}  Some providers expose this as a 'GPU passthrough' toggle."
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        read -rp "You have a GPU but CUDA is unavailable. Continue on CPU anyway? [y/N] " _CONTINUE_CPU
+        if [[ ! "$_CONTINUE_CPU" =~ ^[Yy]$ ]]; then
+            error "Aborted. Fix CUDA access and re-run."
+        fi
+        warn "Continuing on CPU as requested. Inference will be significantly slower."
     fi
 else
     warn "nvidia-smi not found — deploying in CPU-only mode."
@@ -373,17 +428,53 @@ info "Installing AI service requirements..."
 # Record CUDA state BEFORE pip install — needed to detect if pip downgraded torch.
 _TORCH_CUDA_BEFORE=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
 
-"$AI_PYTHON" -m pip install "setuptools>=70.0" --quiet 2>&1 | tail -2 || true
-grep -v "^torch" "$PROJECT_DIR/ai-service/requirements.txt" > /tmp/requirements_notorch.txt
-"$AI_PYTHON" -m pip install --quiet -r /tmp/requirements_notorch.txt 2>&1 | tail -5 || \
-    error "Failed to install AI dependencies. Check pip output above."
+if "$AI_PYTHON" -c "import fastapi, transformers, langchain, pymilvus" 2>/dev/null; then
+    skip "AI service requirements already installed."
+else
+    "$AI_PYTHON" -m pip install "setuptools>=70.0" --quiet 2>&1 | tail -2 || true
+    # Exclude torch AND torchvision — we will reinstall the exact matching torchvision below
+    grep -v "^torch" "$PROJECT_DIR/ai-service/requirements.txt" \
+        | grep -v "^torchvision" \
+        > /tmp/requirements_notorch.txt
+    "$AI_PYTHON" -m pip install --ignore-installed typing_extensions --quiet -r /tmp/requirements_notorch.txt 2>&1 | tail -5 || \
+        error "Failed to install AI dependencies. Check pip output above."
 
-# Upgrade milvus-lite + pymilvus (pkg_resources fix)
-"$AI_PYTHON" -m pip install "milvus-lite>=2.4.9" "pymilvus>=2.4.0" \
-    --upgrade --quiet 2>&1 | tail -2 || true
+    # Fix Numpy 2.0 ABI incompatibilities with scipy
+    "$AI_PYTHON" -m pip install "numpy>=2.0.0" "scipy>=1.13.0" --upgrade --quiet 2>&1 | tail -2 || true
 
-# Install FlagEmbedding (required by bge-reranker-v2-m3)
-"$AI_PYTHON" -m pip install "FlagEmbedding>=1.2.0" --quiet 2>&1 | tail -2 || true
+    # Install FlagEmbedding (required by bge-reranker-v2-m3)
+    "$AI_PYTHON" -m pip install "FlagEmbedding>=1.2.0" --quiet 2>&1 | tail -2 || true
+fi
+
+# Uninstall torchvision entirely — our AI service does NOT use it.
+# (Jina embeddings + CrossEncoder + Milvus + LangChain have no image processing needs.)
+# transformers imports torchvision only for image features and gracefully skips it when absent.
+# Keeping a mismatched torchvision (e.g. CPU build vs CUDA torch, or wrong cu-tag) causes:
+#   RuntimeError: operator torchvision::nms does not exist
+# The safest fix for any server is to simply remove it.
+info "Removing torchvision (not needed by this AI service, prevents nms crash)..."
+"$AI_PYTHON" -m pip uninstall torchvision -y --quiet 2>&1 | tail -1 || true
+
+# Always enforce pymilvus 2.4.x — pymilvus 3.0 breaks MilvusLite by treating .db file as a directory.
+# --force-reinstall: ensure the downgrade happens even if pip thinks it's already installed.
+# --break-system-packages: required on Ubuntu 24.04 (PEP 668) to overwrite system-managed packages.
+info "Enforcing pymilvus<2.5 (required for legacy SQLite VN_law_lora.db)..."
+"$AI_PYTHON" -m pip install \
+    "milvus-lite>=2.4.9,<2.5.0" "pymilvus>=2.4.0,<2.5.0" \
+    --force-reinstall --break-system-packages \
+    --quiet 2>&1 | tail -3 || \
+"$AI_PYTHON" -m pip install \
+    "milvus-lite>=2.4.9,<2.5.0" "pymilvus>=2.4.0,<2.5.0" \
+    --force-reinstall \
+    --quiet 2>&1 | tail -3 || true
+
+# Verify the version is actually 2.4.x (fail loudly if not, so we catch silent failures)
+_milvus_ver=$("$AI_PYTHON" -c "import pymilvus; print(pymilvus.__version__)" 2>/dev/null || echo "unknown")
+info "  pymilvus installed version: $_milvus_ver"
+case "$_milvus_ver" in
+    2.4.*) info "  ✅ pymilvus $_milvus_ver — correct (2.4.x)" ;;
+    *)     warn "  ⚠️  pymilvus $_milvus_ver is NOT 2.4.x — MilvusLite may fail. Run manually: pip install 'pymilvus>=2.4.0,<2.5.0' --force-reinstall --break-system-packages" ;;
+esac
 
 # Verify torch CUDA state AFTER all installs.
 # Only fail if CUDA was working BEFORE pip but is now broken (pip downgraded torch).
@@ -403,10 +494,10 @@ info "AI service requirements installed."
 info "Verifying critical imports..."
 "$AI_PYTHON" -c "
 import torch
-from peft import PeftModel
 from transformers import AutoModel, AutoTokenizer
 from sentence_transformers import CrossEncoder
 import peft, transformers, uvicorn, fastapi, langchain_openai, langgraph
+from peft import PeftModel
 print(f'✅ All imports OK | torch={torch.__version__} | peft={peft.__version__} | transformers={transformers.__version__}')
 " || error "Import verification FAILED — check pip installation above."
 
@@ -525,6 +616,13 @@ else
     skip "frontend dist is up-to-date"
 fi
 
+# Ensure nginx is installed
+if ! command -v nginx &>/dev/null; then
+    info "Installing nginx..."
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nginx >/dev/null 2>&1 || true
+fi
+mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+
 # nginx config
 cat > /etc/nginx/sites-available/penallaw <<'NGINX'
 server {
@@ -578,17 +676,29 @@ info "nginx started."
 
 # ── 8. Health checks ──────────────────────────────────────────
 echo ""
-info "Waiting for AI service to be ready (up to 300s — first run downloads/loads models; CPU is slower)..."
+info "Waiting for AI service to be ready (up to 300s)..."
+info "  (First run: model loading takes 60-120s on GPU, 180-300s on CPU)"
 _ai_ready=false
-for _i in $(seq 1 60); do   # 60 × 5s = 300s
-    if curl -sf --max-time 5 "http://localhost:8000/health" > /dev/null 2>&1; then
-        info "  ✅ AI Service is up (after $((_i * 5))s)"
+_ai_elapsed=0
+_ai_last_log=0
+while [ $_ai_elapsed -lt 300 ]; do
+    if curl -sf --max-time 2 "http://localhost:8000/health" > /dev/null 2>&1; then
+        info "  ✅ AI Service is up! (after ${_ai_elapsed}s)"
         _ai_ready=true
         break
     fi
-    sleep 5
+    # Print last 2 lines of AI log every 10 seconds so user can see progress
+    if [ $((_ai_elapsed % 10)) -eq 0 ] && [ $_ai_elapsed -gt 0 ]; then
+        _last_lines=$(tail -2 "$LOG_DIR/ai-service.log" 2>/dev/null | tr '\n' ' ')
+        printf "\r  ⏳ [%3ds] %s\n" "$_ai_elapsed" "$_last_lines"
+    else
+        printf "\r  ⏳ Elapsed: %3ds / 300s — waiting..." "$_ai_elapsed"
+    fi
+    sleep 1
+    _ai_elapsed=$((_ai_elapsed + 1))
 done
-[ "$_ai_ready" = false ] && warn "  ⚠️  AI Service not ready after 180s — check $LOG_DIR/ai-service.log"
+echo ""
+[ "$_ai_ready" = false ] && warn "  ⚠️  AI Service not ready after 300s — check $LOG_DIR/ai-service.log"
 
 info "Waiting for Backend to be ready (up to 60s)..."
 _be_ready=false

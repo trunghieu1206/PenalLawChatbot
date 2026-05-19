@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
@@ -24,7 +25,16 @@ public class AiServiceClient {
     private final WebClient.Builder webClientBuilder;
 
     private WebClient getClient() {
-        return webClientBuilder.baseUrl(aiServiceBaseUrl).build();
+        // Default WebClient buffer is 256KB — too small for /predict responses
+        // (full Vietnamese legal analysis + mapped_laws + extracted_facts can exceed 1MB).
+        // Increase to 10MB to safely handle all response sizes.
+        ExchangeStrategies strategies = ExchangeStrategies.builder()
+                .codecs(config -> config.defaultCodecs().maxInMemorySize(10 * 1024 * 1024))
+                .build();
+        return webClientBuilder
+                .baseUrl(aiServiceBaseUrl)
+                .exchangeStrategies(strategies)
+                .build();
     }
 
     public record PredictRequest(
