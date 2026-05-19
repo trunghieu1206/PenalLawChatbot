@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional, List, Callable
 from collections import defaultdict
 
+import httpx
 import requests
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -135,8 +136,9 @@ _BASELINE_SYSTEM = "Bạn là chuyên gia pháp lý Việt Nam, am hiểu Bộ l
 
 def call_baseline(client: OpenAI, model: str, question: str,
                   role_label: str, log: logging.Logger) -> str:
+    _timeout = httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=5.0)
     try:
-        r = client.chat.completions.create(
+        r = client.with_options(timeout=_timeout).chat.completions.create(
             model=model,
             messages=[
                 {"role": "system", "content": _BASELINE_SYSTEM},
@@ -145,7 +147,6 @@ def call_baseline(client: OpenAI, model: str, question: str,
             ],
             temperature=0,
             max_tokens=1200,
-            timeout=120.0,
         )
         return r.choices[0].message.content.strip()
     except Exception as e:
@@ -156,9 +157,10 @@ def call_baseline(client: OpenAI, model: str, question: str,
 def call_judge(client: OpenAI, model: str, prompt: str,
                dimensions: list, log: logging.Logger,
                retries: int = 3) -> Optional[dict]:
+    _timeout = httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=5.0)
     for attempt in range(retries):
         try:
-            r = client.chat.completions.create(
+            r = client.with_options(timeout=_timeout).chat.completions.create(
                 model=model,
                 messages=[
                     {"role": "system", "content":
@@ -167,9 +169,8 @@ def call_judge(client: OpenAI, model: str, prompt: str,
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0,
-                max_tokens=4096,  # Gemini 2.5 Pro thinking tokens count here; give full budget
+                max_tokens=512,  # rubric JSON is tiny — 512 tokens is plenty
                 extra_body={"thinking": {"type": "disabled"}},  # disable extended thinking
-                timeout=120.0,
             )
             raw = (r.choices[0].message.content or "").strip()
             if not raw:

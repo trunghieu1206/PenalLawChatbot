@@ -16,6 +16,14 @@ HOW TO RUN EXAMPLES:
   python3 /root/PenalLawChatbot/ai-service/evaluation/eval_combined_hallucination_recall_role_adherence.py \
     --start 1 --end 50 --resume --log-file /root/PenalLawChatbot/ai-service/logs/eval_chunk_1_50.txt
 
+  # skip rubric
+  python3 /root/PenalLawChatbot/ai-service/evaluation/eval_combined_hallucination_recall_role_adherence.py \
+    --start 1 \
+    --end 1 \
+    --skip-rubric \
+    --log-file /root/PenalLawChatbot/ai-service/logs/eval_chunk_1_10.txt
+
+
 OUTPUTS:
   combined_results.jsonl  — full raw data per case (for programmatic analysis)
   combined_summary.json   — final aggregated scores (JSON)
@@ -27,6 +35,7 @@ import os, json, re, sys, time, argparse, logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from tqdm import tqdm
+import httpx
 import requests
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -229,9 +238,10 @@ def call_rubric_judge(client, model: str, role: str, case: dict,
             gt_articles=gt_arts, response=response[:2000], baseline=other[:1200])
 
     def _call(prompt, label):
+        _timeout = httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=5.0)
         for attempt in range(3):
             try:
-                r = client.chat.completions.create(
+                r = client.with_options(timeout=_timeout).chat.completions.create(
                     model=model,
                     messages=[
                         {"role": "system", "content":
@@ -239,9 +249,8 @@ def call_rubric_judge(client, model: str, role: str, case: dict,
                          "JSON object with no explanation, no markdown, no extra text."},
                         {"role": "user", "content": prompt},
                     ],
-                    temperature=0.0, max_tokens=4096,
+                    temperature=0.0, max_tokens=512,
                     extra_body={"thinking": {"type": "disabled"}},  # disable Gemini 2.5 Pro thinking
-                    timeout=120.0,
                 )
                 raw = (r.choices[0].message.content or "").strip()
                 if not raw:

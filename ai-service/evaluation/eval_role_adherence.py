@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Optional
 from collections import defaultdict
 
+import httpx
 import requests
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -250,9 +251,10 @@ def llm_score(client: OpenAI, model: str, question: str,
         question=question[:800],
         response=response[:1500],
     )
+    _timeout = httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=5.0)
     for attempt in range(3):
         try:
-            r = client.chat.completions.create(
+            r = client.with_options(timeout=_timeout).chat.completions.create(
                 model=model,
                 messages=[
                     {"role": "system", "content":
@@ -261,9 +263,8 @@ def llm_score(client: OpenAI, model: str, question: str,
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.0,
-                max_tokens=4096,   # Gemini 2.5 Pro thinking tokens count here; give full budget
+                max_tokens=512,   # Role adherence is 4 yes/no answers — 512 is more than enough
                 extra_body={"thinking": {"type": "disabled"}},  # disable extended thinking
-                timeout=120.0,
             )
             raw = (r.choices[0].message.content or "").strip()
             if not raw:
