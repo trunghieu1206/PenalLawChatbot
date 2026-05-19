@@ -24,6 +24,7 @@ OUTPUTS:
 """
 
 import os, json, re, sys, time, argparse, logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from tqdm import tqdm
 import requests
@@ -347,7 +348,7 @@ def composite_hallucination(l1, l2, l3):
     return round(score, 4)
 
 def evaluate_metrics(response_dict, case, gt_nums, valid_corpus, role,
-                     oai_judge, judge_model, is_baseline, log):
+                     oai_judge, judge_model, is_baseline, log, skip_llm=False):
     """Computes all 3 metrics for a given response. Returns a detailed result dict."""
     result_text = response_dict.get("result", response_dict.get("text", ""))
 
@@ -359,32 +360,27 @@ def evaluate_metrics(response_dict, case, gt_nums, valid_corpus, role,
         mapped_laws     = response_dict.get("mapped_laws") or []
         extracted_facts = response_dict.get("extracted_facts") or {}
 
-    # 1. Primary Recall (skip if dataset has no primary article for this case)
+    # 1. Primary Recall
     if case.get("primary_num"):
         recall = check_primary_hit(case["primary_num"], mapped_laws, result_text)
-        recall_hit    = recall["hit"]
-        recall_source = recall["source"]
-        recall_cited  = recall["cited_nums"]
-        recall_doc    = recall.get("document_source") or "N/A"
+        recall_hit, recall_source = recall["hit"], recall["source"]
+        recall_cited, recall_doc  = recall["cited_nums"], recall.get("document_source") or "N/A"
     else:
-        recall_hit    = None  # N/A — no ground truth article in verdict
-        recall_source = "n/a"
-        recall_cited  = []
-        recall_doc    = "N/A"
+        recall_hit, recall_source, recall_cited, recall_doc = None, "n/a", [], "N/A"
 
-    # 2. Hallucination (L1-L3)
+    # 2. Hallucination L1-L3 (deterministic — instant)
     l1 = layer1_article_existence(mapped_laws, gt_nums, valid_corpus)
     l2 = layer2_edition(mapped_laws, extracted_facts)
     l3 = layer3_sentencing(result_text, case["all_gt_articles"], {})
     hall_score = composite_hallucination(l1, l2, l3)
 
-    # 3. Role Adherence (METRIC A) — 2 yes/no LLM questions + keyword signal
-    #    Q1: Does response advocate from the requested role perspective?
-    #    Q2: Is tone/language consistent with role, no self-contradiction?
-    #    Formula: 0.3 * signal + 0.7 * llm_yes_rate
-    sig        = signal_score(result_text, role)
-    llm        = llm_score(oai_judge, judge_model, case["case_description"], result_text, role, log)
-    role_score = combined_score(sig["score"], llm.get("score"), w_sig=0.3, w_llm=0.7)
+    # 3. Role Adherence — signal (always) + optional LLM judge
+    sig = signal_score(result_text, role)
+    if skip_llm:
+        llm_result = {"score": None, "answers": {}, "note": "skipped"}
+    else:
+        llm_result = llm_score(oai_judge, judge_model, case["case_description"], result_text, role, log)
+    role_score = combined_score(sig["score"], llm_result.get("score"), w_sig=0.3, w_llm=0.7)
 
     return {
         "recall":           recall_hit,
@@ -397,8 +393,8 @@ def evaluate_metrics(response_dict, case, gt_nums, valid_corpus, role,
         "hall_l3":          l3.get("triggered", False) if l3 else False,
         "role_adherence":   role_score,
         "role_sig_score":   sig["score"],
-        "role_llm_score":   llm.get("score"),
-        "role_llm_answers": llm.get("answers", {}),  # {"q1": "yes"/"no", "q2": "yes"/"no"}
+        "role_llm_score":   llm_result.get("score"),
+        "role_llm_answers": llm_result.get("answers", {}),
         "text_preview":     result_text[:300],
     }
 
@@ -514,7 +510,14 @@ def main():
     parser.add_argument("--ai-url",         default=os.getenv("AI_SERVICE_URL", "http://localhost:8000"))
     parser.add_argument("--judge-model",    default=os.getenv("LLM_JUDGE_MODEL", "google/gemini-2.5-pro"))
     parser.add_argument("--baseline-model", default=os.getenv("LLM_MODEL", "google/gemini-2.5-flash"))
-    parser.add_argument("--timeout",        type=int,   default=120)
+    parser.add_argument("--timeout",        type=int,   default=30,
+                        help="/predict request timeout in seconds (GPU server: 30s is generous)")
+    parser.add_argument("--skip-rubric",    action="store_true",
+                        help="Skip rubric LLM scoring (saves ~6 OpenRouter calls per case)")
+    parser.add_argument("--skip-llm",       action="store_true",
+                        help="Skip role-adherence LLM judge, use signal only (saves ~6 calls per case)")
+    parser.add_argument("--judge-timeout",  type=float, default=60.0,
+                        help="OpenRouter API call timeout in seconds (default: 60)")
     parser.add_argument("--start",          type=int,   default=1)
     parser.add_argument("--end",            type=int,   default=0)
     parser.add_argument("--resume",         action="store_true")
@@ -583,16 +586,26 @@ def main():
     report(f"  Judge API key : {_mask(judge_key)}  (OPENROUTER_LLM_JUDGE_KEY)")
     report(f"  Baseline key  : {_mask(baseline_key)}  (OPENROUTER_API_KEY)")
 
+    _judge_timeout = args.judge_timeout
     oai_judge    = OpenAI(
         api_key=judge_key or "missing",
         base_url="https://openrouter.ai/api/v1",
         default_headers=or_headers,
+        timeout=_judge_timeout,
     )
     oai_baseline = OpenAI(
         api_key=baseline_key or "missing",
         base_url="https://openrouter.ai/api/v1",
         default_headers=or_headers,
+        timeout=_judge_timeout,
     )
+
+    skip_rubric = args.skip_rubric
+    skip_llm    = args.skip_llm
+    if skip_rubric:
+        report("  ⚡ --skip-rubric: rubric LLM scoring disabled")
+    if skip_llm:
+        report("  ⚡ --skip-llm: role adherence using signal scoring only")
 
     metrics = {
         "system":   {"recall_hits": 0, "recall_total": 0, "hallucination_scores": [], "role_scores": [], "rubric_scores": []},
@@ -617,23 +630,51 @@ def main():
 
             row = {"case_index": cidx, "case_url": url, "evaluations": {}}
 
-            for role in ["neutral", "defense", "victim"]:
-                sys_pred  = call_system(args.ai_url, case["case_description"], role, args.timeout, log)
-                base_text = call_baseline(oai_baseline, args.baseline_model,
-                                          case["case_description"], ROLE_LABELS[role], log)
+            # ── Step 1: Fetch all 3 system + 3 baseline responses in parallel ──
+            roles = ["neutral", "defense", "victim"]
+            report(f"  ⏳ Fetching system responses (3 roles in parallel)...")
+            t0 = time.time()
+            with ThreadPoolExecutor(max_workers=3) as ex:
+                sys_futures  = {ex.submit(call_system, args.ai_url, case["case_description"],
+                                          r, args.timeout, log): r for r in roles}
+                base_futures = {ex.submit(call_baseline, oai_baseline, args.baseline_model,
+                                          case["case_description"], ROLE_LABELS[r], log): r for r in roles}
+                sys_preds  = {}
+                base_texts = {}
+                for f in as_completed(list(sys_futures) + list(base_futures)):
+                    if f in sys_futures:
+                        sys_preds[sys_futures[f]]   = f.result()
+                    else:
+                        base_texts[base_futures[f]] = f.result()
+            report(f"  ✅ Responses fetched in {time.time()-t0:.1f}s")
+
+            # ── Step 2: Evaluate metrics per role (parallel for LLM judge calls) ──
+            def _eval_role(role):
+                sys_pred  = sys_preds.get(role, {})
+                base_text = base_texts.get(role, "")
                 base_pred = {"text": base_text}
-
                 sys_eval  = evaluate_metrics(sys_pred,  case, gt_nums, valid_corpus, role,
-                                             oai_judge, args.judge_model, is_baseline=False, log=log)
+                                             oai_judge, args.judge_model,
+                                             is_baseline=False, log=log, skip_llm=skip_llm)
                 base_eval = evaluate_metrics(base_pred, case, gt_nums, valid_corpus, role,
-                                             oai_judge, args.judge_model, is_baseline=True,  log=log)
-
+                                             oai_judge, args.judge_model,
+                                             is_baseline=True,  log=log, skip_llm=skip_llm)
                 sys_text  = sys_pred.get("result", "") if sys_pred else ""
-                rubric    = call_rubric_judge(oai_judge, args.judge_model, role, case,
-                                              sys_text, base_text, log)
+                rubric    = ({} if skip_rubric else
+                             call_rubric_judge(oai_judge, args.judge_model, role, case,
+                                               sys_text, base_text, log))
+                return role, sys_eval, base_eval, rubric, sys_text, base_text
 
-                _print_case_report(report, cidx, total, case, role, sys_eval, base_eval, rubric)
+            report(f"  ⏳ Scoring metrics{'(signal only)' if skip_llm else '(+LLM judge)'}...")
+            t1 = time.time()
+            with ThreadPoolExecutor(max_workers=3) as ex:
+                role_results = list(ex.map(_eval_role, roles))
+            report(f"  ✅ Scoring done in {time.time()-t1:.1f}s")
 
+            for role, sys_eval, base_eval, rubric, sys_text, base_text in role_results:
+
+                _print_case_report(report, cidx, total, case, role, sys_eval, base_eval,
+                                   rubric if rubric else None)
                 row["evaluations"][role] = {"system": sys_eval, "baseline": base_eval, "rubric": rubric}
 
                 metrics["total_evals"] += 1
