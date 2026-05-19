@@ -348,10 +348,12 @@ def _extract_blhs_articles(text: str):
     not BLTTHS (Bộ luật Tố tụng Hình sự) procedural articles.
 
     Strategy:
-      1. For each 'Điều X' mention, look at a ±150-char window.
+      1. For each 'Điều X' mention, look at a ±300-char window.
          - If window contains a BLTTHS marker → skip (procedural).
          - If window contains a BLHS marker   → accept (crime article).
          - If neither, use known BLTTHS number list + _PROCEDURAL set to decide.
+      Window is 300 chars (not 150) to handle long multi-article citation lines:
+        'Điều 134; điểm b,e,s khoản 1,2 Điều 51; Điều 38 Bộ luật hình sự'
     Returns (blhs_nums, confidence):
       blhs_nums  : list of article numbers (str), deduplicated, order-preserving
       confidence : 'high' if at least one explicit BLHS marker found, else 'low'
@@ -364,8 +366,8 @@ def _extract_blhs_articles(text: str):
 
     for m in art_iter:
         num = m.group(1)
-        win_start = max(0, m.start() - 150)
-        win_end   = min(len(t_low), m.end() + 150)
+        win_start = max(0, m.start() - 300)
+        win_end   = min(len(t_low), m.end() + 300)
         window    = t_low[win_start:win_end]
 
         is_bltths = any(mk in window for mk in _BLTTHS_MARKERS)
