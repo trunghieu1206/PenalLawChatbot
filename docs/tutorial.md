@@ -134,3 +134,10 @@ scp -P 10000 \
 python3 ai-service/evaluation/eval_primary_recall.py \
   --resume \
   --log-file ai-service/logs/eval_primary_recall.txt
+
+# Logs
+[INFO]  Logs:
+[INFO]    AI service : tail -f /var/log/penallaw/ai-service.log
+[INFO]    Backend    : tail -f /var/log/penallaw/backend.log
+[INFO]    PostgreSQL : tail -f /var/log/penallaw/postgres.log
+[INFO]    nginx      : tail -f /var/log/nginx/error.log

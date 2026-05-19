@@ -1143,9 +1143,20 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
         newer  = []
         always = []
 
+        all_known_editions = {e[0] for e in _EDITION_RANGES}
+        relevant_editions = set(crime_editions)
+        if trial_edition:
+            relevant_editions.add(trial_edition)
+
         for d in docs:
             art_no     = str(d.metadata.get("article_number", ""))
             src        = d.metadata.get("source", "")
+            
+            # BUG FIX: Discard documents from BLHS editions that are completely irrelevant
+            # to the case's temporal context (e.g. dropping BLHS 1999 if case is in 2022).
+            if src in all_known_editions and src not in relevant_editions:
+                continue
+
             always_keep = _ALWAYS_KEEP_BY_EDITION.get(src, set())
 
             if art_no in always_keep:
@@ -1158,7 +1169,7 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
                     if di.get("crime_edition") == src
                 ] or ["all"]
                 tagged.append(d)
-            elif needs_comparison:
+            elif needs_comparison and src == trial_edition:
                 d.metadata["_temporal_role"] = "comparison"
                 newer.append(d)
 
