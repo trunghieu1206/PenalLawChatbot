@@ -751,10 +751,29 @@ def main():
                 except Exception:
                     pass
         n_done = len(done_urls)
-        report(f"Resume mode: {n_done} cases already done — skipping.")
+        report(f"Resume mode: {n_done} cases fully done — skipping.")
         rh = preloaded["recall_hits"]; rt = preloaded["recall_total"]
         nh = len(preloaded["hallucination_scores"]); nr = len(preloaded["role_scores"])
         report(f"  Pre-loaded from JSONL: recall={rh}/{rt}  hall_evals={nh}  role_evals={nr}")
+
+    # ── Role-level progress sidecar (tracks partial-case completions) ──────────
+    # Format: one line per completed role: {"url": "...", "role": "neutral", "eval": {...}}
+    prog_path = out_path.with_name(out_path.stem + "_role_progress.jsonl")
+    done_roles: dict[str, set] = {}   # url -> {roles already done}
+    if args.resume and prog_path.exists():
+        with open(prog_path, encoding="utf-8") as pf:
+            for line in pf:
+                try:
+                    entry = json.loads(line)
+                    u, r = entry["url"], entry["role"]
+                    if u not in done_roles:
+                        done_roles[u] = set()
+                    done_roles[u].add(r)
+                except Exception:
+                    pass
+        partial_cases = {u for u, rs in done_roles.items() if u not in done_urls and len(rs) < 3}
+        if partial_cases:
+            report(f"  Role-progress sidecar: {len(partial_cases)} partial case(s) found — will resume mid-case.")
 
     # OpenRouter requires HTTP-Referer and X-Title headers, otherwise some models silently return empty content.
     or_headers = {
@@ -818,7 +837,8 @@ def main():
 
     interrupted = False
     try:
-        with open(out_path, "a", encoding="utf-8") as out_f:
+        with open(out_path, "a", encoding="utf-8") as out_f, \
+             open(prog_path, "a", encoding="utf-8") as prog_f:
             for i, case in enumerate(tqdm(cases, desc="Evaluating", unit="case")):
                 url = case["case_url"]
                 if url in done_urls:
@@ -837,6 +857,20 @@ def main():
                 roles = ["neutral", "defense", "victim"]
 
                 for role in roles:
+                    # Skip this role if it was already completed in a previous interrupted run
+                    if url in done_roles and role in done_roles[url]:
+                        report(f"  ⏭️  [SKIP-ROLE] {role.upper()} already done for this case — skipping.")
+                        # Re-use the stored eval from the progress sidecar to restore metrics
+                        try:
+                            stored_ev = next(
+                                json.loads(l)["eval"]
+                                for l in open(prog_path, encoding="utf-8")
+                                if json.loads(l).get("url") == url and json.loads(l).get("role") == role
+                            )
+                            row["evaluations"][role] = {"system": stored_ev, "rubric": {}}
+                        except Exception:
+                            pass
+                        continue
                     report(f"  ┌─ ⏳ Processing Role: {role.upper()} ───────────────────────")
 
                     # 1. Fetch RAG system response
@@ -860,6 +894,12 @@ def main():
                     # 4. Print & Save
                     _print_case_report(report, cidx, total, case, role, sys_eval, rubric if rubric else None)
                     row["evaluations"][role] = {"system": sys_eval, "rubric": rubric}
+                    # Write role-level progress entry immediately (enables mid-case resume)
+                    prog_f.write(json.dumps({"url": url, "role": role, "eval": sys_eval}, ensure_ascii=False) + "\n")
+                    prog_f.flush()
+                    if url not in done_roles:
+                        done_roles[url] = set()
+                    done_roles[url].add(role)
 
                     metrics["total_evals"] += 1
 
