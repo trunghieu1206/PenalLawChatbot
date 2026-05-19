@@ -19,7 +19,7 @@ HOW TO RUN EXAMPLES:
   #### skip rubric (USE THIS)
   python3 /root/PenalLawChatbot/ai-service/evaluation/eval_combined_hallucination_recall_role_adherence.py \
     --start 1 \
-    --end 100 \
+    --end 10 \
     --skip-rubric \
     --log-file /root/PenalLawChatbot/ai-service/logs/eval_combined_1_100.txt
 
@@ -843,13 +843,23 @@ def main():
         low_conf = metrics["system"]["low_conf_cases"]
         if misses:
             report("")
-            report(f"  🔴 RECALL MISSES ({len(misses)}) — cases where system cited wrong article:")
-            seen_miss_cases: set = set()
+            # Deduplicate to count unique (case_index, gt_article) pairs — same as list below
+            unique_miss_keys: set = set()
+            deduped_misses = []
+            clarification_count = 0
             for m in misses:
                 key = (m['case_index'], m['gt_article'])
-                if key in seen_miss_cases:
-                    continue
-                seen_miss_cases.add(key)
+                if key not in unique_miss_keys:
+                    unique_miss_keys.add(key)
+                    deduped_misses.append(m)
+                if m.get('cited') == [] or m.get('cited') is None:
+                    clarification_count += 1
+            report(f"  🔴 RECALL MISSES ({len(deduped_misses)} unique cases) — system cited wrong/no article:")
+            if clarification_count > 0:
+                report(f"  ⚠️  NOTE: {clarification_count} role eval(s) returned a clarification request (no mapped_laws).")
+                report(f"       This means the system asked for more info instead of analysing the case.")
+                report(f"       Check if case_description has explicit crime date (ngay_pham_toi) and behavior (hanh_vi).")
+            for m in deduped_misses:
                 report(f"    [{m['case_index']}] GT={m['gt_article']}  cited={m['cited']}  conf={m['gt_conf']}")
                 report(f"         {m['case_url']}")
         if low_conf:
