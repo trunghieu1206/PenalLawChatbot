@@ -12,17 +12,17 @@ tmux new -s deploy
 
 # upload scripts + .env template + DB backup ───────────────────────
 # Run these from your LOCAL machine (inside PenalLawChatbot/ directory):
-scp -P 1652 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@n3.ckey.vn:/root/
-scp -P 1652 .env.example root@n3.ckey.vn:/root/.env.example
+scp -P 2504 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@n3.ckey.vn:/root/
+scp -P 2504 .env.example root@n3.ckey.vn:/root/.env.example
 
 # ── ON SERVER: Run the base setup first ──────────────────────────────────────
 chmod +x setup_server.sh deploy_nodocker.sh restore_database.sh
 bash setup_server.sh
 
 # Create directories on the server first (scp cannot create them automatically)
-ssh -p 1652 root@n3.ckey.vn "mkdir -p ~/PenalLawChatbot/database/backups ~/PenalLawChatbot/ai-service/scraped_datasets"
+ssh -p 2504 root@n3.ckey.vn "mkdir -p ~/PenalLawChatbot/database/backups ~/PenalLawChatbot/ai-service/scraped_datasets"
 
-scp -P 1652 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260505_150435.sql \
+scp -P 2504 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260505_150435.sql \
     root@n3.ckey.vn:~/PenalLawChatbot/database/backups/
 
 # ── ON SERVER: Finish deployment ─────────────────────────────────────────────
