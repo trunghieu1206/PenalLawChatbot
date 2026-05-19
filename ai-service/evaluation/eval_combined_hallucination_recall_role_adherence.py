@@ -615,122 +615,137 @@ def main():
     }
     processed = 0
 
-    with open(out_path, "a", encoding="utf-8") as out_f:
-        for i, case in enumerate(tqdm(cases, desc="Evaluating", unit="case")):
-            url = case["case_url"]
-            if url in done_urls:
-                continue
+    interrupted = False
+    try:
+        with open(out_path, "a", encoding="utf-8") as out_f:
+            for i, case in enumerate(tqdm(cases, desc="Evaluating", unit="case")):
+                url = case["case_url"]
+                if url in done_urls:
+                    continue
 
-            cidx    = s_idx + i + 1
-            total   = s_idx + len(cases)
-            gt_nums = _gt_nums(case["all_gt_articles"])
+                cidx    = s_idx + i + 1
+                total   = s_idx + len(cases)
+                gt_nums = _gt_nums(case["all_gt_articles"])
 
-            report("")
-            report(f"━━━ CASE {cidx}/{total} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            report(f"  URL: {url}")
+                report("")
+                report(f"━━━ CASE {cidx}/{total} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                report(f"  URL: {url}")
 
-            row = {"case_index": cidx, "case_url": url, "evaluations": {}}
+                row = {"case_index": cidx, "case_url": url, "evaluations": {}}
 
-            roles = ["neutral", "defense", "victim"]
+                roles = ["neutral", "defense", "victim"]
 
-            for role in roles:
-                report(f"  ┌─ ⏳ Processing Role: {role.upper()} ───────────────────────")
-                
-                # 1. Fetch RAG system response
-                t_fetch = time.time()
-                sys_pred  = call_system(args.ai_url, case["case_description"], role, args.timeout, log)
-                report(f"  │  ✅ Fetched in {time.time()-t_fetch:.1f}s")
+                for role in roles:
+                    report(f"  ┌─ ⏳ Processing Role: {role.upper()} ───────────────────────")
 
-                # 2. Score Metrics (system only — deterministic, free)
-                t_score = time.time()
-                sys_eval  = evaluate_metrics(sys_pred, case, gt_nums, valid_corpus, role, oai_judge, args.judge_model, is_baseline=False, log=log, skip_llm=True)
-                
-                # 3. LLM Judge Rubric (system vs baseline — only if not skipped)
-                sys_text  = sys_pred.get("result", "") if sys_pred else ""
-                if not skip_rubric:
-                    base_text = call_baseline(oai_baseline, args.baseline_model, case["case_description"], ROLE_LABELS[role], log)
-                    rubric = call_rubric_judge(oai_judge, args.judge_model, role, case, sys_text, base_text, log)
-                else:
-                    rubric = {}
-                report(f"  │  ✅ Scored in {time.time()-t_score:.1f}s")
+                    # 1. Fetch RAG system response
+                    t_fetch = time.time()
+                    sys_pred  = call_system(args.ai_url, case["case_description"], role, args.timeout, log)
+                    report(f"  │  ✅ Fetched in {time.time()-t_fetch:.1f}s")
 
-                # 4. Print & Save
-                _print_case_report(report, cidx, total, case, role, sys_eval, rubric if rubric else None)
-                row["evaluations"][role] = {"system": sys_eval, "rubric": rubric}
+                    # 2. Score Metrics (system only — deterministic, free)
+                    t_score = time.time()
+                    sys_eval  = evaluate_metrics(sys_pred, case, gt_nums, valid_corpus, role, oai_judge, args.judge_model, is_baseline=False, log=log, skip_llm=True)
 
-                metrics["total_evals"] += 1
-                if sys_eval["recall"] is not None:
-                    metrics["system"]["recall_hits"] += int(sys_eval["recall"])
-                    metrics["system"]["recall_total"] += 1
+                    # 3. LLM Judge Rubric (system vs baseline — only if not skipped)
+                    sys_text  = sys_pred.get("result", "") if sys_pred else ""
+                    if not skip_rubric:
+                        base_text = call_baseline(oai_baseline, args.baseline_model, case["case_description"], ROLE_LABELS[role], log)
+                        rubric = call_rubric_judge(oai_judge, args.judge_model, role, case, sys_text, base_text, log)
+                    else:
+                        rubric = {}
+                    report(f"  │  ✅ Scored in {time.time()-t_score:.1f}s")
 
-                metrics["system"]["hallucination_scores"].append(sys_eval["hallucination"])
-                metrics["system"]["role_scores"].append(sys_eval["role_adherence"])
-                if rubric.get("sys", {}).get("normalized") is not None:
-                    metrics["system"]["rubric_scores"].append(rubric["sys"]["normalized"])
+                    # 4. Print & Save
+                    _print_case_report(report, cidx, total, case, role, sys_eval, rubric if rubric else None)
+                    row["evaluations"][role] = {"system": sys_eval, "rubric": rubric}
 
-                time.sleep(args.delay)
+                    metrics["total_evals"] += 1
+                    if sys_eval["recall"] is not None:
+                        metrics["system"]["recall_hits"] += int(sys_eval["recall"])
+                        metrics["system"]["recall_total"] += 1
 
-            out_f.write(json.dumps(row, ensure_ascii=False) + "\n")
-            out_f.flush()
-            processed += 1
+                    metrics["system"]["hallucination_scores"].append(sys_eval["hallucination"])
+                    metrics["system"]["role_scores"].append(sys_eval["role_adherence"])
+                    if rubric.get("sys", {}).get("normalized") is not None:
+                        metrics["system"]["rubric_scores"].append(rubric["sys"]["normalized"])
 
-            # Print running % after every case
-            _print_running_totals(report, metrics, processed)
+                    time.sleep(args.delay)
 
-    # ── Final Summary ──────────────────────────────────────────────────────────
-    def _avg(lst): return round(sum(lst) / len(lst), 4) if lst else 0.0
+                out_f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                out_f.flush()
+                processed += 1
 
-    n_evals    = metrics["total_evals"]
-    sys_recall = round(metrics["system"]["recall_hits"] / metrics["system"]["recall_total"], 4) if metrics["system"]["recall_total"] else None
-    sys_hall   = _avg(metrics["system"]["hallucination_scores"])
-    sys_role   = _avg(metrics["system"]["role_scores"])
-    sys_rub    = _avg(metrics["system"]["rubric_scores"])
+                # Print running % after every case
+                _print_running_totals(report, metrics, processed)
 
-    summary = {
-        "meta": {
-            "n_cases_evaluated":      processed,
-            "total_role_evaluations": n_evals,
-            "case_range": f"{args.start}–{'END' if not args.end else args.end}",
-        },
-        "system": {"primary_recall": sys_recall, "hallucination_rate": sys_hall, "role_adherence": sys_role},
-        "pass": {
-            "recall":        (sys_recall >= 0.90) if sys_recall is not None else None,
-            "hallucination": sys_hall   <= 0.10,
-            "role":          sys_role   >= 0.85,
-        },
-    }
+    except KeyboardInterrupt:
+        interrupted = True
+        report("")
+        report("⚠️  Evaluation interrupted (Ctrl+C) — writing partial summary...")
+        log.warning("Evaluation interrupted — partial results saved to disk.")
 
-    sum_path = Path(args.summary)
-    with open(sum_path, "w", encoding="utf-8") as f:
-        json.dump(summary, f, ensure_ascii=False, indent=2)
+    finally:
+        # ── Always flush + write summary, even on Ctrl+C or server disconnect ──
+        def _avg(lst): return round(sum(lst) / len(lst), 4) if lst else 0.0
 
-    def _recall_str(v):
-        return "N/A" if v is None else _pct(v)
+        n_evals    = metrics["total_evals"]
+        sys_recall = round(metrics["system"]["recall_hits"] / metrics["system"]["recall_total"], 4) if metrics["system"]["recall_total"] else None
+        sys_hall   = _avg(metrics["system"]["hallucination_scores"])
+        sys_role   = _avg(metrics["system"]["role_scores"])
+        sys_rub    = _avg(metrics["system"]["rubric_scores"])
 
-    def _pass_str(key):
-        v = summary["pass"][key]
-        if v is None: return "➖ N/A"
-        return "✅ PASS" if v else "❌ FAIL"
+        status = "PARTIAL (interrupted)" if interrupted else "COMPLETE"
 
-    # Rich final report block
-    report("")
-    report("=" * 70)
-    report(f"  FINAL RESULTS — {processed} cases  ({n_evals} role evaluations)")
-    report("=" * 70)
-    report(f"  {'Metric':<22} {'System':>9}  {'Target':>8}  Pass?")
-    report(f"  {'-'*50}")
-    report(f"  {'Primary Recall':<22} {_recall_str(sys_recall):>9}  {'≥90%':>8}  {_pass_str('recall')}")
-    report(f"  {'Hallucination Rate':<22} {_pct(sys_hall):>9}  {'≤10%':>8}  {_pass_str('hallucination')}")
-    report(f"  {'Role Adherence':<22} {_pct(sys_role):>9}  {'≥85%':>8}  {_pass_str('role')}")
-    if sys_rub:
-        report(f"  {'Rubric Score (avg)':<22} {sys_rub:>9.2f}  {'(0–5)':>8}  (run eval_rubric_*.py for Δ vs baseline)")
-    report(f"  {'-'*50}")
-    report(f"  Detailed JSONL : {out_path}")
-    report(f"  Summary JSON   : {sum_path}")
-    report(f"  Human report   : {report_path}  ← download this file for offline review")
-    report("=" * 70)
+        summary = {
+            "meta": {
+                "status":                 status,
+                "n_cases_evaluated":      processed,
+                "total_role_evaluations": n_evals,
+                "case_range": f"{args.start}–{'END' if not args.end else args.end}",
+            },
+            "system": {"primary_recall": sys_recall, "hallucination_rate": sys_hall, "role_adherence": sys_role},
+            "pass": {
+                "recall":        (sys_recall >= 0.90) if sys_recall is not None else None,
+                "hallucination": sys_hall   <= 0.10,
+                "role":          sys_role   >= 0.85,
+            },
+        }
 
-    report_fh.close()
+        sum_path = Path(args.summary)
+        sum_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(sum_path, "w", encoding="utf-8") as f:
+            json.dump(summary, f, ensure_ascii=False, indent=2)
+
+        def _recall_str(v):
+            return "N/A" if v is None else _pct(v)
+
+        def _pass_str(key):
+            v = summary["pass"][key]
+            if v is None: return "➖ N/A"
+            return "✅ PASS" if v else "❌ FAIL"
+
+        report("")
+        report("=" * 70)
+        report(f"  {'⚠️  PARTIAL ' if interrupted else ''}RESULTS — {processed} cases  ({n_evals} role evals)  [{status}]")
+        report("=" * 70)
+        report(f"  {'Metric':<22} {'System':>9}  {'Target':>8}  Pass?")
+        report(f"  {'-'*50}")
+        report(f"  {'Primary Recall':<22} {_recall_str(sys_recall):>9}  {'≥90%':>8}  {_pass_str('recall')}")
+        report(f"  {'Hallucination Rate':<22} {_pct(sys_hall):>9}  {'≤10%':>8}  {_pass_str('hallucination')}")
+        report(f"  {'Role Adherence':<22} {_pct(sys_role):>9}  {'≥85%':>8}  {_pass_str('role')}")
+        if sys_rub:
+            report(f"  {'Rubric Score (avg)':<22} {sys_rub:>9.2f}  {'(0–5)':>8}  (run eval_rubric_*.py for Δ vs baseline)")
+        report(f"  {'-'*50}")
+        report(f"  Detailed JSONL : {out_path}")
+        report(f"  Summary JSON   : {sum_path}")
+        report(f"  Human report   : {report_path}  ← download this file for offline review")
+        if interrupted:
+            report(f"  ↺  Resume with: --resume --start {args.start} --end {'END' if not args.end else args.end}")
+        report("=" * 70)
+
+        report_fh.flush()
+        report_fh.close()
 
 if __name__ == "__main__":
     main()
