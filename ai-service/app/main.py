@@ -1707,19 +1707,31 @@ TIÊU CHÍ (100 điểm):
 
         if is_greeting:
             reply = (
-                "Xin chào! Tôi là **Trợ lý Pháp luật Hình sự AI**.\n\n"
-                "Tôi có thể giúp bạn:\n"
-                "- **Phân tích vụ án hình sự** — định tội danh, lượng hình\n"
-                "- **Nhận định của tòa án** hoặc lập luận theo vai trò **bào chữa / bị hại**\n"
-                "- **Trích dẫn Bộ luật Hình sự** điều khoản liên quan\n"
-                "- **Giải thích chi tiết** bất kỳ điểm nào trong phân tích\n\n"
-                "Hãy dán nội dung hồ sơ vụ án hoặc đặt câu hỏi pháp lý để bắt đầu!"
+                "Xin chào! Tôi là **Trợ lý Pháp luật Hình sự AI** 🏛️\n\n"
+                "Tôi được xây dựng chuyên biệt để hỗ trợ **phân tích và tra cứu pháp luật hình sự Việt Nam**. "
+                "Dưới đây là những gì tôi có thể làm cho bạn:\n\n"
+                "⚖️ **Phân tích vụ án hình sự**\n"
+                "   Định tội danh, xác định khung hình phạt, lượng hình cụ thể theo BLHS\n\n"
+                "🧑‍⚖️ **Phân tích đa chiều theo vai trò**\n"
+                "   • *Thẩm phán* — nhận định trung lập, khách quan\n"
+                "   • *Luật sư bào chữa* — lập luận giảm nhẹ, bảo vệ bị cáo\n"
+                "   • *Luật sư bị hại* — yêu cầu xử nghiêm, bồi thường tối đa\n\n"
+                "📖 **Tra cứu & giải thích điều luật**\n"
+                "   Trích dẫn chính xác điều khoản BLHS 2015 (sửa đổi 2017/2025), giải thích tình tiết tăng nặng/giảm nhẹ\n\n"
+                "🔍 **Kiểm tra hiệu lực hồi tố (Điều 7 BLHS)**\n"
+                "   Tự động xác định phiên bản luật áp dụng theo ngày phạm tội\n\n"
+                "---\n"
+                "💡 **Cách dùng:** Dán toàn bộ nội dung hồ sơ vụ án vào đây — tôi sẽ phân tích ngay.\n"
+                "*Ví dụ: \"Ngày 15/3/2023, Nguyễn Văn A dùng dao đe dọa lấy tài sản của bị hại...\"*"
             )
         else:
             reply = (
-                "Xin lỗi, tôi chỉ có thể hỗ trợ các vấn đề liên quan đến **pháp luật hình sự Việt Nam**.\n\n"
-                "Nếu bạn có hồ sơ vụ án hoặc câu hỏi về tội danh, khung hình phạt, "
-                "hay tình tiết tăng nặng/giảm nhẹ, hãy cho tôi biết nhé!"
+                "Xin lỗi, lĩnh vực này nằm ngoài phạm vi hỗ trợ của tôi. 🙏\n\n"
+                "Tôi chuyên về **pháp luật hình sự Việt Nam** — nếu bạn có:\n"
+                "- Hồ sơ vụ án cần phân tích tội danh và hình phạt\n"
+                "- Câu hỏi về điều khoản BLHS, tình tiết tăng nặng/giảm nhẹ\n"
+                "- Cần lập luận theo góc độ thẩm phán, luật sư bào chữa hoặc luật sư bị hại\n\n"
+                "Hãy chia sẻ và tôi sẽ hỗ trợ ngay! ⚖️"
             )
 
         return {"messages": [AIMessage(content=reply)]}
