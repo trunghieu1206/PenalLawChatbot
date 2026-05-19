@@ -1088,7 +1088,7 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
                 try:
                     hits = milvus_client.query(
                         collection_name=COLLECTION_NAME,
-                        filter=f'article_number == "{art_no}" AND source == "{edition}"',
+                        filter=f'article_number == "{art_no}" and source == "{edition}"',
                         output_fields=_OUTPUT_FIELDS,
                         limit=1,
                     )
