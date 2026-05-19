@@ -35,54 +35,201 @@ load_dotenv(dotenv_path=_PROJECT_ROOT / ".env", override=False)
 
 ROLES = ["neutral", "defense", "victim"]
 
-# ── Role signals ─────────────────────────────────────────────────────────────
-# Each entry: list of lowercase Vietnamese phrases to search in response text.
-ROLE_SIGNALS = {
+# ═══════════════════════════════════════════════════════════════════════════════
+# DETERMINISTIC ROLE-ADHERENCE SCORING  (4 weighted dimensions, zero API cost)
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# D1 Article alignment   (30 %) — cites the articles expected for the role
+# D2 Sentencing direction (30 %) — argues toward the outcome expected for the role
+# D3 Vocabulary stance    (25 %) — role-specific language density
+# D4 Citation structure   (15 %) — proper legal citation format present
+#
+# Final score = weighted sum, clamped to [0, 1].
+
+# D1 — article sets (lowercase) per role
+_ART_ALIGN = {
+    # Defense cites mitigating/mercy articles; victim cites aggravating; neutral both
+    "defense": {
+        "positive": ["điều 51", "điều 54", "điều 65", "điều 59", "điều 62", "điều 63"],  # mitigating/suspended sentence
+        "negative": ["điều 52"],   # aggravating articles belong to prosecution, not defense
+    },
+    "victim": {
+        "positive": ["điều 52", "điều 48"],   # aggravating circumstances
+        "negative": ["điều 54", "điều 65"],   # suspended sentence / below-min articles
+    },
+    "neutral": {
+        "positive": [],   # neutral is graded on balance, not which side
+        "negative": [],
+    },
+}
+
+# D2 — sentencing direction phrases (lowercase)
+_SENT_DIR = {
+    "defense": {
+        "toward": [  # argues for lighter outcome
+            "án treo", "cải tạo không giam giữ", "dưới mức thấp nhất",
+            "đề nghị giảm", "xin giảm nhẹ", "mức án thấp nhất", "khoan hồng",
+            "không cần thiết giam giữ", "không tái phạm",
+        ],
+        "against": [  # argues for heavier outcome — wrong direction for defense
+            "mức án cao nhất", "phạt tù dài hạn", "không cho hưởng án treo",
+            "tước quyền", "tịch thu",
+        ],
+    },
+    "victim": {
+        "toward": [  # argues for heavier/maximum outcome
+            "mức án cao nhất", "hình phạt nghiêm khắc", "không cho hưởng án treo",
+            "không áp dụng án treo", "tước quyền", "bồi thường thiệt hại",
+            "yêu cầu bồi thường", "đề nghị phạt nặng",
+        ],
+        "against": [  # argues for lighter outcome — wrong direction for victim's lawyer
+            "đề nghị án treo", "xin miễn", "giảm nhẹ hình phạt",
+            "nên áp dụng án treo", "không đáng bị phạt",
+        ],
+    },
+    "neutral": {
+        "toward": [  # balanced judicial language
+            "căn cứ", "nhận định", "xem xét", "cân nhắc", "theo quy định",
+            "hội đồng xét xử", "quy định tại",
+        ],
+        "against": [  # one-sided advocacy — neutral should avoid
+            "kiên quyết đề nghị", "nhất định phải phạt",
+            "bảo vệ bị cáo bằng mọi giá", "phải trả giá",
+        ],
+    },
+}
+
+# D3 — vocabulary stance (role identity language)
+_VOCAB = {
     "defense": {
         "positive": [
-            "giảm nhẹ", "tình tiết giảm nhẹ", "án treo",
-            "cải tạo không giam giữ", "thành khẩn", "ăn năn", "hối cải",
+            "giảm nhẹ", "tình tiết giảm nhẹ", "thành khẩn", "ăn năn", "hối cải",
             "lần đầu phạm tội", "phạm tội lần đầu", "nhân thân tốt",
             "bồi thường", "khắc phục hậu quả", "hoàn cảnh khó khăn",
-            "đề nghị giảm", "xin giảm nhẹ",
-            "điều 51", "điều 54", "điều 65",
+            "bào chữa", "bảo vệ bị cáo", "thân chủ",
         ],
         "negative": [
-            "tình tiết tăng nặng", "tăng nặng trách nhiệm",
-            "mức án cao nhất", "đề nghị mức án cao",
-            "không có khả năng cải tạo", "nguy hiểm cho xã hội",
+            "tăng nặng trách nhiệm", "không có khả năng cải tạo",
+            "nguy hiểm cho xã hội", "cần xử lý nghiêm",
         ],
     },
     "victim": {
         "positive": [
             "tình tiết tăng nặng", "tăng nặng", "hậu quả nghiêm trọng",
-            "bồi thường thiệt hại", "bồi thường dân sự", "thiệt hại",
-            "mức án cao nhất", "hình phạt nghiêm khắc", "đề nghị phạt",
+            "bồi thường thiệt hại", "thiệt hại", "bị hại",
             "tiền án", "tái phạm", "có tổ chức", "dùng hung khí",
-            "điều 52", "điều 48",
+            "bảo vệ quyền lợi bị hại", "đại diện bị hại",
         ],
         "negative": [
             "đề nghị án treo", "xin miễn", "giảm nhẹ hình phạt",
-            "không đáng bị phạt", "nên áp dụng án treo",
-            "cải tạo không giam giữ",
+            "không đáng bị phạt",
         ],
     },
     "neutral": {
         "positive": [
-            "giảm nhẹ", "tăng nặng",          # must mention BOTH sides
+            "giảm nhẹ", "tăng nặng",     # must mention BOTH sides
             "nhận định", "xem xét", "cân nhắc",
-            "theo quy định", "căn cứ",
+            "theo quy định", "căn cứ", "pháp luật quy định",
         ],
         "negative": [
-            # One-sided language — neutral should not exclusively advocate
             "kiên quyết đề nghị", "nhất định phải phạt",
             "bảo vệ bị cáo bằng mọi giá",
         ],
     },
 }
 
-# For neutral role, BOTH "giảm nhẹ" AND "tăng nặng" must appear
-NEUTRAL_BALANCE_TERMS = ["giảm nhẹ", "tăng nặng"]
+# For neutral: both mitigating AND aggravating language must appear
+_NEUTRAL_BALANCE_REQUIRED = ["giảm nhẹ", "tăng nặng"]
+
+
+# ── D4: Citation structure patterns ──────────────────────────────────────────
+import re as _re
+_CITATION_PAT  = _re.compile(r"điều\s*\d+[a-z]?(?:\s*(?:khoản|điểm)\s*[\d\w]+)?", _re.I | _re.U)
+_CONCLUSION_PAT = _re.compile(
+    r"(đề nghị|kiến nghị|kết luận|nhận định|quyết định|xử phạt|tuyên|yêu cầu)",
+    _re.I | _re.U
+)
+
+
+def _d1_article_alignment(text: str, role: str) -> float:
+    """D1: Are the cited articles appropriate for this role? (0–1)"""
+    if role == "neutral":
+        # Neutral is scored on balance — does it cite articles from BOTH sides?
+        has_mitigating = any(a in text for a in ["điều 51", "điều 54", "điều 65"])
+        has_aggravating = any(a in text for a in ["điều 52", "điều 48"])
+        has_primary     = bool(_CITATION_PAT.search(text))  # cites at least one article
+        score = 0.0
+        if has_primary:     score += 0.4
+        if has_mitigating:  score += 0.3
+        if has_aggravating: score += 0.3
+        return min(1.0, score)
+    cfg = _ART_ALIGN[role]
+    pos_hits = sum(1 for a in cfg["positive"] if a in text)
+    neg_hits = sum(1 for a in cfg["negative"] if a in text)
+    req = max(1, len(cfg["positive"]))
+    pos_rate = min(1.0, pos_hits / req) if cfg["positive"] else 0.5
+    penalty  = 0.3 * min(1.0, neg_hits / max(1, len(cfg["negative"])))
+    return max(0.0, pos_rate - penalty)
+
+
+def _d2_sentencing_direction(text: str, role: str) -> float:
+    """D2: Does the response argue toward the correct sentencing direction? (0–1)"""
+    cfg = _SENT_DIR[role]
+    toward_hits = sum(1 for p in cfg["toward"]  if p in text)
+    against_hits = sum(1 for p in cfg["against"] if p in text)
+    req = max(1, int(len(cfg["toward"]) * 0.4))  # need 40% of toward phrases
+    toward_rate  = min(1.0, toward_hits / req)  if cfg["toward"]  else 0.5
+    against_pen  = 0.4 * min(1.0, against_hits / max(1, len(cfg["against"]))) if cfg["against"] else 0.0
+    return max(0.0, toward_rate - against_pen)
+
+
+def _d3_vocabulary_stance(text: str, role: str) -> float:
+    """D3: Role-specific vocabulary density (0–1)"""
+    cfg = _VOCAB[role]
+    pos_hits = [p for p in cfg["positive"] if p in text]
+    neg_hits = [n for n in cfg["negative"]  if n in text]
+    req_pos  = max(1, int(len(cfg["positive"]) * 0.4))  # need 40% positive vocab
+    pos_rate = min(1.0, len(pos_hits) / req_pos) if cfg["positive"] else 1.0
+    neg_rate = min(1.0, len(neg_hits) / max(1, len(cfg["negative"]))) if cfg["negative"] else 0.0
+    bonus = 0.0
+    if role == "neutral":
+        both = all(t in text for t in _NEUTRAL_BALANCE_REQUIRED)
+        bonus = 0.15 if both else -0.15
+    return max(0.0, min(1.0, pos_rate - 0.5 * neg_rate + bonus))
+
+
+def _d4_citation_structure(text: str) -> float:
+    """D4: Is there proper legal citation format AND a conclusion/recommendation? (0–1)"""
+    cit_count  = len(_CITATION_PAT.findall(text))
+    has_concl  = bool(_CONCLUSION_PAT.search(text))
+    cit_score  = min(1.0, cit_count / 3)  # 3+ citations → full score
+    return round(0.6 * cit_score + 0.4 * float(has_concl), 4)
+
+
+def signal_score(response: str, role: str) -> dict:
+    """4-dimension deterministic role-adherence scorer. Zero API cost."""
+    t = response.lower()
+    d1 = _d1_article_alignment(t, role)
+    d2 = _d2_sentencing_direction(t, role)
+    d3 = _d3_vocabulary_stance(t, role)
+    d4 = _d4_citation_structure(t)
+    score = round(0.30 * d1 + 0.30 * d2 + 0.25 * d3 + 0.15 * d4, 4)
+    return {
+        "score":       score,
+        "d1_article":  round(d1, 4),
+        "d2_sentence": round(d2, 4),
+        "d3_vocab":    round(d3, 4),
+        "d4_struct":   round(d4, 4),
+        # legacy fields kept for backward compatibility
+        "pos_hits":    [p for p in _VOCAB[role]["positive"] if p in t],
+        "neg_hits":    [n for n in _VOCAB[role]["negative"]  if n in t],
+        "pos_rate":    round(d3, 4),
+        "neg_rate":    0.0,
+    }
+
+# ── Legacy compatibility alias ────────────────────────────────────────────────
+ROLE_SIGNALS = _VOCAB   # kept so any external import still resolves
+NEUTRAL_BALANCE_TERMS = _NEUTRAL_BALANCE_REQUIRED
 
 # ── LLM judge prompts (role-specific, 4 yes/no questions each) ──────────────────────
 # 4 questions → LLM score ∈ {0.00, 0.25, 0.50, 0.75, 1.00}
@@ -209,35 +356,6 @@ def call_predict(ai_url: str, question: str, role: str,
         log.warning(f"  /predict [{role}] failed: {e}")
         return ""
 
-
-# ── Layer A: Signal scoring ───────────────────────────────────────────────────
-def signal_score(response: str, role: str) -> dict:
-    t = response.lower()
-    sigs = ROLE_SIGNALS[role]
-    pos_hits = [p for p in sigs["positive"] if p in t]
-    neg_hits = [n for n in sigs["negative"] if n in t]
-
-    # Require only 50% of the positive vocabulary list to get a perfect vocabulary score
-    req_pos = max(1, int(len(sigs["positive"]) * 0.5))
-    pos_rate = min(1.0, len(pos_hits) / req_pos) if sigs["positive"] else 1.0
-    
-    req_neg = max(1, len(sigs["negative"]))
-    neg_rate = min(1.0, len(neg_hits) / req_neg) if sigs["negative"] else 0.0
-
-    # Extra check for neutral: must mention BOTH sides
-    balance_bonus = 0.0
-    if role == "neutral":
-        both_present = all(term in t for term in NEUTRAL_BALANCE_TERMS)
-        balance_bonus = 0.2 if both_present else -0.2
-
-    score = max(0.0, min(1.0, pos_rate - 0.5 * neg_rate + balance_bonus))
-    return {
-        "score":    round(score, 4),
-        "pos_hits": pos_hits,
-        "neg_hits": neg_hits,
-        "pos_rate": round(pos_rate, 4),
-        "neg_rate": round(neg_rate, 4),
-    }
 
 
 # ── Layer B: LLM judge ──────────────────────────────────────────────────────────────────
