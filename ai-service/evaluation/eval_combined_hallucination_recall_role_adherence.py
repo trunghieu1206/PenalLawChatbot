@@ -314,23 +314,20 @@ _PROCEDURAL = {
     "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "65",
 }
 
-# ── Known BLTTHS article numbers (commonly cited in every verdict for procedure) ──
-# These are definitive BLTTHS-only articles that must never be treated as BLHS crime articles.
-_BLTTHS_ARTICLES = {
-    # BLTTHS 2015 procedural articles most commonly cited in court verdicts:
-    "298", "299", "300", "301", "302", "303", "304", "305",
-    "306", "307", "308", "309", "310", "311", "312", "313",
-    "314", "315", "316", "317", "318", "319", "320", "321",
-    "322", "323", "324", "325", "326", "327", "328", "329", "330",
-    "331", "332", "333", "334", "335", "336", "337", "338", "339",
-    "340", "341", "342", "343", "344", "345", "346", "347", "348",
-    "349", "350", "351", "352", "353", "354", "355", "356", "357",
-    "358", "359", "360", "361", "362", "363", "364", "365",
-    # Lower procedural articles (investigation, prosecution, trial procedure)
-    "155", "156", "157", "158", "159", "160", "161", "162", "163",
-    "165", "170", "172", "176", "179", "185", "195",
-    "248", "249", "250", "252", "255", "256", "258", "259", "260",
-}
+# ── Known BLTTHS-ONLY citation article numbers ────────────────────────────────
+# IMPORTANT: Keep this list VERY narrow.
+# The fallback (no marker found) path uses this list, so anything here will
+# be silently dropped. Only include articles whose number CANNOT appear as a
+# BLHS crime article. BLHS 2015 has crime articles up to ~425, so overlap is
+# very real — DO NOT add crime-range numbers here.
+#
+# Safe to include: purely procedural BLTTHS articles almost never cited as
+# crime articles — mainly the higher appeal/execution procedure ones.
+# We keep this empty; rely on _BLHS_MARKERS / nearest-marker logic instead.
+_BLTTHS_ARTICLES: set = set()  # kept empty: marker-distance logic handles disambiguation
+
+# _PROCEDURAL contains general/sentencing support articles that are always
+# support articles in BLHS (never the primary crime article):
 
 # Markers indicating BLTTHS context (to skip those article citations)
 _BLTTHS_MARKERS = [

@@ -50,20 +50,10 @@ _PROCEDURAL = {
     "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "65",
 }
 
-# Known BLTTHS article numbers — must never be treated as BLHS crime articles
-_BLTTHS_ARTICLES = {
-    "298", "299", "300", "301", "302", "303", "304", "305",
-    "306", "307", "308", "309", "310", "311", "312", "313",
-    "314", "315", "316", "317", "318", "319", "320", "321",
-    "322", "323", "324", "325", "326", "327", "328", "329", "330",
-    "331", "332", "333", "334", "335", "336", "337", "338", "339",
-    "340", "341", "342", "343", "344", "345", "346", "347", "348",
-    "349", "350", "351", "352", "353", "354", "355", "356", "357",
-    "358", "359", "360", "361", "362", "363", "364", "365",
-    "155", "156", "157", "158", "159", "160", "161", "162", "163",
-    "165", "170", "172", "176", "179", "185", "195",
-    "248", "249", "250", "252", "255", "256", "258", "259", "260",
-}
+# Known BLTTHS-ONLY numbers — kept empty; nearest-marker logic handles disambiguation.
+# DO NOT add crime-range numbers: BLHS 2015 crime articles go up to ~425 and overlap
+# heavily with BLTTHS procedural numbers (e.g. Điều 260, 306, 315 are BLHS crimes).
+_BLTTHS_ARTICLES: set = set()
 
 _BLTTHS_MARKERS = ["tố tụng hình sự", "bltths", "b.l.t.t.h.s", "luật tố tụng"]
 _BLHS_MARKERS   = ["bộ luật hình sự", "blhs", "b.l.h.s", "luật hình sự"]
