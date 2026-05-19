@@ -1170,13 +1170,25 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
             else (state.get("full_case_content") or state["question"])
         )
 
-        pinned_docs   = [d for d in docs if d.metadata.get("_pinned")]
-        semantic_docs = [d for d in docs if not d.metadata.get("_pinned")]
+        # Separate into 3 buckets:
+        #   pinned    = explicitly fetched by pinned step (_pinned=True)
+        #   always    = adjustment-role docs (Điều 51/52/55/7 etc) — semantically
+        #               retrieved but should always survive like pinned
+        #   semantic  = normal semantic docs → scored by cross-encoder
+        pinned_docs    = [d for d in docs if d.metadata.get("_pinned")]
+        adjustment_docs = [
+            d for d in docs
+            if not d.metadata.get("_pinned")
+            and d.metadata.get("_temporal_role") == "adjustment"
+        ]
+        semantic_docs  = [
+            d for d in docs
+            if not d.metadata.get("_pinned")
+            and d.metadata.get("_temporal_role") != "adjustment"
+        ]
 
         if semantic_docs:
-            # Direct AutoModel reranker — no wrapper dependency.
-            # Returns raw logits; higher = more relevant.
-            _q = query[:512]  # cap query to ~130 tokens, leave room for full doc
+            _q = query[:512]
             pairs  = [(_q, d.page_content) for d in semantic_docs]
             scores = _rerank_scores(pairs)
             ranked_semantic = sorted(zip(scores, semantic_docs), key=lambda x: x[0], reverse=True)
@@ -1185,19 +1197,25 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
             ranked_semantic = []
             top_semantic    = []
 
-        top_docs = top_semantic + pinned_docs
+        # Merge: semantic (cross-encoder top-K) + adjustment (always-keep) + pinned
+        top_docs = top_semantic + adjustment_docs + pinned_docs
 
         if not top_docs:
             return {"documents": [], "is_relevant": False}
 
         print(f"  [RERANK] query[:80]: {query[:80]!r}")
         print(f"  [RERANK] {len(docs)} → {len(top_docs)} docs "
-              f"(semantic_kept={len(top_semantic)}/{len(semantic_docs)}, pinned={len(pinned_docs)})")
+              f"(semantic_kept={len(top_semantic)}/{len(semantic_docs)}, "
+              f"adjustment_kept={len(adjustment_docs)}, pinned={len(pinned_docs)})")
         for score, doc in ranked_semantic[:_MAX_SEMANTIC_DOCS]:
             art  = doc.metadata.get("article_number", "?")
             src  = doc.metadata.get("source", "?")
             role = doc.metadata.get("_temporal_role", "?")
             print(f"    [sem] score={score:.4f}  Điều {art} | {src} | {role}")
+        for doc in adjustment_docs:
+            art = doc.metadata.get("article_number", "?")
+            src = doc.metadata.get("source", "?")
+            print(f"    [adj] Điều {art} | {src} | always-keep")
         for doc in pinned_docs:
             art     = doc.metadata.get("article_number", "?")
             src     = doc.metadata.get("source", "?")
