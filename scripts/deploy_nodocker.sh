@@ -38,6 +38,18 @@ BRANCH="dev"
 mkdir -p "$LOG_DIR"
 chmod 777 "$LOG_DIR"
 
+# ── Ensure evaluation log directory exists (needed for eval scripts + scp uploads) ──
+AI_SVC_LOG_DIR="/root/PenalLawChatbot/ai-service/logs"
+mkdir -p "$AI_SVC_LOG_DIR"
+chmod 777 "$AI_SVC_LOG_DIR"
+
+# ── tmux — required by eval scripts to survive SSH disconnect ─────────────────
+if ! command -v tmux &>/dev/null; then
+    info "Installing tmux..."
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends tmux 2>&1 | tail -2 || true
+fi
+command -v tmux &>/dev/null && skip "tmux: $(tmux -V)" || warn "tmux install failed — eval scripts may not survive SSH disconnect."
+
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🚀  PenalLawChatbot — Bare-Metal Deploy (no Docker)"
@@ -285,7 +297,65 @@ for py in /opt/conda/bin/python3 /usr/bin/python3.11 /usr/bin/python3.10 /usr/bi
         break
     fi
 done
-[ -z "$AI_PYTHON" ] && error "No Python with torch found. Ensure torch is installed (setup_server.sh)."
+
+# ── Self-install torch if not found ──────────────────────────────────────────
+# On a fresh CPU-only server (e.g. AWS EC2, DigitalOcean) setup_server.sh may
+# not have been run yet. We install the correct wheel here so deploy_nodocker.sh
+# works standalone on ANY server — GPU or CPU.
+if [ -z "$AI_PYTHON" ]; then
+    info "torch not found — installing automatically..."
+    # Pick the best Python available
+    for py in /opt/conda/bin/python3 /usr/bin/python3.11 /usr/bin/python3.10 /usr/bin/python3; do
+        [ -x "$py" ] && AI_PYTHON="$py" && break
+    done
+    [ -z "$AI_PYTHON" ] && error "No Python 3 interpreter found. Install python3 and re-run."
+
+    if command -v nvidia-smi &>/dev/null && nvidia-smi &>/dev/null; then
+        # GPU server — pick cu-tag from driver version
+        _DRV_M=$(nvidia-smi 2>/dev/null | grep -oP 'Driver Version: \K[0-9]+' | head -1 || echo "0")
+        if   [ "$_DRV_M" -ge 550 ]; then _AUTO_CU="cu124"; _AUTO_TV="2.5.1"
+        elif [ "$_DRV_M" -ge 525 ]; then _AUTO_CU="cu121"; _AUTO_TV="2.5.1"
+        else                              _AUTO_CU="cu118"; _AUTO_TV="2.4.1"; fi
+        info "  GPU server (R${_DRV_M}) — installing torch ${_AUTO_TV}+${_AUTO_CU}..."
+        "$AI_PYTHON" -m pip install \
+            "torch==${_AUTO_TV}+${_AUTO_CU}" \
+            --index-url "https://download.pytorch.org/whl/${_AUTO_CU}" \
+            --quiet 2>&1 | tail -3 || \
+            warn "  GPU torch install failed — falling back to CPU torch."
+    fi
+
+    # CPU-only server, or GPU torch install failed above → install CPU wheel
+    if ! "$AI_PYTHON" -c "import torch" 2>/dev/null; then
+        info "  CPU-only server — installing torch (CPU wheel, ~200 MB)..."
+        "$AI_PYTHON" -m pip install torch \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --quiet 2>&1 | tail -3 || error "Failed to install CPU torch. Check pip output above."
+    fi
+
+    TORCH_VER=$("$AI_PYTHON" -c "import torch; print(torch.__version__)" 2>/dev/null)
+    CUDA_AVAIL=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null)
+    info "torch installed: $TORCH_VER  |  CUDA: $CUDA_AVAIL"
+fi
+
+[ -z "$AI_PYTHON" ] && error "No Python with torch found. This should not happen — please report."
+
+# ── Print deployment mode banner ──────────────────────────────────────────────
+if command -v nvidia-smi &>/dev/null && nvidia-smi &>/dev/null; then
+    _MODE_GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | paste -sd ',' || echo "unknown")
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    info "🖥️  DEPLOYMENT MODE: GPU  — $_MODE_GPU_NAME"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+else
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    info "🖥️  DEPLOYMENT MODE: CPU-ONLY  (no GPU detected)"
+    info "   Inference will run on CPU. This is slower but fully functional."
+    info "   To use GPU: rent a GPU-enabled server and re-run this script."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+fi
+echo ""
+
 
 # Ensure torch cu-tag matches the installed NVIDIA driver version.
 # cu124 requires driver ≥R550; cu121 requires R530; cu118 works from R520.
@@ -351,72 +421,174 @@ fi
 
 # NEVER pip-upgrade torch here. Upgrading torch breaks torchvision (version coupling).
 if command -v nvidia-smi &>/dev/null; then
-    # Auto-fix: ensure /dev/nvidia-uvm exists.
-    # Without it, torch.cuda.is_available() = False (CUDA error 999) even when
-    # nvidia-smi and /dev/nvidia0 are present.
-    if [ ! -e /dev/nvidia-uvm ]; then
-        info "  /dev/nvidia-uvm missing — attempting fix..."
+    # ── /dev/nvidia-uvm repair ──────────────────────────────────────────────────
+    # nvidia-smi uses /dev/nvidia0+nvidiactl (query only) → always works.
+    # PyTorch CUDA needs /dev/nvidia-uvm for GPU memory allocation.
+    # On VPS/container hosts the UVM node may exist but be non-functional,
+    # OR may be missing entirely — we handle BOTH cases.
+    #
+    # KEY FIX: We check CUDA availability FIRST (quick Python probe), and only
+    # run repair strategies if CUDA is actually broken. This avoids skipping
+    # repairs when /dev/nvidia-uvm exists but is a bad/unusable device node.
+    # ────────────────────────────────────────────────────────────────────────────
 
-        # Strategy 1: nvidia-modprobe (the official tool — creates /dev/nvidia* nodes).
-        # Install it first if missing (it's in the nvidia driver package).
+    # Quick initial CUDA probe
+    _TORCH_CUDA=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
+
+    if [ "$_TORCH_CUDA" != "True" ]; then
+        # ── Diagnostics: show what nvidia device files actually exist ──
+        echo ""
+        info "  CUDA unavailable — running diagnostics + repair:"
+        info "  /dev/nvidia* files present:"
+        ls -la /dev/nvidia* 2>/dev/null | while read -r line; do info "    $line"; done || info "    (none)"
+        info "  /proc/devices (nvidia entries):"
+        awk '/nvidia/{printf "    %s\n", $0}' /proc/devices 2>/dev/null || info "    (none)"
+        _UVM_STAT=$(stat -c "major=%t minor=%T perms=%a" /dev/nvidia-uvm 2>/dev/null || echo "not present")
+        info "  /dev/nvidia-uvm: $_UVM_STAT"
+        echo ""
+
+        _UVM_FIXED=false
+
+        # Strategy 1: nvidia-modprobe (official tool — creates/recreates all /dev/nvidia* nodes)
+        # Re-run even if /dev/nvidia-uvm exists — it may be stale/broken.
         if ! command -v nvidia-modprobe &>/dev/null; then
-            info "  Installing nvidia-modprobe..."
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
                 nvidia-modprobe 2>/dev/null || true
         fi
-        if command -v nvidia-modprobe &>/dev/null && nvidia-modprobe -u -c 0 2>/dev/null; then
-            info "  ✅ /dev/nvidia-uvm created via nvidia-modprobe."
-
-        # Strategy 2: modprobe (bare metal; fails inside containers)
-        elif modprobe nvidia-uvm 2>/dev/null; then
-            info "  ✅ nvidia-uvm loaded via modprobe."
-            grep -qxF "nvidia-uvm" /etc/modules 2>/dev/null || echo "nvidia-uvm" >> /etc/modules
-
-        # Strategy 3: mknod (container/LXC — host kernel has module, but modprobe is blocked;
-        # works if nvidia-uvm *major number* is listed in /proc/devices)
-        elif _UVM_MAJOR=$(awk '/nvidia-uvm/{print $1}' /proc/devices 2>/dev/null) && [ -n "$_UVM_MAJOR" ]; then
-            info "  modprobe blocked (container) — creating device nodes via mknod (major=$_UVM_MAJOR)..."
-            mknod /dev/nvidia-uvm       c "$_UVM_MAJOR" 0 2>/dev/null && \
-            mknod /dev/nvidia-uvm-tools c "$_UVM_MAJOR" 1 2>/dev/null || true
+        if command -v nvidia-modprobe &>/dev/null; then
+            info "  Strategy 1 (nvidia-modprobe -u -c 0)..."
+            nvidia-modprobe -u -c 0 2>/dev/null || true
             chmod 666 /dev/nvidia-uvm /dev/nvidia-uvm-tools 2>/dev/null || true
-            [ -e /dev/nvidia-uvm ] && info "  ✅ /dev/nvidia-uvm created via mknod." || \
-                warn "  mknod failed — /dev/nvidia-uvm still absent."
-
+            _probe=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
+            if [ "$_probe" = "True" ]; then
+                info "  ✅ Strategy 1 worked — CUDA available."
+                _UVM_FIXED=true
+            else
+                warn "  Strategy 1 ran but CUDA still False."
+            fi
         else
-            warn "  All strategies failed — nvidia-uvm not in /proc/devices."
-            warn "  GPU is visible but kernel UVM module is not loaded."
+            warn "  Strategy 1 skipped (nvidia-modprobe not available)."
         fi
+
+        # Strategy 2: modprobe (bare metal; blocked inside most containers)
+        if [ "$_UVM_FIXED" = false ]; then
+            info "  Strategy 2 (modprobe nvidia-uvm)..."
+            if modprobe nvidia-uvm 2>/dev/null; then
+                chmod 666 /dev/nvidia-uvm /dev/nvidia-uvm-tools 2>/dev/null || true
+                grep -qxF "nvidia-uvm" /etc/modules 2>/dev/null || echo "nvidia-uvm" >> /etc/modules
+                _probe=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
+                if [ "$_probe" = "True" ]; then
+                    info "  ✅ Strategy 2 worked — nvidia-uvm module loaded."
+                    _UVM_FIXED=true
+                else
+                    warn "  Strategy 2: modprobe ran but CUDA still False."
+                fi
+            else
+                warn "  Strategy 2 skipped (modprobe blocked — normal inside containers)."
+            fi
+        fi
+
+        # Strategy 3: mknod from /proc/devices major number
+        # /proc/devices shows the major number assigned by the host kernel for nvidia-uvm.
+        # Even if a /dev/nvidia-uvm file already exists, it may have the WRONG major:minor —
+        # we recreate it with the correct value from /proc/devices.
+        if [ "$_UVM_FIXED" = false ]; then
+            _UVM_MAJOR=$(awk '/nvidia-uvm/{print $1}' /proc/devices 2>/dev/null || echo "")
+            if [ -n "$_UVM_MAJOR" ]; then
+                info "  Strategy 3 (mknod with /proc/devices major=$_UVM_MAJOR)..."
+                rm -f /dev/nvidia-uvm /dev/nvidia-uvm-tools 2>/dev/null || true
+                mknod /dev/nvidia-uvm       c "$_UVM_MAJOR" 0 2>/dev/null || true
+                mknod /dev/nvidia-uvm-tools c "$_UVM_MAJOR" 1 2>/dev/null || true
+                chmod 666 /dev/nvidia-uvm /dev/nvidia-uvm-tools 2>/dev/null || true
+                _probe=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
+                if [ "$_probe" = "True" ]; then
+                    info "  ✅ Strategy 3 worked — mknod with correct major."
+                    _UVM_FIXED=true
+                else
+                    warn "  Strategy 3: mknod ran (major=$_UVM_MAJOR) but CUDA still False."
+                fi
+            else
+                warn "  Strategy 3 skipped (nvidia-uvm not in /proc/devices — host module not loaded)."
+            fi
+        fi
+
+        # Strategy 4: brute-force common UVM major numbers (cgroup may hide /proc/devices entry)
+        if [ "$_UVM_FIXED" = false ]; then
+            info "  Strategy 4 (brute-force major numbers: 236 235 510 509 195 238 239 234)..."
+            for _try_major in 236 235 510 509 195 238 239 234; do
+                rm -f /dev/nvidia-uvm 2>/dev/null || true
+                mknod /dev/nvidia-uvm c "$_try_major" 0 2>/dev/null || continue
+                chmod 666 /dev/nvidia-uvm 2>/dev/null || true
+                _probe=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
+                if [ "$_probe" = "True" ]; then
+                    mknod /dev/nvidia-uvm-tools c "$_try_major" 1 2>/dev/null || true
+                    chmod 666 /dev/nvidia-uvm-tools 2>/dev/null || true
+                    info "  ✅ Strategy 4 worked — major=$_try_major"
+                    _UVM_FIXED=true
+                    break
+                fi
+            done
+            [ "$_UVM_FIXED" = false ] && { warn "  Strategy 4: no major number worked."; rm -f /dev/nvidia-uvm 2>/dev/null || true; }
+        fi
+
+        # Strategy 5: nvidia-container-cli (libnvidia-container, available on some providers)
+        if [ "$_UVM_FIXED" = false ] && command -v nvidia-container-cli &>/dev/null; then
+            info "  Strategy 5 (nvidia-container-cli)..."
+            nvidia-container-cli --load-kmods configure --ldconfig=@/sbin/ldconfig \
+                --no-cgroups /proc/$$ 2>/dev/null || true
+            _probe=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
+            if [ "$_probe" = "True" ]; then
+                info "  ✅ Strategy 5 worked — nvidia-container-cli configured devices."
+                _UVM_FIXED=true
+            else
+                warn "  Strategy 5: nvidia-container-cli ran but CUDA still False."
+            fi
+        fi
+
+        if [ "$_UVM_FIXED" = false ]; then
+            warn "  ⚠️  All 5 repair strategies failed."
+            warn "  This is a HOST-level restriction — the container cannot access /dev/nvidia-uvm."
+            warn "  Required action on the HOST (not inside this container):"
+            warn "    1. Run:  nvidia-modprobe -u"
+            warn "    2. Verify: ls -la /dev/nvidia-uvm   (should show c 236:0 or similar)"
+            warn "    3. Re-run: bash deploy_nodocker.sh"
+            warn ""
+            warn "  Provider-specific fixes:"
+            warn "    • LXC/Proxmox: lxc.cgroup2.devices.allow = c 195:* rwm  +  /dev/nvidia* pass-through"
+            warn "    • Docker:      --gpus all  or  --device /dev/nvidia-uvm:/dev/nvidia-uvm"
+            warn "    • Vast.ai:     destroy and recreate instance with 'GPU mode' enabled"
+            warn "    • RunPod:      use a RunPod template with CUDA support (not just nvidia-smi)"
+        fi
+
+        # Re-read final CUDA state after all repair attempts
+        _TORCH_CUDA=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
     fi
 
-    _TORCH_CUDA=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
+    # ── Final CUDA status ─────────────────────────────────────────────────────
     if [ "$_TORCH_CUDA" = "True" ]; then
-        _GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || echo "unknown")
-        _GPU_MEM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader 2>/dev/null | head -1 || echo "?")
-        info "✅ GPU ready: $_GPU_NAME ($_GPU_MEM) | torch CUDA: True"
+        _GPU_NAMES=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | paste -sd ',' || echo "unknown")
+        _GPU_MEM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader 2>/dev/null | paste -sd ',' || echo "?")
+        _GPU_COUNT_TORCH=$("$AI_PYTHON" -c "import torch; print(torch.cuda.device_count())" 2>/dev/null || echo "1")
+        info "✅ GPU ready: $_GPU_NAMES | VRAM: $_GPU_MEM | torch device_count: $_GPU_COUNT_TORCH"
     else
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo -e "${RED}[ERR]${NC}   GPU detected (nvidia-smi OK) but CUDA is NOT available."
-        echo -e "${RED}[ERR]${NC}   torch.cuda.is_available() = False"
+        echo -e "${RED}[ERR]${NC}   GPU detected (nvidia-smi OK) but CUDA is NOT usable."
+        echo -e "${RED}[ERR]${NC}   torch.cuda.is_available() = False after all 5 repair attempts."
         echo ""
-        echo -e "${YELLOW}[HELP]${NC}  This is a driver/kernel issue — NOT a PyTorch issue."
-        echo -e "${YELLOW}[HELP]${NC}  Likely cause: the GPU container is missing CUDA device files."
+        echo -e "${YELLOW}[WARN]${NC}  Running on CPU will be SIGNIFICANTLY slower."
+        echo -e "${YELLOW}[WARN]${NC}  Embedding + reranking may take 10–30× longer per request."
         echo ""
-        echo -e "${YELLOW}[HELP]${NC}  Try these steps on the HOST (not inside the container):"
-        echo -e "${YELLOW}[HELP]${NC}    1. nvidia-modprobe -u    # load nvidia-uvm kernel module"
-        echo -e "${YELLOW}[HELP]${NC}    2. ls /dev/nvidia*       # should show nvidia0, nvidia-uvm, etc."
-        echo -e "${YELLOW}[HELP]${NC}    3. Re-run this script."
-        echo ""
-        echo -e "${YELLOW}[HELP]${NC}  If on a rental server: contact your provider to enable"
-        echo -e "${YELLOW}[HELP]${NC}  'CUDA compute access' or to run nvidia-modprobe on the host."
-        echo -e "${YELLOW}[HELP]${NC}  Some providers expose this as a 'GPU passthrough' toggle."
+        echo -e "${YELLOW}[HELP]${NC}  To fix GPU access, ask your provider or try on the HOST:"
+        echo -e "${YELLOW}[HELP]${NC}    nvidia-modprobe -u && ls -la /dev/nvidia-uvm"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo ""
-        read -rp "You have a GPU but CUDA is unavailable. Continue on CPU anyway? [y/N] " _CONTINUE_CPU
+        read -rp "⚠️  Continue deploying in CPU-only mode anyway? [y/N] " _CONTINUE_CPU
         if [[ ! "$_CONTINUE_CPU" =~ ^[Yy]$ ]]; then
-            error "Aborted. Fix CUDA access and re-run."
+            error "Aborted. Fix CUDA access on the host and re-run deploy_nodocker.sh."
         fi
-        warn "Continuing on CPU as requested. Inference will be significantly slower."
+        warn "Continuing in CPU-only mode as confirmed. Inference will be slower."
+        echo ""
     fi
 else
     warn "nvidia-smi not found — deploying in CPU-only mode."
@@ -520,14 +692,38 @@ pkill -f "uvicorn app.main:app" 2>/dev/null || true
 sleep 1
 unset MILVUS_URI 2>/dev/null || true
 
+# ── Auto-detect GPU count and launch one worker per GPU ──────────────────────
+# On a CPU-only server GPU_COUNT=0 → fall back to 1 worker.
+# On a 1-GPU server GPU_COUNT=1 → 1 worker on cuda:0.
+# On a 2-GPU server GPU_COUNT=2 → 2 workers; main.py assigns cuda:0/cuda:1
+# by PID % gpu_count so both GPUs are active for concurrent requests.
+_GPU_COUNT=0
+if command -v nvidia-smi &>/dev/null && nvidia-smi &>/dev/null; then
+    _GPU_COUNT=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | wc -l)
+    _GPU_COUNT=$(( _GPU_COUNT < 0 ? 0 : _GPU_COUNT ))   # guard against negative
+fi
+
+if [ "$_GPU_COUNT" -ge 2 ]; then
+    _UVICORN_WORKERS="$_GPU_COUNT"
+    info "🖥️  Multi-GPU detected ($_GPU_COUNT GPUs) — launching $_UVICORN_WORKERS uvicorn workers"
+elif [ "$_GPU_COUNT" -eq 1 ]; then
+    _UVICORN_WORKERS=1
+    info "🖥️  Single GPU detected — launching 1 uvicorn worker"
+else
+    _UVICORN_WORKERS=1
+    info "🖥️  No GPU detected (CPU-only) — launching 1 uvicorn worker"
+fi
+
+export GPU_COUNT="$_GPU_COUNT"
+
 nohup "$AI_PYTHON" -m uvicorn app.main:app \
     --host 0.0.0.0 \
     --port 8000 \
-    --workers 1 \
+    --workers "$_UVICORN_WORKERS" \
     --timeout-keep-alive 660 \
     > "$LOG_DIR/ai-service.log" 2>&1 &
 AI_PID=$!
-info "AI service started (PID $AI_PID). Log: $LOG_DIR/ai-service.log"
+info "AI service started (PID $AI_PID, workers=$_UVICORN_WORKERS). Log: $LOG_DIR/ai-service.log"
 
 # ── 6. Backend (Spring Boot) ──────────────────────────────────
 info "Building Spring Boot backend..."
@@ -730,7 +926,7 @@ info "  PostgreSQL : tail -f $LOG_DIR/postgres.log"
 info "  nginx      : tail -f /var/log/nginx/error.log"
 echo ""
 info "Restart tips:"
-info "  AI service : pkill -f uvicorn; cd $PROJECT_DIR/ai-service && nohup $AI_PYTHON -m uvicorn app.main:app --host 0.0.0.0 --port 8000 >> $LOG_DIR/ai-service.log 2>&1 &"
+info "  AI service : pkill -f uvicorn; _GC=\$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | wc -l || echo 0); [ \"\$_GC\" -lt 1 ] && _GC=1; cd $PROJECT_DIR/ai-service && GPU_COUNT=\$_GC nohup $AI_PYTHON -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers \$_GC >> $LOG_DIR/ai-service.log 2>&1 &"
 info "  Backend    : pkill -f java; nohup java -jar $PROJECT_DIR/backend/target/*.jar --server.port=8080 >> $LOG_DIR/backend.log 2>&1 &"
 info "  nginx      : pkill nginx; nginx"
 echo ""

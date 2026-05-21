@@ -113,7 +113,7 @@ apt-get update -qq 2>&1 | grep -v '^W:' || true
 # ── 1. Base system packages ─────────────────────────────────
 info "Installing core packages..."
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    git curl wget unzip nano \
+    git curl wget unzip nano tmux \
     build-essential ca-certificates gnupg lsb-release \
     software-properties-common apt-transport-https \
     net-tools nginx \

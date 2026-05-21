@@ -65,6 +65,18 @@ OUTPUTS:
   /root/PenalLawChatbot/ai-service/evaluation/results/combined_summary.json   — final aggregated scores (JSON)
   /root/PenalLawChatbot/ai-service/evaluation/results/combined_report.txt     — human-readable report with per-case details + final %
                             (download this file to review results offline)
+
+DOWNLOAD output to local machine
+# Download all result files (primary server)
+scp -P 2319 -r \
+  'root@n3.ckey.vn:~/PenalLawChatbot/ai-service/evaluation/results/' \
+  ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/
+
+# Download log files too
+scp -P 2319 \
+  'root@n3.ckey.vn:~/PenalLawChatbot/ai-service/logs/eval_*.txt' \
+  ~/Desktop/Projects/PenalLawChatbot/ai-service/logs/
+
 """
 
 import os, json, re, sys, time, argparse, logging

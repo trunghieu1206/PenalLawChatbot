@@ -157,11 +157,22 @@ _DEFAULT_EMBEDDING = "trunghieu1206/jina-embeddings-v5-text-nano-retrieval-vn-le
 
 
 def _detect_device() -> str:
-    """Auto-detect the best available device: GPU → CPU fallback.
+    """Auto-detect the best available compute device for this worker process.
 
-    1. FORCE_CPU=1 env var → always CPU (explicit override).
-    2. CUDA available + kernel probe succeeds → use GPU.
-    3. CUDA not available OR kernel probe fails → fall back to CPU with a warning.
+    GPU distribution strategy (multi-GPU servers)
+    -----------------------------------------------
+    uvicorn --workers N spawns N independent processes. We use:
+        gpu_index = os.getpid() % gpu_count
+    so that workers round-robin across all available GPUs automatically.
+
+    Decision tree
+    -------------
+    1. FORCE_CPU=1 env var         → always "cpu"  (explicit override)
+    2. nvidia-smi / CUDA absent    → "cpu"  (CPU-only server)
+    3. 0 CUDA devices visible      → "cpu"
+    4. CUDA kernel probe fails     → "cpu"  (bad driver / container issue)
+    5. 1 GPU                       → "cuda:0"
+    6. N GPUs (N>=2)               → "cuda:{pid % N}"  (round-robin)
 
     Never raises — the service always starts.
     """
@@ -176,24 +187,36 @@ def _detect_device() -> str:
         )
         return "cpu"
 
+    gpu_count = torch.cuda.device_count()
+    if gpu_count == 0:
+        print("⚠️  CUDA is available but device_count()=0 — falling back to CPU.")
+        return "cpu"
+
+    # Distribute workers across GPUs: worker with PID P uses cuda:(P % N)
+    gpu_idx = os.getpid() % gpu_count
+    device   = f"cuda:{gpu_idx}"
+
     try:
-        probe = torch.zeros(1, device="cuda")
+        probe = torch.zeros(1, device=device)
         _ = probe + 1  # triggers actual kernel dispatch
         del probe
-        gpu_name = torch.cuda.get_device_name(0)
-        cap = torch.cuda.get_device_capability(0)
-        print(f"⚙️  GPU Ready — {gpu_name} (sm_{cap[0]}{cap[1]})")
-        return "cuda"
+        gpu_name  = torch.cuda.get_device_name(gpu_idx)
+        cap       = torch.cuda.get_device_capability(gpu_idx)
+        total_mem = torch.cuda.get_device_properties(gpu_idx).total_memory // (1024 ** 2)
+        print(
+            f"⚙️  GPU {gpu_idx}/{gpu_count}: {gpu_name} "
+            f"({total_mem} MB VRAM, sm_{cap[0]}{cap[1]}) — PID {os.getpid()}"
+        )
+        return device
     except Exception as e:
         print(
-            f"⚠️  GPU probe failed ({type(e).__name__}: {e})\n"
+            f"⚠️  GPU {gpu_idx} probe failed ({type(e).__name__}: {e})\n"
             f"   Falling back to CPU. To fix GPU:\n"
             f"   - Check driver: nvidia-smi\n"
             f"   - Reinstall matching PyTorch CUDA wheel (cu118 / cu121 / cu124)\n"
             f"   - Re-run deploy_nodocker.sh"
         )
         return "cpu"
-
 
 
 DEVICE = _detect_device()
@@ -723,10 +746,13 @@ async def lifespan(app: FastAPI):
         or _DEFAULT_EMBEDDING
     )
     print(f"📌 Embedding model: {_jina_model}")
+    # Scale batch size with device: GPU can process larger batches efficiently.
+    # EMBEDDING_BATCH_SIZE env var always wins; default 64 on GPU, 32 on CPU.
+    _default_batch = "64" if DEVICE.startswith("cuda") else "32"
     embedding_model = JinaEmbeddings(
         model_name=_jina_model,
         device=DEVICE,
-        batch_size=int(os.getenv("EMBEDDING_BATCH_SIZE", "32")),
+        batch_size=int(os.getenv("EMBEDDING_BATCH_SIZE", _default_batch)),
     )
 
     # 2. Milvus-Lite vector store — use MilvusClient directly
@@ -805,9 +831,20 @@ async def lifespan(app: FastAPI):
     )
     reranker_model.eval()
     reranker_model.to(DEVICE)
-    _prec = "fp16" if DEVICE == "cuda" else "fp32"
+    _prec = "fp16" if DEVICE.startswith("cuda") else "fp32"
     print(f"✅ Reranker loaded: {_RERANKER_MODEL} ({_prec}, AutoModel direct, max_length=8192).")
     del _rerank_torch
+
+    # Log VRAM usage after all models are loaded on this worker
+    if DEVICE.startswith("cuda"):
+        _gpu_idx   = int(DEVICE.split(":")[-1]) if ":" in DEVICE else 0
+        _mem_used  = torch.cuda.memory_allocated(_gpu_idx) // (1024 ** 2)
+        _mem_rsvd  = torch.cuda.memory_reserved(_gpu_idx)  // (1024 ** 2)
+        _mem_total = torch.cuda.get_device_properties(_gpu_idx).total_memory // (1024 ** 2)
+        print(
+            f"📊 GPU {_gpu_idx} VRAM after model load: "
+            f"{_mem_used} MB allocated / {_mem_rsvd} MB reserved / {_mem_total} MB total"
+        )
 
     def _rerank_scores(pairs: list[tuple[str, str]], batch_size: int = 8) -> list[float]:
         """Score (query, doc) pairs with the reranker. Returns raw logits (higher=more relevant)."""

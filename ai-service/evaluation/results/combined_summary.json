@@ -1,0 +1,18 @@
+{
+  "meta": {
+    "status": "COMPLETE",
+    "n_cases_evaluated": 20,
+    "total_role_evaluations": 81,
+    "case_range": "1–20"
+  },
+  "system": {
+    "primary_recall": 0.971,
+    "hallucination_rate": 0.0198,
+    "role_adherence": 0.8391
+  },
+  "pass": {
+    "recall": true,
+    "hallucination": true,
+    "role": false
+  }
+}
