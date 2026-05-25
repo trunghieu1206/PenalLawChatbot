@@ -7,6 +7,7 @@ L4 Hallucination is removed per request to minimize LLM judge cost.
 
 HOW TO RUN EXAMPLES:
   # start a new tmux session (survives SSH disconnect)
+    apt-get install -y tmux
     tmux new -s eval
     # → run your python command inside tmux
     # → detach (leave running): Ctrl+B then D
@@ -35,8 +36,8 @@ HOW TO RUN EXAMPLES:
 
   #### resume
   python3 /root/PenalLawChatbot/ai-service/evaluation/eval_combined_hallucination_recall_role_adherence.py \
-    --start 1 \
-    --end 20 \
+    --start 21 \
+    --end 100 \
     --resume \
     --skip-rubric \
     --log-file /root/PenalLawChatbot/ai-service/logs/eval_combined_1_100.txt
@@ -65,16 +66,17 @@ OUTPUTS:
   /root/PenalLawChatbot/ai-service/evaluation/results/combined_summary.json   — final aggregated scores (JSON)
   /root/PenalLawChatbot/ai-service/evaluation/results/combined_report.txt     — human-readable report with per-case details + final %
                             (download this file to review results offline)
+  /root/PenalLawChatbot/ai-service/evaluation/results/combined_results_role_progress.jsonl  — role adherence progress
 
 DOWNLOAD output to local machine
 # Download all result files (primary server)
-scp -P 2319 -r \
-  'root@n3.ckey.vn:~/PenalLawChatbot/ai-service/evaluation/results/' \
+scp -P 35275 -r \
+  'root@142.188.39.36:~/PenalLawChatbot/ai-service/evaluation/results/' \
   ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/
 
 # Download log files too
-scp -P 2319 \
-  'root@n3.ckey.vn:~/PenalLawChatbot/ai-service/logs/eval_*.txt' \
+scp -P 35275 \
+  'root@142.188.39.36:~/PenalLawChatbot/ai-service/logs/eval_*.txt' \
   ~/Desktop/Projects/PenalLawChatbot/ai-service/logs/
 
 """
@@ -571,6 +573,7 @@ def evaluate_metrics(response_dict, case, gt_nums, valid_corpus, role,
         "role_llm_score":   llm_result.get("score"),
         "role_llm_answers": llm_result.get("answers", {}),
         "text_preview":     result_text[:300],
+        "full_response":    result_text,   # full text saved for offline LLM-as-a-judge rubric scoring
     }
 
 
@@ -906,7 +909,9 @@ def main():
                     # 4. Print & Save
                     _print_case_report(report, cidx, total, case, role, sys_eval, rubric if rubric else None)
                     row["evaluations"][role] = {"system": sys_eval, "rubric": rubric}
-                    # Write role-level progress entry immediately (enables mid-case resume)
+                    # Write role-level progress entry immediately (enables mid-case resume).
+                    # full_response is already inside sys_eval — written to disk so that an
+                    # offline LLM-as-a-judge rubric script can read responses without re-calling the system.
                     prog_f.write(json.dumps({"url": url, "role": role, "eval": sys_eval}, ensure_ascii=False) + "\n")
                     prog_f.flush()
                     if url not in done_roles:
