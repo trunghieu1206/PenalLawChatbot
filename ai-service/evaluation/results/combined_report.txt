@@ -3712,3 +3712,305 @@ Resume mode: 20 cases fully done — skipping.
   │  Response: '**I. LUẬN ĐIỂM BÀO CHỮA:**\n\n1.  **Về định tội danh:**\n    Kính thưa Hội đồng xét xử,\n    Căn cứ vào hồ sơ vụ án và các t'
   └──────────────────────────────────────────────────────────────
   ┌─ ⏳ Processing Role: VICTIM ───────────────────────
+======================================================================
+VNPLaw Combined Evaluation  (Recall · Hallucination L1-L3 · Role Adherence)
+  AI service    : http://localhost:8000
+  Judge model   : google/gemini-2.5-pro
+  Baseline model: google/gemini-2.5-flash
+  Case range    : 21 – 100
+======================================================================
+Cases to evaluate: 80  (77 have primary article for recall)
+Resume mode: 50 cases fully done — skipping.
+  Pre-loaded from JSONL: recall=149/159  hall_evals=171  role_evals=171
+  Role-progress sidecar: 1 partial case(s) found — will resume mid-case.
+  Judge API key : sk-or-v1...  (OPENROUTER_LLM_JUDGE_KEY)
+  Baseline key  : sk-or-v1...  (OPENROUTER_API_KEY)
+  ⚡ Role adherence: 4-dim deterministic scorer (zero LLM calls)
+  ⚡ --skip-rubric: rubric LLM scoring disabled
+
+━━━ CASE 51/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  URL: https://congbobanan.toaan.gov.vn/2ta327938t1cvn/chi-tiet-ban-an
+  ⏭️  [SKIP-ROLE] NEUTRAL already done for this case — skipping.
+  ⏭️  [SKIP-ROLE] DEFENSE already done for this case — skipping.
+  ┌─ ⏳ Processing Role: VICTIM ───────────────────────
+
+⚠️  Evaluation interrupted (Ctrl+C) — writing partial summary...
+
+======================================================================
+  ⚠️  PARTIAL RESULTS — 50 cases (50 preloaded + 0 new)  (171 role evals)  [PARTIAL (interrupted)]
+======================================================================
+  Metric                    System    Target  Pass?
+  --------------------------------------------------
+  Primary Recall             93.7%      ≥90%  ✅ PASS
+  Hallucination Rate          1.6%      ≤10%  ✅ PASS
+  Role Adherence             85.4%      ≥85%  ✅ PASS
+  --------------------------------------------------
+  Detailed JSONL : /root/PenalLawChatbot/ai-service/evaluation/results/combined_results.jsonl
+  Summary JSON   : /root/PenalLawChatbot/ai-service/evaluation/results/combined_summary.json
+  Human report   : /root/PenalLawChatbot/ai-service/evaluation/results/combined_report.txt  ← download this file for offline review
+  ↺  Resume with: --resume --start 21 --end 100
+======================================================================
+
+  🔴 RECALL MISSES (6 unique cases) — system cited wrong/no article:
+  ⚠️  NOTE: 10 role eval(s) returned a clarification request (no mapped_laws).
+       This means the system asked for more info instead of analysing the case.
+       Check if case_description has explicit crime date (ngay_pham_toi) and behavior (hanh_vi).
+======================================================================
+VNPLaw Combined Evaluation  (Recall · Hallucination L1-L3 · Role Adherence)
+  AI service    : http://localhost:8000
+  Judge model   : google/gemini-2.5-pro
+  Baseline model: google/gemini-2.5-flash
+  Case range    : 21 – 100
+======================================================================
+Cases to evaluate: 80  (77 have primary article for recall)
+Resume mode: 50 cases fully done — skipping.
+  Pre-loaded from JSONL: recall=149/159  hall_evals=171  role_evals=171
+  Role-progress sidecar: 1 partial case(s) found — will resume mid-case.
+  Judge API key : sk-or-v1...  (OPENROUTER_LLM_JUDGE_KEY)
+  Baseline key  : sk-or-v1...  (OPENROUTER_API_KEY)
+  ⚡ Role adherence: 4-dim deterministic scorer (zero LLM calls)
+  ⚡ --skip-rubric: rubric LLM scoring disabled
+
+━━━ CASE 51/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  URL: https://congbobanan.toaan.gov.vn/2ta327938t1cvn/chi-tiet-ban-an
+  ⏭️  [SKIP-ROLE] NEUTRAL already done for this case — skipping.
+  ⏭️  [SKIP-ROLE] DEFENSE already done for this case — skipping.
+  ┌─ ⏳ Processing Role: VICTIM ───────────────────────
+  │  ✅ Fetched in 391.1s
+  │  ✅ Scored in 0.1s
+  ┌─ [51/100]  Role: VICTIM  ──────────────────────────────────────
+  │  Crime  : Tội vô ý gây thương tích hoặc gây tổn hai sức khoẻ của người khác (Bộ luật hình sự năm 1999)
+  │
+  │  ✅ Recall        : HIT  ⚠️ [GT LOW CONFIDENCE — manual check needed]
+  │       Ground truth article (from court verdict) : Điều 134  [GT confidence: low]
+  │       Article cited by system                   : 134
+  │       Law document source of cited article      : (source field unavailable)
+  │       Hit method                                : mapped_laws
+  │  ✅ Hallucination : score=0.0  L1=False  L2=False  L3=False
+  │  ✅ Role Adherence: 0.750  (d1_art=0.5  d2_sent=0.667  d3_voc=1.0  d4_cit=1.0)
+  │  Response: '**I. LUẬN ĐIỂM BẢO VỆ BỊ HẠI:**\n\n1.  **Về định tội danh:**\n    Bị cáo Ngô Minh T đã có hành vi cố ý dùng dao tự chế (hun'
+  └──────────────────────────────────────────────────────────────
+  📊 Running totals after 51 case(s)  (172 role evals)
+     Metric                    System  Target
+     ---------------------------------------------
+     Primary Recall             93.8%  ≥90%  ✅  (miss=10/160)
+     Hallucination Rate          1.6%  ≤10%  ✅
+     Role Adherence             85.3%  ≥85%  ✅
+
+━━━ CASE 52/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  URL: https://congbobanan.toaan.gov.vn/2ta1326625t1cvn/chi-tiet-ban-an
+  ┌─ ⏳ Processing Role: NEUTRAL ───────────────────────
+  │  ✅ Fetched in 21.0s
+  │  ✅ Scored in 0.0s
+  ┌─ [52/100]  Role: NEUTRAL  ──────────────────────────────────────
+  │  Crime  : Tội cướp tài sản (Bộ luật hình sự năm 1999)
+  │
+  │  ✅ Recall        : HIT
+  │       Ground truth article (from court verdict) : Điều 168  [GT confidence: high]
+  │       Article cited by system                   : 168, 178
+  │       Law document source of cited article      : (source field unavailable)
+  │       Hit method                                : mapped_laws
+  │  ✅ Hallucination : score=0.0  L1=False  L2=False  L3=False
+  │  ✅ Role Adherence: 1.000  (d1_art=1.0  d2_sent=1.0  d3_voc=1.0  d4_cit=1.0)
+  │  Response: '**I. NHẬN ĐỊNH CỦA TÒA ÁN:**\n1.  **Định tội danh:**\n    *   **Tội Cướp tài sản:** Lê Huy T đã có hành vi điều khiển xe m'
+  └──────────────────────────────────────────────────────────────
+  ┌─ ⏳ Processing Role: DEFENSE ───────────────────────
+  │  ✅ Fetched in 24.3s
+  │  ✅ Scored in 0.0s
+  ┌─ [52/100]  Role: DEFENSE  ──────────────────────────────────────
+  │  Crime  : Tội cướp tài sản (Bộ luật hình sự năm 1999)
+  │
+  │  ✅ Recall        : HIT
+  │       Ground truth article (from court verdict) : Điều 168  [GT confidence: high]
+  │       Article cited by system                   : 168, 172, 178, 51, 52, 54, 55, 65
+  │       Law document source of cited article      : (extracted from free text — no structured source)
+  │       Hit method                                : text_fallback
+  │  ✅ Hallucination : score=0.0  L1=False  L2=False  L3=False
+  │  ✅ Role Adherence: 0.760  (d1_art=0.2  d2_sent=1.0  d3_voc=1.0  d4_cit=1.0)
+  │  Response: '**I. LUẬN ĐIỂM BÀO CHỮA:**\n\n1.  **Về định tội danh:**\n    *   **Đối với hành vi hủy hoại hoặc cố ý làm hư hỏng tài sản:*'
+  └──────────────────────────────────────────────────────────────
+  ┌─ ⏳ Processing Role: VICTIM ───────────────────────
+  │  ✅ Fetched in 24.9s
+  │  ✅ Scored in 0.0s
+  ┌─ [52/100]  Role: VICTIM  ──────────────────────────────────────
+  │  Crime  : Tội cướp tài sản (Bộ luật hình sự năm 1999)
+  │
+  │  ✅ Recall        : HIT
+  │       Ground truth article (from court verdict) : Điều 168  [GT confidence: high]
+  │       Article cited by system                   : 168, 178, 48, 52, 53, 55
+  │       Law document source of cited article      : (extracted from free text — no structured source)
+  │       Hit method                                : text_fallback
+  │  ✅ Hallucination : score=0.0  L1=False  L2=False  L3=False
+  │  ✅ Role Adherence: 0.900  (d1_art=1.0  d2_sent=0.667  d3_voc=1.0  d4_cit=1.0)
+  │  Response: '**I. LUẬN ĐIỂM BẢO VỆ BỊ HẠI:**\n\n1.  **Về định tội danh:**\n    Chúng tôi hoàn toàn đồng ý với quan điểm truy tố của Viện'
+  └──────────────────────────────────────────────────────────────
+  📊 Running totals after 52 case(s)  (175 role evals)
+     Metric                    System  Target
+     ---------------------------------------------
+     Primary Recall             93.9%  ≥90%  ✅  (miss=10/163)
+     Hallucination Rate          1.6%  ≤10%  ✅
+     Role Adherence             85.4%  ≥85%  ✅
+
+━━━ CASE 53/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  URL: https://congbobanan.toaan.gov.vn/2ta466779t1cvn/chi-tiet-ban-an
+  ┌─ ⏳ Processing Role: NEUTRAL ───────────────────────
+  │  ✅ Fetched in 12.0s
+  │  ✅ Scored in 0.0s
+  ┌─ [53/100]  Role: NEUTRAL  ──────────────────────────────────────
+  │  Crime  : Tội sản xuất, tàng trữ, vận chuyển, sử dụng hoặc mua bán trái phép chất cháy, chất độc (Luật sửa đổi, bổ sung một số điều của BLHS năm 2015)
+  │
+  │  ✅ Recall        : HIT
+  │       Ground truth article (from court verdict) : Điều 311  [GT confidence: high]
+  │       Article cited by system                   : 311
+  │       Law document source of cited article      : (source field unavailable)
+  │       Hit method                                : mapped_laws
+  │  ✅ Hallucination : score=0.0  L1=False  L2=False  L3=False
+  │  ✅ Role Adherence: 1.000  (d1_art=1.0  d2_sent=1.0  d3_voc=1.0  d4_cit=1.0)
+  │  Response: '**I. NHẬN ĐỊNH CỦA TÒA ÁN:**\n1. **Định tội danh:**\n   - Hành vi của Lê Văn S: Khoảng 15 giờ 20 phút ngày 09-4-2019, Lê V'
+  └──────────────────────────────────────────────────────────────
+  ┌─ ⏳ Processing Role: DEFENSE ───────────────────────
+  │  ✅ Fetched in 402.2s
+  │  ✅ Scored in 0.1s
+  ┌─ [53/100]  Role: DEFENSE  ──────────────────────────────────────
+  │  Crime  : Tội sản xuất, tàng trữ, vận chuyển, sử dụng hoặc mua bán trái phép chất cháy, chất độc (Luật sửa đổi, bổ sung một số điều của BLHS năm 2015)
+  │
+  │  ✅ Recall        : HIT
+  │       Ground truth article (from court verdict) : Điều 311  [GT confidence: high]
+  │       Article cited by system                   : 311
+  │       Law document source of cited article      : (source field unavailable)
+  │       Hit method                                : mapped_laws
+  │  ✅ Hallucination : score=0.0  L1=False  L2=False  L3=False
+  │  ✅ Role Adherence: 0.850  (d1_art=0.5  d2_sent=1.0  d3_voc=1.0  d4_cit=1.0)
+  │  Response: '**I. LUẬN ĐIỂM BÀO CHỮA:**\n\n1.  **Về định tội danh:**\n    Kính thưa Hội đồng xét xử,\n    Cáo trạng của Viện kiểm sát nhâ'
+  └──────────────────────────────────────────────────────────────
+  ┌─ ⏳ Processing Role: VICTIM ───────────────────────
+  │  ✅ Fetched in 19.0s
+  │  ✅ Scored in 0.0s
+  ┌─ [53/100]  Role: VICTIM  ──────────────────────────────────────
+  │  Crime  : Tội sản xuất, tàng trữ, vận chuyển, sử dụng hoặc mua bán trái phép chất cháy, chất độc (Luật sửa đổi, bổ sung một số điều của BLHS năm 2015)
+  │
+  │  ✅ Recall        : HIT
+  │       Ground truth article (from court verdict) : Điều 311  [GT confidence: high]
+  │       Article cited by system                   : 311, 47
+  │       Law document source of cited article      : (source field unavailable)
+  │       Hit method                                : mapped_laws
+  │  ✅ Hallucination : score=0.0  L1=False  L2=False  L3=False
+  │  ✅ Role Adherence: 0.750  (d1_art=0.5  d2_sent=0.667  d3_voc=1.0  d4_cit=1.0)
+  │  Response: '**I. LUẬN ĐIỂM BẢO VỆ BỊ HẠI:**\n\n1.  **Về định tội danh:**\n    Bị cáo Lê Văn S đã thực hiện hành vi vận chuyển trái phép'
+  └──────────────────────────────────────────────────────────────
+  📊 Running totals after 53 case(s)  (178 role evals)
+     Metric                    System  Target
+     ---------------------------------------------
+     Primary Recall             94.0%  ≥90%  ✅  (miss=10/166)
+     Hallucination Rate          1.6%  ≤10%  ✅
+     Role Adherence             85.4%  ≥85%  ✅
+
+━━━ CASE 54/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  URL: https://congbobanan.toaan.gov.vn/2ta1510104t1cvn/chi-tiet-ban-an
+  ┌─ ⏳ Processing Role: NEUTRAL ───────────────────────
+  │  ✅ Fetched in 16.0s
+  │  ✅ Scored in 0.0s
+  ┌─ [54/100]  Role: NEUTRAL  ──────────────────────────────────────
+  │  Crime  : Tội sản xuất, buôn bán hàng giả là lương thực, thực phẩm, phụ gia thực phẩm (Luật sửa đổi, bổ sung một số điều của BLHS năm 2015)
+  │
+  │  ✅ Recall        : HIT
+  │       Ground truth article (from court verdict) : Điều 193  [GT confidence: high]
+  │       Article cited by system                   : 193
+  │       Law document source of cited article      : (source field unavailable)
+  │       Hit method                                : mapped_laws
+  │  ✅ Hallucination : score=0.0  L1=False  L2=False  L3=False
+  │  ✅ Role Adherence: 1.000  (d1_art=1.0  d2_sent=1.0  d3_voc=1.0  d4_cit=1.0)
+  │  Response: '**I. NHẬN ĐỊNH CỦA TÒA ÁN:**\n1. **Định tội danh:**\n   - Hà Đức H2 đã có hành vi sản xuất và buôn bán Trà gạo lứt giả, đâ'
+  └──────────────────────────────────────────────────────────────
+  ┌─ ⏳ Processing Role: DEFENSE ───────────────────────
+  │  ✅ Fetched in 19.7s
+  │  ✅ Scored in 0.0s
+  ┌─ [54/100]  Role: DEFENSE  ──────────────────────────────────────
+  │  Crime  : Tội sản xuất, buôn bán hàng giả là lương thực, thực phẩm, phụ gia thực phẩm (Luật sửa đổi, bổ sung một số điều của BLHS năm 2015)
+  │
+  │  ✅ Recall        : HIT
+  │       Ground truth article (from court verdict) : Điều 193  [GT confidence: high]
+  │       Article cited by system                   : 193
+  │       Law document source of cited article      : (source field unavailable)
+  │       Hit method                                : mapped_laws
+  │  ✅ Hallucination : score=0.0  L1=False  L2=False  L3=False
+  │  ✅ Role Adherence: 0.769  (d1_art=0.333  d2_sent=1.0  d3_voc=0.875  d4_cit=1.0)
+  │  Response: '**I. LUẬN ĐIỂM BÀO CHỮA:**\n\n1.  **Về định tội danh:**\n    Căn cứ vào các tài liệu có trong hồ sơ vụ án và diễn biến tại '
+  └──────────────────────────────────────────────────────────────
+  ┌─ ⏳ Processing Role: VICTIM ───────────────────────
+  │  ✅ Fetched in 224.9s
+  │  ✅ Scored in 0.2s
+  ┌─ [54/100]  Role: VICTIM  ──────────────────────────────────────
+  │  Crime  : Tội sản xuất, buôn bán hàng giả là lương thực, thực phẩm, phụ gia thực phẩm (Luật sửa đổi, bổ sung một số điều của BLHS năm 2015)
+  │
+  │  ✅ Recall        : HIT
+  │       Ground truth article (from court verdict) : Điều 193  [GT confidence: high]
+  │       Article cited by system                   : 193
+  │       Law document source of cited article      : (source field unavailable)
+  │       Hit method                                : mapped_laws
+  │  ✅ Hallucination : score=0.0  L1=False  L2=False  L3=False
+  │  ✅ Role Adherence: 1.000  (d1_art=1.0  d2_sent=1.0  d3_voc=1.0  d4_cit=1.0)
+  │  Response: 'Với vai trò là Luật sư bảo vệ quyền lợi cho Bị hại (Công ty Cổ phần T5 và chị Cao Thị Thanh H), tôi xin trình bày luận đ'
+  └──────────────────────────────────────────────────────────────
+  📊 Running totals after 54 case(s)  (181 role evals)
+     Metric                    System  Target
+     ---------------------------------------------
+     Primary Recall             94.1%  ≥90%  ✅  (miss=10/169)
+     Hallucination Rate          1.5%  ≤10%  ✅
+     Role Adherence             85.5%  ≥85%  ✅
+
+━━━ CASE 55/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  URL: https://congbobanan.toaan.gov.vn/2ta1340916t1cvn/chi-tiet-ban-an
+  ┌─ ⏳ Processing Role: NEUTRAL ───────────────────────
+  │  ✅ Fetched in 9.3s
+  │  ✅ Scored in 0.0s
+  ┌─ [55/100]  Role: NEUTRAL  ──────────────────────────────────────
+  │  Crime  : Tội vi phạm quy định về xuất cảnh, nhập cảnh; tội ở lại Việt Nam trái phép (Luật sửa đổi, bổ sung một số điều của BLHS năm 2015)
+  │
+  │  ✅ Recall        : HIT
+  │       Ground truth article (from court verdict) : Điều 347  [GT confidence: high]
+  │       Article cited by system                   : 347
+  │       Law document source of cited article      : (source field unavailable)
+  │       Hit method                                : mapped_laws
+  │  ✅ Hallucination : score=0.0  L1=False  L2=False  L3=False
+  │  ✅ Role Adherence: 1.000  (d1_art=1.0  d2_sent=1.0  d3_voc=1.0  d4_cit=1.0)
+  │  Response: '**I. NHẬN ĐỊNH CỦA TÒA ÁN:**\n1. **Định tội danh:**\n   Bị cáo Võ Nguyễn Thu T đã có hành vi nhập cảnh vào Việt Nam trái p'
+  └──────────────────────────────────────────────────────────────
+  ┌─ ⏳ Processing Role: DEFENSE ───────────────────────
+  │  ✅ Fetched in 16.7s
+  │  ✅ Scored in 0.0s
+  ┌─ [55/100]  Role: DEFENSE  ──────────────────────────────────────
+  │  Crime  : Tội vi phạm quy định về xuất cảnh, nhập cảnh; tội ở lại Việt Nam trái phép (Luật sửa đổi, bổ sung một số điều của BLHS năm 2015)
+  │
+  │  ✅ Recall        : HIT
+  │       Ground truth article (from court verdict) : Điều 347  [GT confidence: high]
+  │       Article cited by system                   : 347
+  │       Law document source of cited article      : (source field unavailable)
+  │       Hit method                                : mapped_laws
+  │  ✅ Hallucination : score=0.0  L1=False  L2=False  L3=False
+  │  ✅ Role Adherence: 0.850  (d1_art=0.5  d2_sent=1.0  d3_voc=1.0  d4_cit=1.0)
+  │  Response: 'Kính thưa Hội đồng xét xử,\n\nVới tư cách là Luật sư bào chữa cho bị cáo Võ Nguyễn Thu T, tôi xin trình bày luận điểm bào '
+  └──────────────────────────────────────────────────────────────
+  ┌─ ⏳ Processing Role: VICTIM ───────────────────────
+
+⚠️  Evaluation interrupted (Ctrl+C) — writing partial summary...
+
+======================================================================
+  ⚠️  PARTIAL RESULTS — 54 cases (50 preloaded + 4 new)  (183 role evals)  [PARTIAL (interrupted)]
+======================================================================
+  Metric                    System    Target  Pass?
+  --------------------------------------------------
+  Primary Recall             94.2%      ≥90%  ✅ PASS
+  Hallucination Rate          1.5%      ≤10%  ✅ PASS
+  Role Adherence             85.6%      ≥85%  ✅ PASS
+  --------------------------------------------------
+  Detailed JSONL : /root/PenalLawChatbot/ai-service/evaluation/results/combined_results.jsonl
+  Summary JSON   : /root/PenalLawChatbot/ai-service/evaluation/results/combined_summary.json
+  Human report   : /root/PenalLawChatbot/ai-service/evaluation/results/combined_report.txt  ← download this file for offline review
+  ↺  Resume with: --resume --start 21 --end 100
+======================================================================
+
+  🔴 RECALL MISSES (6 unique cases) — system cited wrong/no article:
+  ⚠️  NOTE: 10 role eval(s) returned a clarification request (no mapped_laws).
+       This means the system asked for more info instead of analysing the case.
+       Check if case_description has explicit crime date (ngay_pham_toi) and behavior (hanh_vi).

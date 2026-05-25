@@ -70,13 +70,13 @@ OUTPUTS:
 
 DOWNLOAD output to local machine
 # Download all result files (primary server)
-scp -P 35275 -r \
-  'root@142.188.39.36:~/PenalLawChatbot/ai-service/evaluation/results/' \
+scp -P 2423 -r \
+  'root@n3.ckey.vn:~/PenalLawChatbot/ai-service/evaluation/results/' \
   ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/
 
 # Download log files too
-scp -P 35275 \
-  'root@142.188.39.36:~/PenalLawChatbot/ai-service/logs/eval_*.txt' \
+scp -P 2423 \
+  'root@n3.ckey.vn:~/PenalLawChatbot/ai-service/logs/eval_*.txt' \
   ~/Desktop/Projects/PenalLawChatbot/ai-service/logs/
 
 """
