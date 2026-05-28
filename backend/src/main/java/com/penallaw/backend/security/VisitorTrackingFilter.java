@@ -15,7 +15,7 @@ import java.io.IOException;
  *   POST /api/home/track-visit  { visitor_id: "<browser-uuid>" }
  *
  * The browser sends this once per day (checked via localStorage date).
- * The backend stores one row per (visitor_id, date) in the daily_visits table,
+ * The backend stores one row per (visitor_id, date) in the visitor_logs table,
  * enforced by a DB unique constraint — so the count is always accurate.
  *
  * This class is intentionally NOT annotated with @Component and will NOT

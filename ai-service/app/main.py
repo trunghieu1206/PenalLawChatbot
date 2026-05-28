@@ -700,10 +700,16 @@ def cleanup_response(text: str) -> str:
     Replaces 'BLHS' with 'Bộ luật Hình sự' for clarity.
     This ensures AI responses are user-friendly and don't use abbreviations.
     Also strips lone surrogate characters that would crash the JSON encoder.
+    Also collapses excessively long markdown table separator dashes (e.g. |:----------|)
+    that the LLM generates to match wide column content, which causes multi-MB JSONL lines.
     """
     text = sanitize_text(text)
     # Replace " BLHS " or " BLHS," with " Bộ luật Hình sự "
     text = re.sub(r"\bBLHS\b", "Bộ luật Hình sự", text, flags=re.IGNORECASE)
+    # Collapse overly long markdown table separator dashes inside cell boundaries.
+    # Pattern: | :---...---  | or | ---...--- | → | :--- | or | --- |
+    # This prevents the LLM from generating thousands-of-chars separator rows.
+    text = re.sub(r"(\|\s*:?)-{4,}(\s*\|)", r"\1---\2", text)
     return text
 
 

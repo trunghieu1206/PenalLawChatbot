@@ -5,7 +5,7 @@ import com.penallaw.backend.entity.ChatMessage;
 import com.penallaw.backend.entity.ChatSession;
 import com.penallaw.backend.repository.ChatMessageRepository;
 import com.penallaw.backend.repository.ChatSessionRepository;
-import com.penallaw.backend.repository.DailyVisitRepository;
+import com.penallaw.backend.repository.VisitorLogRepository;
 import com.penallaw.backend.repository.FeedbackRepository;
 import com.penallaw.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -37,7 +37,7 @@ public class StatsService {
     private final ChatMessageRepository messageRepository;
     private final FeedbackRepository    feedbackRepository;
     private final UserRepository        userRepository;
-    private final DailyVisitRepository  dailyVisitRepository;
+    private final VisitorLogRepository  visitorLogRepository;
 
     /**
      * Build the full public dashboard statistics object.
@@ -90,7 +90,7 @@ public class StatsService {
 
         return new StatsDTOs.DashboardStats(
                 totalSessions, totalUsers, casesProcessed,
-                dailyVisitRepository.count(),
+                visitorLogRepository.count(),
                 byRole, byProvince, byCrimeType,
                 feedbackTotal, feedbackCorrect, feedbackIncorrect
         );
