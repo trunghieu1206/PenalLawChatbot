@@ -980,7 +980,16 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
         return {"_missing_fields": missing}
 
     def clarification_router(state: AgentState) -> str:
-        """Router: reads _missing_fields, returns route key."""
+        """
+        Router: reads _missing_fields, returns route key.
+        Practice Mode always bypasses clarification — the user is practicing
+        with a given case and should always get a graded evaluation regardless
+        of incomplete fields. Asking for clarification in practice mode would
+        cause the /practice/evaluate endpoint to receive a text message instead
+        of the expected JSON, resulting in a parse error.
+        """
+        if state.get("is_practice_mode"):
+            return "continue"
         return "clarify" if state.get("_missing_fields") else "continue"
 
     def clarification_node(state: AgentState) -> dict:
