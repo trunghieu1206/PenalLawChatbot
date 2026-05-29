@@ -1853,6 +1853,11 @@ OUTPUT: CHỈ JSON."""
             feedback = data.get("feedback", {})
 
             # Build suggested_laws directly from the retrieved documents from RAG (reranked chunks).
+            # Deduplicate by article number — RAG may return multiple chunks for the same article
+            # with slightly different source strings (e.g. "Bộ luật Hình sự 2015" vs
+            # "Bộ luật Hình sự 2015 (sửa đổi 2017)"), so using (art, source) as the key
+            # would produce duplicate entries. Dedup by art is safe because a single case
+            # context will not reference the same article number from two unrelated laws.
             seen: set = set()
             suggested_laws: list = []
             for d in documents:
@@ -1864,16 +1869,19 @@ OUTPUT: CHỈ JSON."""
                 if not art or art in ("N/A", ""):
                     continue
 
+                # Strip "Điều " prefix if present in metadata
                 if art.lower().startswith("điều "):
                     art = art[5:].strip()
 
+                # Normalise source abbreviations (usually already full names in Milvus,
+                # but guard against any inconsistency from manual ingestion)
                 source = re.sub(r"\bBLHS\b", "Bộ luật Hình sự", source, flags=re.IGNORECASE)
                 source = re.sub(r"\bBLTTHS\b", "Bộ luật Tố tụng Hình sự", source, flags=re.IGNORECASE)
                 source = source.strip()
 
-                key = (art, source)
-                if key not in seen:
-                    seen.add(key)
+                # Dedup by article number only
+                if art not in seen:
+                    seen.add(art)
                     suggested_laws.append({
                         "article":      art,
                         "clause":       clause,

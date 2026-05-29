@@ -335,6 +335,9 @@ export default function TrainingPage() {
                             {law.offense_name && (
                               <span className={styles.lawOffenseName}>{law.offense_name}</span>
                             )}
+                            {law.source && (
+                              <span className={styles.lawSource}>{law.source}</span>
+                            )}
                           </button>
                         ))}
                       </div>
