@@ -1900,7 +1900,6 @@ OUTPUT: CHỈ JSON."""
                 "feedback": {
                     "strengths": [],
                     "improvements": [f"Lỗi hệ thống khi chấm điểm: {e}"],
-                    "missed_articles": [],
                     "suggestion": "Vui lòng thử lại.",
                     "suggested_laws": [],
                 },
@@ -2277,7 +2276,6 @@ async def practice_evaluate(req: PracticeEvalRequest):
             feedback=PracticeEvalFeedback(
                 strengths=       feedback.get("strengths", []),
                 improvements=    feedback.get("improvements", []),
-                missed_articles= feedback.get("missed_articles", []),
                 suggestion=      feedback.get("suggestion", ""),
                 suggested_laws=  feedback.get("suggested_laws", []),
             ),
