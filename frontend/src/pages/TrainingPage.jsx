@@ -305,16 +305,7 @@ export default function TrainingPage() {
                     </section>
                   )}
 
-                  {result.feedback.missed_articles?.length > 0 && (
-                    <section className={styles.section}>
-                      <h4 className={styles.sectionTitle}>Điều luật bỏ sót</h4>
-                      <div className={styles.pills}>
-                        {result.feedback.missed_articles.map((a, i) => (
-                          <div key={i}>{renderLawCitations(a)}</div>
-                        ))}
-                      </div>
-                    </section>
-                  )}
+
 
                   {result.feedback.suggestion && (
                     <section className={styles.section}>
@@ -326,7 +317,7 @@ export default function TrainingPage() {
                   {result.feedback.suggested_laws?.length > 0 && (
                     <section className={styles.section}>
                       <h4 className={styles.sectionTitle}>
-                        Điều luật từ hệ thống
+                        Điều luật gợi ý
                         <span style={{ fontSize: '11px', fontWeight: 400, marginLeft: 6, color: 'var(--on-surface-variant)', textTransform: 'none', letterSpacing: 0 }}>
                           (nhấn để xem nội dung)
                         </span>

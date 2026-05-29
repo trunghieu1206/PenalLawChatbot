@@ -492,7 +492,6 @@ class PracticeEvalRequest(BaseModel):
 class PracticeEvalFeedback(BaseModel):
     strengths: List[str]
     improvements: List[str]
-    missed_articles: List[str]
     suggestion: str
     suggested_laws: List[Dict[str, str]] = Field(default_factory=list)
     # Each item: {"article": "93", "clause": "Khoản 1", "offense_name": "Giết người", "source": "Bộ luật Hình sự 1999"}
@@ -1832,7 +1831,6 @@ Trả về JSON hợp lệ (không markdown, không giải thích bên ngoài JS
   "feedback": {{
     "strengths": ["<điểm mạnh 1>", "<điểm mạnh 2>", ...],
     "improvements": ["<cần cải thiện 1>", "<cần cải thiện 2>", ...],
-    "missed_articles": ["<Điều X Bộ luật Hình sự (ý nghĩa hoặc ghi chú)>", ...],
     "suggestion": "<Gợi ý tổng hợp cho người dùng>"
   }}
 }}
@@ -1840,7 +1838,6 @@ Trả về JSON hợp lệ (không markdown, không giải thích bên ngoài JS
 Quy tắc:
 - strengths: 2–4 điểm tích cực cụ thể (trích dẫn rõ luận điểm người dùng).
 - improvements: 2–5 điểm cần cải thiện, cụ thể, có điều khoản tham chiếu.
-- missed_articles: liệt kê các điều luật quan trọng mà người dùng bỏ sót dựa vào kết quả chuẩn (có thể rỗng nếu đầy đủ). CHỈ dùng tên đầy đủ như "Điều 51 Bộ luật Hình sự 2015", không dùng từ viết tắt BLHS.
 - suggestion: 1–2 câu gợi ý cụ thể nhất cho người dùng.
 OUTPUT: CHỈ JSON."""
 
@@ -1853,33 +1850,23 @@ OUTPUT: CHỈ JSON."""
             raw_response = raw_response.rstrip("`").strip()
             data = json.loads(raw_response)
 
-            # Sanitize BLHS abbreviations in missed_articles
-            missed = [
-                re.sub(r"\bBLHS\b", "Bộ luật Hình sự", a, flags=re.IGNORECASE)
-                for a in data.get("feedback", {}).get("missed_articles", [])
-            ]
             feedback = data.get("feedback", {})
 
-            # Build suggested_laws from the actual mapped_laws produced by the RAG pipeline.
-            # These are 100% grounded in retrieved Milvus documents — no hallucination.
-            # Deduplicate by (article, source) so users don't see duplicates.
+            # Build suggested_laws directly from the retrieved documents from RAG (reranked chunks).
             seen: set = set()
             suggested_laws: list = []
-            for m in mapped_laws:
-                art    = str(m.get("article", "")).strip()
-                clause = str(m.get("clause", "")).strip()
-                name   = str(m.get("offense_name", "")).strip()
-                source = str(m.get("edition_applied", "")).strip()
+            for d in documents:
+                art    = str(d.metadata.get("article_number", "")).strip()
+                clause = str(d.metadata.get("clause", "")).strip()
+                name   = str(d.metadata.get("title", "")).strip()
+                source = str(d.metadata.get("source", "")).strip()
 
-                # Skip sentinel error entries
-                if m.get("_mapping_error") or not art or art in ("N/A", ""):
+                if not art or art in ("N/A", ""):
                     continue
 
-                # Normalise article number: LLM returns "Điều 168", DB stores "168"
                 if art.lower().startswith("điều "):
                     art = art[5:].strip()
 
-                # Normalise source: LLM returns "BLHS 2015", DB stores "Bộ luật Hình sự 2015"
                 source = re.sub(r"\bBLHS\b", "Bộ luật Hình sự", source, flags=re.IGNORECASE)
                 source = re.sub(r"\bBLTTHS\b", "Bộ luật Tố tụng Hình sự", source, flags=re.IGNORECASE)
                 source = source.strip()
@@ -1900,7 +1887,6 @@ OUTPUT: CHỈ JSON."""
                 "feedback": {
                     "strengths":       feedback.get("strengths", []),
                     "improvements":    feedback.get("improvements", []),
-                    "missed_articles": missed,
                     "suggestion":      feedback.get("suggestion", ""),
                     "suggested_laws":  suggested_laws,
                 },
