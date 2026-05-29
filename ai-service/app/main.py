@@ -1894,7 +1894,17 @@ OUTPUT: CHỈ JSON."""
           'casual'   — greeting, chit-chat, off-topic → simple canned response
           'followup' — elaboration/question about a prior AI response
           'new_case' — penal law case or legal question → full RAG pipeline
+
+        Practice Mode always routes as 'new_case' — the case description is always
+        a legal case, never a greeting or follow-up, regardless of its length.
         """
+        # Practice Mode: bypass ALL heuristics — always go through the full pipeline.
+        # The case input can be short (e.g. "Nam giết người") but must still reach
+        # extract_facts → map_laws → practice_evaluate_node.
+        if state.get("is_practice_mode"):
+            print("  [INTENT] Practice Mode → new_case (bypass heuristics)")
+            return "new_case"
+
         history = state.get("chat_history", []) or []
         question = state["question"].strip()
 
