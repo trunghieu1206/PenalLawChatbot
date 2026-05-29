@@ -494,7 +494,7 @@ class PracticeEvalFeedback(BaseModel):
     improvements: List[str]
     suggestion: str
     suggested_laws: List[Dict[str, str]] = Field(default_factory=list)
-    # Each item: {"article": "93", "clause": "Khoản 1", "offense_name": "Giết người", "source": "Bộ luật Hình sự 1999"}
+    # Each item: {"article": "93", "clause": "Khoản 1", "offense_name": "Giết người", "source": "BLHS 1999"}
 
 
 class PracticeEvalResponse(BaseModel):
@@ -1854,8 +1854,8 @@ OUTPUT: CHỈ JSON."""
 
             # Build suggested_laws directly from the retrieved documents from RAG (reranked chunks).
             # Deduplicate by article number — RAG may return multiple chunks for the same article
-            # with slightly different source strings (e.g. "Bộ luật Hình sự 2015" vs
-            # "Bộ luật Hình sự 2015 (sửa đổi 2017)"), so using (art, source) as the key
+            # with slightly different source strings (e.g. "BLHS 2015" vs
+            # "BLHS 2015 (sửa đổi 2017)"), so using (art, source) as the key
             # would produce duplicate entries. Dedup by art is safe because a single case
             # context will not reference the same article number from two unrelated laws.
             seen: set = set()
@@ -1873,10 +1873,9 @@ OUTPUT: CHỈ JSON."""
                 if art.lower().startswith("điều "):
                     art = art[5:].strip()
 
-                # Normalise source abbreviations (usually already full names in Milvus,
-                # but guard against any inconsistency from manual ingestion)
-                source = re.sub(r"\bBLHS\b", "Bộ luật Hình sự", source, flags=re.IGNORECASE)
-                source = re.sub(r"\bBLTTHS\b", "Bộ luật Tố tụng Hình sự", source, flags=re.IGNORECASE)
+                # Keep source exactly as stored in Milvus — the DB stores abbreviated names
+                # like "BLHS 1999", "BLHS 2015 (sửa đổi 2017)", "BLHS 2025".
+                # Java's findByArticleNumberAndSource() does exact-match, so DO NOT expand.
                 source = source.strip()
 
                 # Dedup by article number only
