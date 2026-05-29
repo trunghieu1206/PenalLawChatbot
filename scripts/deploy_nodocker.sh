@@ -286,9 +286,30 @@ fi
 info "Preparing AI service..."
 cd "$PROJECT_DIR/ai-service"
 
+# ── Python version guard ──────────────────────────────────────────────────────
+# pydantic-core, torch, and most ML packages do NOT yet have pre-built wheels
+# for Python 3.13+. Ubuntu 26.04 ships python3 → Python 3.14 by default.
+# If the system Python is too new (>= 3.13), auto-install python3.11 which has
+# full wheel coverage for all our dependencies.
+_SYS_PY_MAJOR=$(python3 -c "import sys; print(sys.version_info.major)" 2>/dev/null || echo "3")
+_SYS_PY_MINOR=$(python3 -c "import sys; print(sys.version_info.minor)" 2>/dev/null || echo "0")
+if [ "$_SYS_PY_MAJOR" -ge 3 ] && [ "$_SYS_PY_MINOR" -ge 13 ]; then
+    warn "System python3 is Python ${_SYS_PY_MAJOR}.${_SYS_PY_MINOR} — too new for pydantic-core/torch wheels."
+    if ! command -v python3.11 &>/dev/null; then
+        info "Auto-installing python3.11 (required for ML package wheel compatibility)..."
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            python3.11 python3.11-venv python3.11-dev python3-pip 2>&1 | tail -3 || \
+            warn "python3.11 install failed — will try to continue with system Python."
+    fi
+    if command -v python3.11 &>/dev/null; then
+        info "Using python3.11 ($(python3.11 --version)) instead of system python3 ${_SYS_PY_MAJOR}.${_SYS_PY_MINOR}."
+    fi
+fi
+
 # Find Python with torch (prefer conda env which has GPU torch pre-installed)
+# Priority: conda → python3.11 → python3.12 → python3.10 → bare python3 (last resort)
 AI_PYTHON=""
-for py in /opt/conda/bin/python3 /usr/bin/python3.11 /usr/bin/python3.10 /usr/bin/python3; do
+for py in /opt/conda/bin/python3 /usr/bin/python3.11 /usr/local/bin/python3.11 /usr/bin/python3.12 /usr/bin/python3.10 /usr/bin/python3; do
     if [ -x "$py" ] && "$py" -c "import torch" 2>/dev/null; then
         AI_PYTHON="$py"
         TORCH_VER=$("$py" -c "import torch; print(torch.__version__)" 2>/dev/null)
@@ -304,10 +325,23 @@ done
 # works standalone on ANY server — GPU or CPU.
 if [ -z "$AI_PYTHON" ]; then
     info "torch not found — installing automatically..."
-    # Pick the best Python available
-    for py in /opt/conda/bin/python3 /usr/bin/python3.11 /usr/bin/python3.10 /usr/bin/python3; do
-        [ -x "$py" ] && AI_PYTHON="$py" && break
+    # Pick the best Python available — prefer 3.11/3.12 over bare python3 which
+    # may resolve to 3.13+ on Ubuntu 26.04 (no pydantic-core/torch wheels yet).
+    for py in /opt/conda/bin/python3 /usr/bin/python3.11 /usr/local/bin/python3.11 /usr/bin/python3.12 /usr/bin/python3.10 /usr/bin/python3; do
+        if [ -x "$py" ]; then
+            _py_minor=$("$py" -c "import sys; print(sys.version_info.minor)" 2>/dev/null || echo "99")
+            _py_major=$("$py" -c "import sys; print(sys.version_info.major)" 2>/dev/null || echo "3")
+            # Skip Python >= 3.13 unless it's the only option
+            [ "$_py_major" -ge 3 ] && [ "$_py_minor" -ge 13 ] && continue
+            AI_PYTHON="$py" && break
+        fi
     done
+    # If all found Pythons are 3.13+, fall back to the first available as a last resort
+    if [ -z "$AI_PYTHON" ]; then
+        for py in /opt/conda/bin/python3 /usr/bin/python3.11 /usr/bin/python3.12 /usr/bin/python3; do
+            [ -x "$py" ] && AI_PYTHON="$py" && break
+        done
+    fi
     [ -z "$AI_PYTHON" ] && error "No Python 3 interpreter found. Install python3 and re-run."
 
     if command -v nvidia-smi &>/dev/null && nvidia-smi &>/dev/null; then
