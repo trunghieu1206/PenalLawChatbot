@@ -1862,17 +1862,28 @@ OUTPUT: CHỈ JSON."""
 
             # Build suggested_laws from the actual mapped_laws produced by the RAG pipeline.
             # These are 100% grounded in retrieved Milvus documents — no hallucination.
-            # Deduplicate by (article, edition_applied) so users don’t see duplicates.
-            seen = set()
+            # Deduplicate by (article, source) so users don't see duplicates.
+            seen: set = set()
             suggested_laws: list = []
             for m in mapped_laws:
-                art     = str(m.get("article", "")).strip()
-                clause  = str(m.get("clause", "")).strip()
-                name    = str(m.get("offense_name", "")).strip()
-                source  = str(m.get("edition_applied", "")).strip()
+                art    = str(m.get("article", "")).strip()
+                clause = str(m.get("clause", "")).strip()
+                name   = str(m.get("offense_name", "")).strip()
+                source = str(m.get("edition_applied", "")).strip()
+
                 # Skip sentinel error entries
-                if m.get("_mapping_error") or not art or art == "N/A":
+                if m.get("_mapping_error") or not art or art in ("N/A", ""):
                     continue
+
+                # Normalise article number: LLM returns "Điều 168", DB stores "168"
+                if art.lower().startswith("điều "):
+                    art = art[5:].strip()
+
+                # Normalise source: LLM returns "BLHS 2015", DB stores "Bộ luật Hình sự 2015"
+                source = re.sub(r"\bBLHS\b", "Bộ luật Hình sự", source, flags=re.IGNORECASE)
+                source = re.sub(r"\bBLTTHS\b", "Bộ luật Tố tụng Hình sự", source, flags=re.IGNORECASE)
+                source = source.strip()
+
                 key = (art, source)
                 if key not in seen:
                     seen.add(key)
