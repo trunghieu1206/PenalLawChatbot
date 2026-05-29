@@ -1503,7 +1503,8 @@ Nhiệm vụ: Đọc kỹ hồ sơ vụ án và SOẠN LUẬN ĐIỂM BÀO CHỮ
 
 LƯU Ý KHI BÀO CHỮA:
 0. **CHỈ trích dẫn điều khoản thuộc Bộ luật Hình sự (BLHS).** KHÔNG được nhắc đến bất kỳ điều nào của Bộ luật Tố tụng hình sự (BLTTHS), Bộ luật Dân sự, hay bộ luật khác.
-1. Ưu tiên tìm tình tiết giảm nhẹ (Điều 51 Bộ luật Hình sự): thành khẩn, bồi thường, nhân thân tốt, phạm tội lần đầu.
+⚠️ **CHỐNG HALLUCINATION (BẮT BUỘC):** TUYỆT ĐỐI KHÔNG bịa đặt hoặc giả định bất kỳ tình tiết nào không có trong hồ sơ vụ án. Nếu hồ sơ không nêu rõ bị cáo "ăn năn hối cải", "bồi thường thiệt hại", "phạm tội lần đầu", hay "có nhân thân tốt" — KHÔNG được khẳng định các điều đó như sự thật. Thay vào đó, chỉ được dùng ngôn ngữ chiến lược như: "đề nghị thu thập bằng chứng về...", "nếu xác minh được... thì đây là tình tiết giảm nhẹ", "khuyến nghị thân chủ chủ động...".
+1. Ưu tiên tìm tình tiết giảm nhẹ (Điều 51 Bộ luật Hình sự): thành khẩn, bồi thường, nhân thân tốt, phạm tội lần đầu — nhưng CHỈ khẳng định tình tiết nào đã được xác nhận trong hồ sơ, còn lại chỉ đề xuất chiến lược chứng minh.
 2. Phân tích xem có thể đề nghị án treo không (án ≤ 3 năm + không tái phạm + có nơi cư trú ổn định).
 3. Nếu có nhiều tội, đề xuất tách riêng hoặc giảm nhẹ từng tội.
 4. Trích dẫn chính xác điều khoản luật để tăng tính thuyết phục.
@@ -1527,12 +1528,19 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 **II. ĐỀ NGHỊ CỦA LUẬT SƯ BÀO CHỮA:**
 1. Tội danh đề nghị: ...
 2. Điều khoản áp dụng: ...
-3. HÌNH PHẠT ĐỀ NGHỊ: (mức thấp nhất trong khung, hoặc dưới khung nếu có căn cứ)
+3. HÌNH PHẠT ĐỀ NGHỊ: (ghi rõ mức năm tù cụ thể đề nghị, ví dụ: "12–15 năm tù" hoặc "dưới X năm tù theo Điều 47". KHÔNG chỉ nêu lý luận chung chung.)
 4. Đề nghị án treo / cải tạo không giam giữ (nếu đủ điều kiện)
 5. Khấu trừ thời gian tạm giam: ...
 
 **III. KHUYẾN NGHỊ CHO THÂN CHỦ:**
 (Các bước cụ thể: bồi thường, viết đơn xin khoan hồng, xin giấy bãi nại, nộp án phí...)
+
+**ĐIỀU KHOẢN ÁP DỤNG:**
+(Bảng tổng hợp — CHỈ liệt kê các điều luật đã được trích dẫn CỤ THỂ trong nội dung phân tích ở trên. TUYỆT ĐỐI KHÔNG thêm điều luật chưa được đề cập.)
+
+| Điều | Tội danh/Nội dung | Nguồn áp dụng | Lý do chọn nguồn |
+|---|---|---|---|
+| (số điều) | (nội dung) | (tên bộ luật + năm) | (lý do áp dụng) |
 """
         elif role == "victim":
             prompt_template = """{role_instruction}
@@ -1555,7 +1563,8 @@ Nhiệm vụ: Đọc kỹ hồ sơ vụ án và SOẠN LUẬN ĐIỂM BẢO VỆ
 
 LƯU Ý KHI BẢO VỆ BỊ HẠI:
 0. **CHỈ trích dẫn điều khoản thuộc Bộ luật Hình sự (BLHS).** KHÔNG được nhắc đến bất kỳ điều nào của Bộ luật Tố tụng hình sự (BLTTHS), Bộ luật Dân sự, hay bộ luật khác.
-1. Tập trung làm rõ tình tiết tăng nặng (Điều 52 Bộ luật Hình sự): có tổ chức, tái phạm, hậu quả nghiêm trọng.
+⚠️ **CHỐNG HALLUCINATION (BẮT BUỘC):** TUYỆT ĐỐI KHÔNG bịa đặt hoặc giả định tình tiết tăng nặng không có trong hồ sơ. Nếu hồ sơ không nêu rõ "có tổ chức", "tái phạm", "hậu quả đặc biệt nghiêm trọng" — KHÔNG được khẳng định các điều đó. Thay vào đó, chỉ được dùng ngôn ngữ như: "đề nghị điều tra thêm về...", "nếu xác minh được... thì đây là tình tiết tăng nặng", "yêu cầu cơ quan tố tụng làm rõ...".
+1. Tập trung làm rõ tình tiết tăng nặng (Điều 52 Bộ luật Hình sự): có tổ chức, tái phạm, hậu quả nghiêm trọng — nhưng CHỈ khẳng định tình tiết nào đã được xác nhận trong hồ sơ, còn lại chỉ đề xuất chiến lược yêu cầu điều tra.
 2. Phân tích mức độ thiệt hại để yêu cầu bồi thường dân sự tối đa.
 3. Phản bác các tình tiết giảm nhẹ mà bị cáo có thể viện dẫn.
 4. Đề nghị mức án cao nhất trong khung có thể lập luận.
@@ -1579,12 +1588,19 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 **II. ĐỀ NGHỊ CỦA LUẬT SƯ BỊ HẠI:**
 1. Tội danh đề nghị: ...
 2. Điều khoản áp dụng: ...
-3. HÌNH PHẠT ĐỀ NGHỊ: (mức cao nhất trong khung phù hợp)
+3. HÌNH PHẠT ĐỀ NGHỊ: (ghi rõ mức năm tù cụ thể đề nghị, ví dụ: "20 năm tù" hoặc "tù chung thân". KHÔNG chỉ nêu lý luận chung chung.)
 4. Không chấp nhận án treo (nếu có căn cứ)
 5. TRÁCH NHIỆM DÂN SỰ: (yêu cầu bồi thường cụ thể)
 
 **III. KHUYẾN NGHỊ CHO GIA ĐÌNH BỊ HẠI:**
 (Hướng dẫn thu thập hóa đơn, chứng từ thiệt hại, yêu cầu cấp dưỡng, bảo vệ quyền lợi dài hạn...)
+
+**ĐIỀU KHOẢN ÁP DỤNG:**
+(Bảng tổng hợp — CHỈ liệt kê các điều luật đã được trích dẫn CỤ THỂ trong nội dung phân tích ở trên. TUYỆT ĐỐI KHÔNG thêm điều luật chưa được đề cập.)
+
+| Điều | Tội danh/Nội dung | Nguồn áp dụng | Lý do chọn nguồn |
+|---|---|---|---|
+| (số điều) | (nội dung) | (tên bộ luật + năm) | (lý do áp dụng) |
 """
         else:  # neutral — judge perspective
             prompt_template = """{role_instruction}
@@ -1806,13 +1822,13 @@ TIÊU CHÍ (100 điểm):
                 " **Phân tích vụ án hình sự**\n"
                 "   Định tội danh, xác định khung hình phạt, lượng hình cụ thể theo Bộ luật Hình sự\n\n"
                 " **Phân tích đa chiều theo vai trò**\n"
-                "   • *Thẩm phán* — nhận định trung lập, khách quan\n"
-                "   • *Luật sư bào chữa* — lập luận giảm nhẹ, bảo vệ bị cáo\n"
-                "   • *Luật sư bị hại* — yêu cầu xử nghiêm, bồi thường tối đa\n\n"
+                "   • *Thẩm phán* - nhận định trung lập, khách quan\n"
+                "   • *Luật sư bào chữa* - lập luận giảm nhẹ, bảo vệ bị cáo\n"
+                "   • *Luật sư bị hại* - yêu cầu xử nghiêm, bồi thường tối đa\n\n"
                 " **Tra cứu & giải thích điều luật**\n"
-                "   Trích dẫn chính xác điều khoản BLHS 2015 (sửa đổi 2017/2025), giải thích tình tiết tăng nặng/giảm nhẹ\n\n"
+                "   Trích dẫn chính xác điều khoản BỘ luật hình sự, giải thích tình tiết tăng nặng/giảm nhẹ\n\n"
                 "---\n"
-                "💡 **Cách dùng:** Dán toàn bộ nội dung hồ sơ vụ án và tôi sẽ bắt đầu phân tích.\n"
+                " **Hướng dẫn:** Dán toàn bộ nội dung hồ sơ vụ án và tôi sẽ bắt đầu phân tích.\n"
                 "*Ví dụ: \"Ngày 15/3/2023, Nguyễn Văn A dùng dao đe dọa lấy tài sản của bị hại...\"*"
             )
         else:
