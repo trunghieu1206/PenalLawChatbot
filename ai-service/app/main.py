@@ -709,7 +709,7 @@ def cleanup_response(text: str) -> str:
     # Collapse overly long markdown table separator dashes inside cell boundaries.
     # Pattern: | :---...---  | or | ---...--- | → | :--- | or | --- |
     # This prevents the LLM from generating thousands-of-chars separator rows.
-    text = re.sub(r"(\|\s*:?)-{4,}(\s*\|)", r"\1---\2", text)
+    text = re.sub(r"(\|[ \t]*:?)-{4,}([ \t]*\|)", r"\1---\2", text)
     return text
 
 
@@ -1536,7 +1536,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 (Các bước cụ thể: bồi thường, viết đơn xin khoan hồng, xin giấy bãi nại, nộp án phí...)
 
 **ĐIỀU KHOẢN ÁP DỤNG:**
-(Bảng tổng hợp — CHỈ liệt kê các điều luật đã được trích dẫn CỤ THỂ trong nội dung phân tích ở trên. TUYỆT ĐỐI KHÔNG thêm điều luật chưa được đề cập.)
+(Bảng tổng hợp — CHỈ liệt kê các điều luật đã được trích dẫn CỤ THỂ trong nội dung phân tích ở trên. TUYỆT ĐỐI KHÔNG thêm điều luật chưa được đề cập. BẮT BUỘC trình bày bảng đúng chuẩn Markdown, phải có ĐÚNG 4 cột và hàng phân cách phải đủ 4 cột `|---|---|---|---|`.)
 
 | Điều | Tội danh/Nội dung | Nguồn áp dụng | Lý do chọn nguồn |
 |---|---|---|---|
@@ -1596,7 +1596,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 (Hướng dẫn thu thập hóa đơn, chứng từ thiệt hại, yêu cầu cấp dưỡng, bảo vệ quyền lợi dài hạn...)
 
 **ĐIỀU KHOẢN ÁP DỤNG:**
-(Bảng tổng hợp — CHỈ liệt kê các điều luật đã được trích dẫn CỤ THỂ trong nội dung phân tích ở trên. TUYỆT ĐỐI KHÔNG thêm điều luật chưa được đề cập.)
+(Bảng tổng hợp — CHỈ liệt kê các điều luật đã được trích dẫn CỤ THỂ trong nội dung phân tích ở trên. TUYỆT ĐỐI KHÔNG thêm điều luật chưa được đề cập. BẮT BUỘC trình bày bảng đúng chuẩn Markdown, phải có ĐÚNG 4 cột và hàng phân cách phải đủ 4 cột `|---|---|---|---|`.)
 
 | Điều | Tội danh/Nội dung | Nguồn áp dụng | Lý do chọn nguồn |
 |---|---|---|---|
