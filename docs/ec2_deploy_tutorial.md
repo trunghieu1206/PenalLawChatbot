@@ -8,12 +8,12 @@
 # What changes in every command:
 #   -P 1927          → (removed — EC2 uses default port 22)
 #   -p 1927          → (removed)
-#   root@n3.ckey.vn  → ubuntu@ec2-3-26-68-122.ap-southeast-2.compute.amazonaws.com
+#   root@n3.ckey.vn  → ubuntu@ec2-13-239-38-15.ap-southeast-2.compute.amazonaws.com
 #   /root/           → /home/ubuntu/
 #   Add: -i "chatbot-key.pem"  to every ssh/scp command
 
 # ── EC2 connection details ────────────────────────────────────────────────────
-EC2_HOST=ec2-3-26-68-122.ap-southeast-2.compute.amazonaws.com
+EC2_HOST=ec2-13-239-38-15.ap-southeast-2.compute.amazonaws.com
 EC2_USER=ubuntu
 EC2_KEY=chatbot-key.pem   # must be in current directory or use full path
 
@@ -25,7 +25,7 @@ EC2_KEY=chatbot-key.pem   # must be in current directory or use full path
 # 7681  (ttyd / web terminal, optional)
 
 # ── SSH into server ───────────────────────────────────────────────────────────
-ssh -i "chatbot-key.pem" ubuntu@ec2-3-26-68-122.ap-southeast-2.compute.amazonaws.com
+ssh -i "chatbot-key.pem" ubuntu@ec2-13-239-38-15.ap-southeast-2.compute.amazonaws.com
 
 # ── Create tmux session (run after SSH) ───────────────────────────────────────
 tmux new -s deploy
@@ -38,25 +38,25 @@ tmux new -s deploy
 scp -i "chatbot-key.pem" \
   scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh \
   scripts/backup_database.sh scripts/restore_database.sh \
-  ubuntu@ec2-3-26-68-122.ap-southeast-2.compute.amazonaws.com:/home/ubuntu/
+  ubuntu@ec2-13-239-38-15.ap-southeast-2.compute.amazonaws.com:/home/ubuntu/
 
 # Upload .env (note: home dir is /home/ubuntu/ not /root/)
 scp -i "chatbot-key.pem" \
   .env.example \
-  ubuntu@ec2-3-26-68-122.ap-southeast-2.compute.amazonaws.com:/home/ubuntu/.env.example
+  ubuntu@ec2-13-239-38-15.ap-southeast-2.compute.amazonaws.com:/home/ubuntu/.env.example
 
 # Create backup dir on server, then upload DB backup
-ssh -i "chatbot-key.pem" ubuntu@ec2-3-26-68-122.ap-southeast-2.compute.amazonaws.com \
+ssh -i "chatbot-key.pem" ubuntu@ec2-13-239-38-15.ap-southeast-2.compute.amazonaws.com \
   "mkdir -p ~/PenalLawChatbot/database/backups"
 
 scp -i "chatbot-key.pem" \
   ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260505_150435.sql \
-  ubuntu@ec2-3-26-68-122.ap-southeast-2.compute.amazonaws.com:~/PenalLawChatbot/database/backups/
+  ubuntu@ec2-13-239-38-15.ap-southeast-2.compute.amazonaws.com:~/PenalLawChatbot/database/backups/
 
 # Upload eval dataset (create directory on server first)
 scp -i "chatbot-key.pem" \
   ai-service/evaluation/thesis_eval_1000.json \
-  ubuntu@ec2-3-26-68-122.ap-southeast-2.compute.amazonaws.com:~/PenalLawChatbot/ai-service/evaluation/
+  ubuntu@ec2-13-239-38-15.ap-southeast-2.compute.amazonaws.com:~/PenalLawChatbot/ai-service/evaluation/
 
 # ── ON SERVER: run the installer ─────────────────────────────────────────────
 # (after SSH into EC2)
@@ -87,7 +87,7 @@ chmod 777 ./database/backups
 
 # Download backup to local machine (from LOCAL):
 scp -i "chatbot-key.pem" \
-  'ubuntu@ec2-3-26-68-122.ap-southeast-2.compute.amazonaws.com:~/PenalLawChatbot/database/backups/penallaw_backup_*.sql' \
+  'ubuntu@ec2-13-239-38-15.ap-southeast-2.compute.amazonaws.com:~/PenalLawChatbot/database/backups/penallaw_backup_*.sql' \
   ~/Desktop/Projects/PenalLawChatbot/database/backups/
 
 # ── EVALUATION ────────────────────────────────────────────────────────────────
@@ -143,12 +143,12 @@ python3 ai-service/evaluation/eval_primary_recall.py \
 
 # Download result JSONs and JSONL files
 scp -i "chatbot-key.pem" -r \
-  'ubuntu@ec2-3-26-68-122.ap-southeast-2.compute.amazonaws.com:~/PenalLawChatbot/ai-service/evaluation/results/' \
+  'ubuntu@ec2-13-239-38-15.ap-southeast-2.compute.amazonaws.com:~/PenalLawChatbot/ai-service/evaluation/results/' \
   ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/
 
 # Download log .txt files
 scp -i "chatbot-key.pem" \
-  'ubuntu@ec2-3-26-68-122.ap-southeast-2.compute.amazonaws.com:~/PenalLawChatbot/ai-service/logs/eval_*.txt' \
+  'ubuntu@ec2-13-239-38-15.ap-southeast-2.compute.amazonaws.com:~/PenalLawChatbot/ai-service/logs/eval_*.txt' \
   ~/Desktop/Projects/PenalLawChatbot/ai-service/logs/
 
 # ── MONITOR GPU ───────────────────────────────────────────────────────────────
