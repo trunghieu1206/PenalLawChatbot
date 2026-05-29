@@ -451,6 +451,8 @@ class AgentState(TypedDict):
     is_relevant:         Optional[bool]
     _missing_fields:     Optional[List[str]]         # set by clarification_check_node
     per_defendant_dates: Optional[List[Dict[str, str]]]  # multi-defendant support
+    is_practice_mode:    Optional[bool]              # True when invoked from /practice/evaluate
+    user_analysis:       Optional[str]               # user's written legal analysis (practice mode only)
 
 
 # ===========================================================
@@ -1289,9 +1291,19 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
 
         return {"documents": top_docs, "is_relevant": True}
 
-    def check_rebuttal(state: AgentState) -> str:
-        """Router after map_laws: grade study submission or generate normally."""
-        return "rebuttal" if state.get("rebuttal_against") else "generate"
+    def application_mode_router(state: AgentState) -> str:
+        """
+        Final-layer router after map_laws (Application Mode Router in diagram).
+        Decides which generation node to invoke:
+          - 'practice_evaluate' : Practice Mode — user submitted their own analysis for grading
+          - 'rebuttal'          : Chat rebuttal — user is countering a prior AI response
+          - 'generate'          : Standard Mode — normal legal argument generation
+        """
+        if state.get("is_practice_mode"):
+            return "practice_evaluate"
+        if state.get("rebuttal_against"):
+            return "rebuttal"
+        return "generate"
 
     # NODE 7: MAP LAWS (fixed — no truncation, retroactivity prompt)
     def map_laws_node(state: AgentState) -> dict:
@@ -1699,9 +1711,9 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
         cleaned_response = cleanup_response(response)
         return {"messages": [AIMessage(content=cleaned_response)]}
 
-    # NODE: REBUTTAL (Study Mode — grades user's legal argument)
+    # NODE: REBUTTAL (Chat mode — user counter-argues a prior AI response)
     def rebuttal_node(state: AgentState) -> dict:
-        """Study mode: grade user's legal argument against ground-truth mapped_laws."""
+        """Chat rebuttal: user is challenging a prior AI response in the conversation."""
         print("[NODE: rebuttal]")
         role          = state.get("user_role", "neutral")
         mapped_laws   = state.get("mapped_laws") or []
@@ -1714,32 +1726,153 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
             for d in documents
         ]))
 
-        system_prompt = f"""Bạn là giám khảo môn luật hình sự Việt Nam.
-Người dùng phân tích vụ án từ góc độ: {role}.
-Chấm điểm và nhận xét lập luận của họ so với kết quả chuẩn.
+        system_prompt = f"""Bạn là chuyên gia luật hình sự Việt Nam.
+Người dùng đang phản biện phân tích pháp lý trước đó từ góc độ: {role}.
+Hãy đáp lại phản biện của họ một cách có căn cứ, trích dẫn chính xác điều luật.
 
-TIÊU CHÍ (100 điểm):
-1. Điều luật viện dẫn đúng không? (40đ)
-2. Phiên bản BLHS áp dụng đúng không? (20đ)
-3. Lập luận phù hợp góc độ {role}? (20đ)
-4. Tình tiết tăng nặng / giảm nhẹ chính xác? (20đ)
-
-Định dạng:
-**Điểm tổng: X/100**
-**Nhận xét:** ...
-**Điểm mạnh:** ...
-**Cần cải thiện:** ...
-**Gợi ý chuẩn:** ..."""
+YÊU CẦU:
+1. Đọc kỹ lập luận phản biện của người dùng.
+2. Đối chiếu với văn bản luật và kết quả ánh xạ chuẩn.
+3. Nếu phản biện đúng: thừa nhận và bổ sung phân tích.
+4. Nếu phản biện sai: giải thích rõ ràng lý do với căn cứ pháp lý.
+5. Kết luận bằng phán quyết cuối cùng."""
 
         response = (llm.invoke(_sanitize_msgs([
             SystemMessage(content=system_prompt),
             HumanMessage(content=(
-                f"LẬP LUẬN NGƯỜI DÙNG:\n{user_argument}\n\n"
-                f"KẾT QUẢ CHUẨN:\n{json.dumps(mapped_laws, ensure_ascii=False)}\n\n"
+                f"PHẢN BIỆN CỦA NGƯỜI DÙNG:\n{user_argument}\n\n"
+                f"KẾT QUẢ PHÂN TÍCH CHUẨN:\n{json.dumps(mapped_laws, ensure_ascii=False)}\n\n"
                 f"VĂN BẢN LUẬT:\n{context_text}"
             ))
         ]))).content
-        return {"messages": [AIMessage(content=response)]}
+        cleaned = cleanup_response(response)
+        return {"messages": [AIMessage(content=cleaned)]}
+
+    # NODE: PRACTICE EVALUATE (Practice Mode — grades user's own written analysis)
+    def practice_evaluate_node(state: AgentState) -> dict:
+        """
+        Practice Mode final node.
+        Grades the user's submitted legal analysis against ground-truth retrieved laws
+        and mapped_laws produced by the full RAG pipeline.
+        Returns a JSON-encoded message that /practice/evaluate parses into PracticeEvalResponse.
+        """
+        print("[NODE: practice_evaluate]")
+        role          = state.get("user_role", "neutral")
+        mapped_laws   = state.get("mapped_laws") or []
+        documents     = state.get("documents") or []
+        user_analysis = state.get("user_analysis", "")
+
+        context_text = sanitize_text("\n\n".join([
+            f"[Điều {d.metadata.get('article_number','?')} - {d.metadata.get('source','Unknown')} | "
+            f"role={d.metadata.get('_temporal_role','unknown')}]\n{d.page_content}"
+            for d in documents
+        ]))
+
+        role_label = {
+            "neutral": "Thẩm phán (trung lập)",
+            "defense": "Luật sư bào chữa (bảo vệ bị cáo)",
+            "victim":  "Luật sư bảo vệ bị hại",
+        }.get(role, "Chuyên gia pháp lý")
+
+        role_criteria = {
+            "neutral": """
+- Đánh giá khả năng xác định tội danh đúng điều luật.
+- Kiểm tra việc phân tích tình tiết tăng nặng/giảm nhẹ theo Điều 51, 52 Bộ luật Hình sự.
+- Kiểm tra việc lượng hình (mức phạt hợp lý, tổng hợp theo Điều 55 nếu nhiều tội).
+- Kiểm tra xem đã trừ thời gian tạm giam chưa.
+- Đánh giá tính trung lập, khách quan của phân tích.
+""",
+            "defense": """
+- Đánh giá khả năng tìm và chứng dẫn tình tiết giảm nhẹ (có theo Điều 51 không).
+- Kiểm tra đề xuất án treo hoặc cải tạo không giam giữ (có căn cứ pháp lý không).
+- Đánh giá luận điểm bào chữa: có bác bỏ tình tiết tăng nặng hiệu quả không.
+- Kiểm tra đề nghị khấu trừ thời gian tạm giam.
+- Đánh giá có xuất hiện yêu cầu giảm nhẹ tội danh không.
+""",
+            "victim": """
+- Đánh giá khả năng xác định tình tiết tăng nặng (có theo Điều 52 không).
+- Kiểm tra yêu cầu bồi thường dân sự: có căn cứ thiệt hại không.
+- Đánh giá luận điểm phản bác tình tiết giảm nhẹ của bị cáo.
+- Kiểm tra đề nghị mức án cao nhất có căn cứ không.
+- Đánh giá có yêu cầu tịch thu công cụ, vật chứng không.
+""",
+        }.get(role, "")
+
+        eval_prompt = f"""Bạn là giáo sư luật hình sự Việt Nam đang đánh giá phân tích pháp lý của người dùng.
+
+VĂN BẢN LUẬT ĐÃ TRA CỨU (từ hệ thống RAG):
+{context_text}
+
+KẾT QUẢ ÁNH XẠ ĐIỀU LUẬT CHUẨN:
+{json.dumps(mapped_laws, ensure_ascii=False, indent=2)}
+
+PHÂN TÍCH CỦA NGƯỜI DÙNG (vai trò: {role_label}):
+{user_analysis}
+
+TIÊU CHÍ ĐÁNH GIÁ (theo vai trò {role_label}):
+{role_criteria}
+
+NHIỆM VỤ: Đánh giá chất lượng phân tích pháp lý trên so với kết quả chuẩn từ hệ thống.
+Chấm điểm từ 0 đến 100, chú trọng tính chính xác của điều luật viện dẫn.
+
+Trả về JSON hợp lệ (không markdown, không giải thích bên ngoài JSON) theo cấu trúc sau:
+{{
+  "score": <số nguyên từ 0 đến 100>,
+  "feedback": {{
+    "strengths": ["<điểm mạnh 1>", "<điểm mạnh 2>", ...],
+    "improvements": ["<cần cải thiện 1>", "<cần cải thiện 2>", ...],
+    "missed_articles": ["<Điều X Bộ luật Hình sự (ý nghĩa hoặc ghi chú)>", ...],
+    "suggestion": "<Gợi ý tổng hợp cho người dùng>"
+  }}
+}}
+
+Quy tắc:
+- strengths: 2–4 điểm tích cực cụ thể (trích dẫn rõ luận điểm người dùng).
+- improvements: 2–5 điểm cần cải thiện, cụ thể, có điều khoản tham chiếu.
+- missed_articles: liệt kê các điều luật quan trọng mà người dùng bỏ sót dựa vào kết quả chuẩn (có thể rỗng nếu đầy đủ). CHỈ dùng tên đầy đủ như "Điều 51 Bộ luật Hình sự 2015", không dùng từ viết tắt BLHS.
+- suggestion: 1–2 câu gợi ý cụ thể nhất cho người dùng.
+OUTPUT: CHỈ JSON."""
+
+        try:
+            raw_response = llm.invoke(_sanitize_msgs([
+                HumanMessage(content=eval_prompt)
+            ])).content.strip()
+            # Strip any accidental markdown fences
+            raw_response = re.sub(r"```(?:json)?\s*", "", raw_response).strip()
+            raw_response = raw_response.rstrip("`").strip()
+            data = json.loads(raw_response)
+
+            # Sanitize BLHS abbreviations in missed_articles
+            missed = [
+                re.sub(r"\bBLHS\b", "Bộ luật Hình sự", a, flags=re.IGNORECASE)
+                for a in data.get("feedback", {}).get("missed_articles", [])
+            ]
+            feedback = data.get("feedback", {})
+
+            # Encode as JSON string in the message so /practice/evaluate can parse it
+            result_payload = json.dumps({
+                "score": int(data.get("score", 50)),
+                "feedback": {
+                    "strengths":       feedback.get("strengths", []),
+                    "improvements":    feedback.get("improvements", []),
+                    "missed_articles": missed,
+                    "suggestion":      feedback.get("suggestion", ""),
+                },
+            }, ensure_ascii=False)
+            return {"messages": [AIMessage(content=result_payload)]}
+
+        except Exception as e:
+            # Return a fallback JSON so the endpoint doesn't crash
+            fallback = json.dumps({
+                "score": 0,
+                "feedback": {
+                    "strengths": [],
+                    "improvements": [f"Lỗi hệ thống khi chấm điểm: {e}"],
+                    "missed_articles": [],
+                    "suggestion": "Vui lòng thử lại.",
+                },
+            }, ensure_ascii=False)
+            return {"messages": [AIMessage(content=fallback)]}
 
 
 
@@ -1911,10 +2044,13 @@ TIÊU CHÍ (100 điểm):
     workflow.add_node("map_laws",                 map_laws_node)
     workflow.add_node("generate",                 generate)
     workflow.add_node("rebuttal",                 rebuttal_node)
+    workflow.add_node("practice_evaluate",        practice_evaluate_node)
     workflow.add_node("followup",                 followup_generate)
     workflow.add_node("casual",                   casual_respond)
 
     # START → 3-way intent router
+    # NOTE: Practice Mode also enters via 'new_case' — is_practice_mode flag in state
+    # ensures the application_mode_router sends it to 'practice_evaluate' at the end.
     workflow.add_conditional_edges(
         START,
         classify_intent,
@@ -1931,15 +2067,21 @@ TIÊU CHÍ (100 điểm):
     workflow.add_edge("parallel_retrieve",         "temporal_priority_tagger")
     workflow.add_edge("temporal_priority_tagger",  "rerank")
     workflow.add_edge("rerank",                    "map_laws")
+    # Application Mode Router: decides generate / rebuttal / practice_evaluate
     workflow.add_conditional_edges(
         "map_laws",
-        check_rebuttal,
-        {"rebuttal": "rebuttal", "generate": "generate"}
+        application_mode_router,
+        {
+            "practice_evaluate": "practice_evaluate",
+            "rebuttal":          "rebuttal",
+            "generate":          "generate",
+        }
     )
-    workflow.add_edge("generate",   END)
-    workflow.add_edge("rebuttal",   END)
-    workflow.add_edge("followup",   END)
-    workflow.add_edge("casual",     END)
+    workflow.add_edge("generate",          END)
+    workflow.add_edge("rebuttal",          END)
+    workflow.add_edge("practice_evaluate", END)
+    workflow.add_edge("followup",          END)
+    workflow.add_edge("casual",            END)
 
     app_compiled = workflow.compile()
     # BUG-14 FIX: Store llm in app_state so /practice/evaluate can reuse it
@@ -2003,6 +2145,8 @@ async def predict_judgment(req: RequestBody):
         "per_defendant_dates": None,
         "rebuttal_against":    req.rebuttal_against,
         "chat_history":        req.conversation_history,
+        "is_practice_mode":    False,
+        "user_analysis":       None,
     }
 
     try:
@@ -2037,107 +2181,70 @@ async def predict_judgment(req: RequestBody):
 @app.post("/practice/evaluate", response_model=PracticeEvalResponse)
 async def practice_evaluate(req: PracticeEvalRequest):
     """
-    Evaluate a user's legal analysis from the perspective of the chosen role.
-    Returns a score (0–100) plus structured feedback.
+    Practice Mode: evaluate user's legal analysis via the full LangGraph pipeline.
+
+    The request is routed through the complete graph:
+      classify_intent → extract_facts → clarification_check → multi_query_rewrite
+      → parallel_retrieve → temporal_priority_tagger → rerank → map_laws
+      → application_mode_router → practice_evaluate_node → END
+
+    This ensures the grading is done against actual RAG-retrieved laws and the
+    deterministic mapped_laws table — not just the LLM's internalized knowledge.
     """
-    # BUG-03 FIX: Reuse the llm from app_state instead of creating a new
-    # ChatOpenAI instance on every request. A new client per-request is:
-    #   (1) wasteful — re-initializes the HTTP client each time, and
-    #   (2) silently broken — if OPENROUTER_API_KEY is not set, the client is
-    #       constructed without error but fails only when .invoke() is called.
-    llm_instance = app_state.get("llm")
-    if not llm_instance:
+    graph = app_state.get("graph")
+    if not graph:
         raise HTTPException(status_code=503, detail="Model not loaded — service is still starting up")
 
-    role_label = {
-        "neutral": "Thẩm phán (trung lập)",
-        "defense": "Luật sư bào chữa (bảo vệ bị cáo)",
-        "victim": "Luật sư bảo vệ bị hại",
-    }.get(req.user_mode, "Chuyên gia pháp lý")
-
-    role_criteria = {
-        "neutral": """
-- Đánh giá khả năng xác định tội danh đúng điều luật.
-- Kiểm tra việc phân tích tình tiết tăng nặng/giảm nhẹ theo Điều 51, 52 Bộ luật Hình sự.
-- Kiểm tra việc lượng hình (mức phạt hợp lý, tổng hợp theo Điều 55 nếu nhiều tội).
-- Kiểm tra xem đã trừ thời gian tạm giam chưa.
-- Đánh giá tính trung lập, khách quan của phân tích.
-""",
-        "defense": """
-- Đánh giá khả năng tìm và chứng dẫn tình tiết giảm nhẹ (có theo Điều 51 không).
-- Kiểm tra đề xuất án treo hoặc cải tạo không giam giữ (có căn cứ pháp lý không).
-- Đánh giá luận điểm bào chữa: có bác bỏ tình tiết tăng nặng hiệu quả không.
-- Kiểm tra đề nghị khấu trừ thời gian tạm giam.
-- Đánh giá có xuất hiện yêu cầu giảm nhẹ tội danh không.
-""",
-        "victim": """
-- Đánh giá khả năng xác định tình tiết tăng nặng (có theo Điều 52 không).
-- Kiểm tra yêu cầu bồi thường dân sự: có căn cứ thiệt hại không.
-- Đánh giá luận điểm phản bác tình tiết giảm nhẹ của bị cáo.
-- Kiểm tra đề nghị mức án cao nhất có căn cứ không.
-- Đánh giá có yêu cầu tịch thu công cụ, vật chứng không.
-""",
-    }.get(req.user_mode, "")
-
-    eval_prompt = f"""Bạn là giáo sư luật hình sự Việt Nam đang đánh giá phân tích pháp lý của người dùng.
-
-VU ÁN:
-{req.case_description}
-
-VAI TRÒ NGƯỜI DÙNG: {role_label}
-
-PHÂN TÍCH CỦA NGƯỜI DÙNG:
-{req.user_analysis}
-
-TIÊU CHÍ ĐÁNH GIÁ (theo vai trò {role_label}):
-{role_criteria}
-
-NHIỆM VỤ: Đánh giá chất lượng phân tích pháp lý trên. Chấm điểm từ 0 đến 100.
-
-Trả về JSON hợp lệ (không markdown, không giải thích bên ngoài JSON) theo cấu trúc sau:
-{{
-  "score": <số nguyên từ 0 đến 100>,
-  "feedback": {{
-    "strengths": ["<điểm mạnh 1>", "<điểm mạnh 2>", ...],
-    "improvements": ["<cần cải thiện 1>", "<cần cải thiện 2>", ...],
-    "missed_articles": ["<Điều X Bộ luật Hình sự (ý nghĩa hoặc ghi chú)>", ...],
-    "suggestion": "<Gợi ý tổng hợp cho người dùng>"
-  }}
-}}
-
-Quy tắc:
-- strengths: 2–4 điểm tích cực cụ thể (trích dẫn rõ luận điểm người dùng).
-- improvements: 2–5 điểm cần cải thiện, cụ thể, có đều khoản tham chiếu.
-- missed_articles: liệt kê các điều luật quan trọng mà người dùng bỏ sót (có thể rỗng nếu đầy đủ). TRONG TRƯỜNG HỢP CÓ CẦN CHỈ RÕ PHIÊN BẢN, DÙNG CÁCH VIẾT: "Điều 51 Bộ luật Hình sự 2015", không dùng từ viết tắt BLHS.
-- suggestion: 1–2 câu gợi ý cụ thể nhất cho người dùng.
-OUTPUT: CHỈ JSON."""
+    # Build the initial state for the graph.
+    # The case description is both `question` and `full_case_content` so the
+    # intent router, retrieval, and mapping nodes all receive the case text.
+    # is_practice_mode=True signals application_mode_router to send to practice_evaluate_node.
+    case_text = sanitize_text(req.case_description)
+    inputs = {
+        "question":            case_text,
+        "full_case_content":   case_text,
+        "messages":            [HumanMessage(content=case_text)],
+        "user_role":           req.user_mode,
+        "user_analysis":       sanitize_text(req.user_analysis),
+        "is_practice_mode":    True,
+        "retry_count":         0,
+        "documents":           [],
+        "retrieval_queries":   [],
+        "extracted_facts":     None,
+        "mapped_laws":         None,
+        "sentencing_data":     None,
+        "is_relevant":         None,
+        "_missing_fields":     None,
+        "per_defendant_dates": None,
+        "rebuttal_against":    None,
+        "chat_history":        [],
+    }
 
     try:
-        response = llm_instance.invoke([HumanMessage(content=eval_prompt)])
-        raw = response.content.strip()
+        output = await graph.ainvoke(inputs)
+        # practice_evaluate_node writes a JSON string as the final AIMessage
+        raw = output["messages"][-1].content.strip()
         raw = re.sub(r"```(?:json)?\s*", "", raw).strip()
+        raw = raw.rstrip("`").strip()
         data = json.loads(raw)
-
-        # Clean up BLHS references in missed_articles
-        missed_articles = data.get("feedback", {}).get("missed_articles", [])
-        cleaned_missed_articles = []
-        for article in missed_articles:
-            # Replace "BLHS" with full name or remove if just cleanup needed
-            cleaned = re.sub(r"\bBLHS\b", "Bộ luật Hình sự", article, flags=re.IGNORECASE)
-            cleaned_missed_articles.append(cleaned)
 
         feedback = data.get("feedback", {})
         return PracticeEvalResponse(
             score=int(data.get("score", 50)),
             feedback=PracticeEvalFeedback(
-                strengths=feedback.get("strengths", []),
-                improvements=feedback.get("improvements", []),
-                missed_articles=cleaned_missed_articles,
-                suggestion=feedback.get("suggestion", ""),
+                strengths=       feedback.get("strengths", []),
+                improvements=    feedback.get("improvements", []),
+                missed_articles= feedback.get("missed_articles", []),
+                suggestion=      feedback.get("suggestion", ""),
             ),
         )
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail=f"Practice evaluation JSON parse error: {e}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Practice evaluation failed: {e}")
+        import traceback
+        tb = traceback.format_exc()
+        print(f"[PRACTICE EVAL ERROR] {type(e).__name__}: {e}\n{tb}")
+        raise HTTPException(status_code=500, detail=f"Practice evaluation failed: {type(e).__name__}: {e}")
 
 
 if __name__ == "__main__":
