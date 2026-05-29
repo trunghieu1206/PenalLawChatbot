@@ -628,21 +628,37 @@ else
     warn "nvidia-smi not found — deploying in CPU-only mode."
 fi
 
-# Install AI service deps (excluding torch to avoid downgrading conda's GPU torch)
+# ── Install AI service deps (idempotent — skips packages already satisfying their version) ───
 info "Installing AI service requirements..."
 
 # Record CUDA state BEFORE pip install — needed to detect if pip downgraded torch.
 _TORCH_CUDA_BEFORE=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "False")
 
-if "$AI_PYTHON" -c "import fastapi, transformers, langchain, pymilvus" 2>/dev/null; then
-    skip "AI service requirements already installed."
+# Comprehensive check: ALL key packages must import successfully.
+# If even one is missing, we run the full requirements install.
+# Using pip install without --upgrade so pip skips packages whose installed version
+# already satisfies the requirement spec — no redundant downloads.
+if "$AI_PYTHON" -c "
+import fastapi, transformers, langchain, langchain_openai, langgraph
+import sentence_transformers, peft, uvicorn, FlagEmbedding
+" 2>/dev/null; then
+    skip "AI service requirements already installed — skipping pip install."
 else
+    info "Installing missing AI service requirements (pip skips already-satisfied packages)..."
     "$AI_PYTHON" -m pip install "setuptools>=70.0" --quiet 2>&1 | tail -2 || true
-    # Exclude torch AND torchvision — we will reinstall the exact matching torchvision below
+
+    # Exclude torch AND torchvision — torch is managed separately above.
     grep -v "^torch" "$PROJECT_DIR/ai-service/requirements.txt" \
         | grep -v "^torchvision" \
         > /tmp/requirements_notorch.txt
-    "$AI_PYTHON" -m pip install --ignore-installed typing_extensions --quiet -r /tmp/requirements_notorch.txt 2>&1 | tail -5 || \
+
+    # --no-deps not used intentionally — transitive deps are needed on fresh installs.
+    # pip will skip packages whose installed version already satisfies the spec,
+    # so re-running is safe and only downloads what is actually missing.
+    "$AI_PYTHON" -m pip install \
+        --ignore-installed typing_extensions \
+        --quiet \
+        -r /tmp/requirements_notorch.txt 2>&1 | tail -5 || \
         error "Failed to install AI dependencies. Check pip output above."
 
     # Fix Numpy 2.0 ABI incompatibilities with scipy
@@ -652,35 +668,43 @@ else
     "$AI_PYTHON" -m pip install "FlagEmbedding>=1.2.0" --quiet 2>&1 | tail -2 || true
 fi
 
-# Uninstall torchvision entirely — our AI service does NOT use it.
-# (Jina embeddings + CrossEncoder + Milvus + LangChain have no image processing needs.)
-# transformers imports torchvision only for image features and gracefully skips it when absent.
-# Keeping a mismatched torchvision (e.g. CPU build vs CUDA torch, or wrong cu-tag) causes:
+# ── Torchvision: uninstall only if actually present ──────────────────────────────────────
+# Our AI service does NOT use torchvision; a mismatched build causes:
 #   RuntimeError: operator torchvision::nms does not exist
-# The safest fix for any server is to simply remove it.
-info "Removing torchvision (not needed by this AI service, prevents nms crash)..."
-"$AI_PYTHON" -m pip uninstall torchvision -y --quiet 2>&1 | tail -1 || true
+# Only run uninstall if pip actually reports it as installed — avoids a no-op round-trip.
+if "$AI_PYTHON" -m pip show torchvision &>/dev/null 2>&1; then
+    info "Removing torchvision (not needed, prevents nms crash)..."
+    "$AI_PYTHON" -m pip uninstall torchvision -y --quiet 2>&1 | tail -1 || true
+else
+    skip "torchvision not installed — nothing to remove."
+fi
 
-# Always enforce pymilvus 2.4.x — pymilvus 3.0 breaks MilvusLite by treating .db file as a directory.
-# --force-reinstall: ensure the downgrade happens even if pip thinks it's already installed.
-# --break-system-packages: required on Ubuntu 24.04 (PEP 668) to overwrite system-managed packages.
-info "Enforcing pymilvus<2.5 (required for legacy SQLite VN_law_lora.db)..."
-"$AI_PYTHON" -m pip install \
-    "milvus-lite>=2.4.9,<2.5.0" "pymilvus>=2.4.0,<2.5.0" \
-    --force-reinstall --break-system-packages \
-    --quiet 2>&1 | tail -3 || \
-"$AI_PYTHON" -m pip install \
-    "milvus-lite>=2.4.9,<2.5.0" "pymilvus>=2.4.0,<2.5.0" \
-    --force-reinstall \
-    --quiet 2>&1 | tail -3 || true
-
-# Verify the version is actually 2.4.x (fail loudly if not, so we catch silent failures)
+# ── pymilvus: force-reinstall ONLY if version is wrong ─────────────────────────────────
+# pymilvus 3.0+ treats .db files as directories, breaking MilvusLite.
+# Check version first; skip force-reinstall (~50 MB download) if already 2.4.x.
 _milvus_ver=$("$AI_PYTHON" -c "import pymilvus; print(pymilvus.__version__)" 2>/dev/null || echo "unknown")
-info "  pymilvus installed version: $_milvus_ver"
 case "$_milvus_ver" in
-    2.4.*) info "  ✅ pymilvus $_milvus_ver — correct (2.4.x)" ;;
-    *)     warn "  ⚠️  pymilvus $_milvus_ver is NOT 2.4.x — MilvusLite may fail. Run manually: pip install 'pymilvus>=2.4.0,<2.5.0' --force-reinstall --break-system-packages" ;;
+    2.4.*)
+        skip "pymilvus $_milvus_ver is already correct (2.4.x) — skipping force-reinstall."
+        ;;
+    *)
+        info "Enforcing pymilvus<2.5 (current: $_milvus_ver) — downloading..."
+        "$AI_PYTHON" -m pip install \
+            "milvus-lite>=2.4.9,<2.5.0" "pymilvus>=2.4.0,<2.5.0" \
+            --force-reinstall --break-system-packages \
+            --quiet 2>&1 | tail -3 || \
+        "$AI_PYTHON" -m pip install \
+            "milvus-lite>=2.4.9,<2.5.0" "pymilvus>=2.4.0,<2.5.0" \
+            --force-reinstall \
+            --quiet 2>&1 | tail -3 || true
+        _milvus_ver=$("$AI_PYTHON" -c "import pymilvus; print(pymilvus.__version__)" 2>/dev/null || echo "unknown")
+        case "$_milvus_ver" in
+            2.4.*) info "  ✅ pymilvus $_milvus_ver installed." ;;
+            *)     warn "  ⚠️  pymilvus $_milvus_ver is NOT 2.4.x — MilvusLite may fail. Run: pip install 'pymilvus>=2.4.0,<2.5.0' --force-reinstall" ;;
+        esac
+        ;;
 esac
+info "  pymilvus version: $_milvus_ver"
 
 # Verify torch CUDA state AFTER all installs.
 # Only fail if CUDA was working BEFORE pip but is now broken (pip downgraded torch).
