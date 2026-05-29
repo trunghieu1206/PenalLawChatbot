@@ -494,6 +494,8 @@ class PracticeEvalFeedback(BaseModel):
     improvements: List[str]
     missed_articles: List[str]
     suggestion: str
+    suggested_laws: List[Dict[str, str]] = Field(default_factory=list)
+    # Each item: {"article": "93", "clause": "Khoản 1", "offense_name": "Giết người", "source": "Bộ luật Hình sự 1999"}
 
 
 class PracticeEvalResponse(BaseModel):
@@ -1858,6 +1860,29 @@ OUTPUT: CHỈ JSON."""
             ]
             feedback = data.get("feedback", {})
 
+            # Build suggested_laws from the actual mapped_laws produced by the RAG pipeline.
+            # These are 100% grounded in retrieved Milvus documents — no hallucination.
+            # Deduplicate by (article, edition_applied) so users don’t see duplicates.
+            seen = set()
+            suggested_laws: list = []
+            for m in mapped_laws:
+                art     = str(m.get("article", "")).strip()
+                clause  = str(m.get("clause", "")).strip()
+                name    = str(m.get("offense_name", "")).strip()
+                source  = str(m.get("edition_applied", "")).strip()
+                # Skip sentinel error entries
+                if m.get("_mapping_error") or not art or art == "N/A":
+                    continue
+                key = (art, source)
+                if key not in seen:
+                    seen.add(key)
+                    suggested_laws.append({
+                        "article":      art,
+                        "clause":       clause,
+                        "offense_name": name,
+                        "source":       source,
+                    })
+
             # Encode as JSON string in the message so /practice/evaluate can parse it
             result_payload = json.dumps({
                 "score": int(data.get("score", 50)),
@@ -1866,6 +1891,7 @@ OUTPUT: CHỈ JSON."""
                     "improvements":    feedback.get("improvements", []),
                     "missed_articles": missed,
                     "suggestion":      feedback.get("suggestion", ""),
+                    "suggested_laws":  suggested_laws,
                 },
             }, ensure_ascii=False)
             return {"messages": [AIMessage(content=result_payload)]}
@@ -1879,6 +1905,7 @@ OUTPUT: CHỈ JSON."""
                     "improvements": [f"Lỗi hệ thống khi chấm điểm: {e}"],
                     "missed_articles": [],
                     "suggestion": "Vui lòng thử lại.",
+                    "suggested_laws": [],
                 },
             }, ensure_ascii=False)
             return {"messages": [AIMessage(content=fallback)]}
@@ -2255,6 +2282,7 @@ async def practice_evaluate(req: PracticeEvalRequest):
                 improvements=    feedback.get("improvements", []),
                 missed_articles= feedback.get("missed_articles", []),
                 suggestion=      feedback.get("suggestion", ""),
+                suggested_laws=  feedback.get("suggested_laws", []),
             ),
         )
     except json.JSONDecodeError as e:

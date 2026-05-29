@@ -322,6 +322,33 @@ export default function TrainingPage() {
                       <p className={styles.suggestion}>{result.feedback.suggestion}</p>
                     </section>
                   )}
+
+                  {result.feedback.suggested_laws?.length > 0 && (
+                    <section className={styles.section}>
+                      <h4 className={styles.sectionTitle}>
+                        Điều luật từ hệ thống
+                        <span style={{ fontSize: '11px', fontWeight: 400, marginLeft: 6, color: 'var(--on-surface-variant)', textTransform: 'none', letterSpacing: 0 }}>
+                          (nhấn để xem nội dung)
+                        </span>
+                      </h4>
+                      <div className={styles.suggestedLawsGrid}>
+                        {result.feedback.suggested_laws.map((law, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            className={styles.suggestedLaw}
+                            onClick={() => handleLawClick(law.article, law.source)}
+                            title={`Xem Điều ${law.article} — ${law.source}`}
+                          >
+                            <span className={styles.lawArticleNum}>Điều {law.article}</span>
+                            {law.offense_name && (
+                              <span className={styles.lawOffenseName}>{law.offense_name}</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  )}
                 </div>
               </section>
             )}
