@@ -629,10 +629,17 @@ def _verify_no_hallucinated_articles(
     mapped_laws: List[Dict[str, Any]],
     documents: List[Document],
 ) -> List[str]:
-    """L1-A: Return article numbers cited in text but absent from retrieved context."""
+    """L1-A: Return article numbers cited in text but absent from retrieved context.
+
+    GROUNDING RULE: Only articles present in the retrieved documents are considered
+    grounded. mapped_laws is intentionally excluded from the allowed set — if the
+    LLM in map_laws cited an article not in the retrieved context (using parametric
+    training knowledge), that should be detected and flagged here.
+    """
     cited = set(_ARTICLE_CITE_PAT.findall(text))
-    allowed: set = {str(m.get("article", "")) for m in mapped_laws}
-    allowed |= {str(d.metadata.get("article_number", "")) for d in documents}
+
+    # Only allow articles that were physically retrieved from the vector DB
+    allowed: set = {str(d.metadata.get("article_number", "")) for d in documents}
     allowed |= {"7"}  # Điều 7 retroactivity — always valid
     allowed.discard("")
     return sorted(cited - allowed)
@@ -1449,6 +1456,10 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
 KHÔNG được áp dụng bất kỳ điều nào của Bộ luật Tố tụng hình sự (BLTTHS), Bộ luật Dân sự,
 Bộ luật Lao động, hôn nhân gia đình, hay bất kỳ bộ luật, nghị định, thông tư nào khác.
 
+❌ NGHIÊM CẤM: CHỈ được ánh xạ vào các ĐIỀU LUẬT có số hiệu XUẤT HIỆN TRONG VĂN BẢN LUẬT ĐÃ CUNG CẤP Ở TRÊN.
+NGHIÊM CẤM truy xuất bất kỳ số điều nào từ kiến thức nội tại (training knowledge) không có trong tài liệu trên.
+Nếu tài liệu cung cấp không chứa điều luật phù hợp, chỉ ánh xạ đến những gì có trong tài liệu và ghi rõ hạn chế này trong applicable_reason.
+
 NGUYÊN TẮC THỜI HIỆU (Điều 7 BLHS) — BẮT BUỘC ÁP DỤNG:
 1. QUY TẮC CƠ BẢN: Áp dụng luật có hiệu lực tại THỜI ĐIỂM PHẠM TỘI (tài liệu có role=primary).
 2. NGOẠI LỆ HỒI TỐ CÓ LỢI: Nếu luật MỚI HƠN (role=comparison) quy định hình phạt NHẸ HƠN, BẮT BUỘC áp dụng.
@@ -1946,6 +1957,7 @@ QUY TẮC:
         messages = state.get("messages") or []
         last_msg = messages[-1] if messages else None
         if not last_msg or not isinstance(last_msg, AIMessage):
+            print("  [VERIFY] No AIMessage found — skipping verification.")
             return {}
 
         ai_text     = last_msg.content
@@ -1954,6 +1966,11 @@ QUY TẮC:
         mapped_laws = state.get("mapped_laws") or []
         documents   = state.get("documents") or []
         crime_date  = facts.get("ngay_pham_toi", "")
+
+        cited_articles = set(_ARTICLE_CITE_PAT.findall(ai_text))
+        print(f"  [VERIFY] role={role} | crime_date={crime_date} | "
+              f"mapped_laws={len(mapped_laws)} | docs={len(documents)} | "
+              f"cited_articles={sorted(cited_articles)}")
 
         issues: List[str] = []
 
@@ -1969,6 +1986,9 @@ QUY TẮC:
                 f"Trích dẫn không có cơ sở: {arts} "
                 f"— không tìm thấy trong văn bản luật đã truy xuất."
             )
+            print(f"  [VERIFY L1-A] ❌ Hallucinated articles: {hallucinated}")
+        else:
+            print(f"  [VERIFY L1-A] ✅ All cited articles verified.")
 
         # L1-B: Temporal validity check
         wrong_edition = _verify_temporal_validity(ai_text, crime_date, documents)
@@ -1978,6 +1998,10 @@ QUY TẮC:
                 f"Có thể áp dụng sai phiên bản luật: {', '.join(wrong_edition)}. "
                 f"Ngày phạm tội {crime_date} → phải dùng {correct}."
             )
+            print(f"  [VERIFY L1-B] ❌ Wrong edition(s) cited: {wrong_edition} "
+                  f"(expected: {correct})")
+        else:
+            print(f"  [VERIFY L1-B] ✅ Temporal edition check passed.")
 
         # L1-C: Role signal check
         role_score = _verify_role_signal(ai_text, role)
@@ -1986,6 +2010,11 @@ QUY TẮC:
                 f"Giọng văn có thể chưa nhất quán với vai '{role}' "
                 f"(điểm tín hiệu = {role_score:.2f}/1.00)."
             )
+            print(f"  [VERIFY L1-C] ❌ Role signal weak: score={role_score:.2f} "
+                  f"(threshold=0.35) for role='{role}'")
+        else:
+            print(f"  [VERIFY L1-C] ✅ Role signal OK: score={role_score:.2f} "
+                  f"for role='{role}'")
 
         # ─────────────────────────────────────────────────────────
         # LAYER 2 — LLM Judge (skip if L1 already caught ≥ 2 issues)
