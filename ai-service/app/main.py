@@ -967,6 +967,67 @@ async def lifespan(app: FastAPI):
             all_scores.extend(logits.cpu().tolist())
         return all_scores
 
+    # -------------------------------------------------------
+    # 5. BM25 Keyword Index (built once at startup from Milvus corpus)
+    # -------------------------------------------------------
+    # rank_bm25 is a pure-Python library — no GPU, no latency per request.
+    # We load the entire Milvus collection into memory once and tokenize it.
+    # Each request then calls bm25_index.get_scores() which is microsecond-fast.
+    #
+    # Fault-tolerant design:
+    #   - If rank_bm25 is not installed  → server starts normally, BM25 disabled.
+    #   - If Milvus full-scan fails       → server starts normally, BM25 disabled.
+    #   - If BM25 returns no results      → silently skipped, no crash.
+    _bm25_index = None
+    _bm25_docs: list[Document] = []
+
+    try:
+        from rank_bm25 import BM25Okapi
+
+        print("📚 Building BM25 keyword index from Milvus corpus...")
+        _all_milvus_docs: list[Document] = []
+
+        # Query ALL documents. offset/limit paging handles large collections.
+        _batch_size = 1000
+        _offset     = 0
+        while True:
+            _batch = milvus_client.query(
+                collection_name=COLLECTION_NAME,
+                filter="",               # no filter = all documents
+                output_fields=_OUTPUT_FIELDS,
+                limit=_batch_size,
+                offset=_offset,
+            )
+            if not _batch:
+                break
+            for h in _batch:
+                _all_milvus_docs.append(Document(
+                    page_content=sanitize_text(h.get("content", "")),
+                    metadata={
+                        k: sanitize_text(h.get(k, "")) if isinstance(h.get(k, ""), str) else h.get(k, "")
+                        for k in _OUTPUT_FIELDS if k != "content"
+                    },
+                ))
+            _offset += _batch_size
+            if len(_batch) < _batch_size:
+                break  # last page
+
+        # Tokenize: simple whitespace split is sufficient for Vietnamese BM25.
+        # BM25 works on term frequency — no need for full NLP tokenization.
+        _tokenized = [doc.page_content.lower().split() for doc in _all_milvus_docs]
+        _bm25_index = BM25Okapi(_tokenized)
+        _bm25_docs  = _all_milvus_docs
+
+        print(f"✅ BM25 index built: {len(_bm25_docs)} documents indexed "
+              f"({len(_tokenized)} tokenized corpus entries).")
+
+    except ImportError:
+        print("⚠️  rank_bm25 not installed — BM25 keyword retrieval disabled. "
+              "Run: pip install rank-bm25>=0.2.2")
+    except Exception as _bm25_err:
+        print(f"⚠️  BM25 index build failed ({type(_bm25_err).__name__}: {_bm25_err}) "
+              "— keyword retrieval disabled, dense-only fallback active.")
+
 
     # -------------------------------------------------------
     # NODE DEFINITIONS
@@ -1220,6 +1281,43 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
             except Exception as e:
                 print(f"[RETRIEVE ERROR] {type(e).__name__}: {e}")
 
+        # Step 1B: BM25 Keyword Search (up to 5 chunks per query)
+        # Runs against the in-memory index built at startup — zero Milvus I/O per request.
+        # Complements dense search by anchoring retrieval to exact legal terminology
+        # (e.g., "trộm cắp" will surface Điều 173 even if the vector was confused).
+        BM25_TOP_K = 5
+        if _bm25_index is not None and _bm25_docs:
+            for q in queries:
+                if not q:
+                    continue
+                try:
+                    tokenized_q = q.lower().split()
+                    scores      = _bm25_index.get_scores(tokenized_q)
+                    top_indices = sorted(
+                        range(len(scores)),
+                        key=lambda i: scores[i],
+                        reverse=True,
+                    )[:BM25_TOP_K]
+                    added = 0
+                    for idx in top_indices:
+                        if scores[idx] <= 0:
+                            break  # no keyword overlap at all — ignore remaining
+                        d   = _bm25_docs[idx]
+                        key = (d.metadata.get("article_number", ""),
+                               d.metadata.get("source", ""))
+                        if key not in seen_ids:
+                            seen_ids.add(key)
+                            # Tag so we can log and distinguish from semantic hits
+                            d.metadata["_retrieval_source"] = "bm25"
+                            all_docs.append(d)
+                            added += 1
+                except Exception as _bm25_q_err:
+                    print(f"  [BM25] Query error ({type(_bm25_q_err).__name__}): "
+                          f"{_bm25_q_err} — skipping this query")
+        else:
+            if _bm25_index is None:
+                print("  [BM25] Index not available — keyword retrieval skipped")
+
         # Step 2: Pinned fetch — edition-aware, multi-defendant safe
         if per_defendant:
             crime_editions = [
@@ -1266,9 +1364,12 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
                     print(f"  [PINNED] Failed to fetch Điều {art_no} ({purpose}): {e}")
 
         n_pinned   = sum(1 for d in all_docs if d.metadata.get("_pinned"))
-        n_semantic = len(all_docs) - n_pinned
-        print(f"  [RETRIEVE] Total: {len(all_docs)} docs (semantic={n_semantic}, pinned={n_pinned})")
+        n_bm25     = sum(1 for d in all_docs if d.metadata.get("_retrieval_source") == "bm25")
+        n_semantic = len(all_docs) - n_pinned - n_bm25
+        print(f"  [RETRIEVE] Total: {len(all_docs)} docs "
+              f"(semantic={n_semantic}, bm25={n_bm25}, pinned={n_pinned})")
         return {"documents": all_docs}
+
 
     # NODE 5: TEMPORAL PRIORITY TAGGER
     def temporal_priority_tagger(state: AgentState) -> dict:
