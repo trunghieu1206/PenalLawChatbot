@@ -333,7 +333,7 @@ export default function ChatPage() {
                     </h2>
                     <div className="flex items-center gap-1 text-xs text-on-surface-variant">
                       <span className="material-symbols-outlined text-[14px]">calendar_today</span>
-                      <span>Ngày: {new Date().toLocaleDateString('vi-VN')}</span>
+                      <span>Ngày: {(currentSession?.createdAt ? new Date(currentSession.createdAt) : new Date()).toLocaleDateString('vi-VN')}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 relative">

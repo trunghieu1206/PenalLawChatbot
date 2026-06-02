@@ -419,6 +419,49 @@
   border-left: 3px solid var(--primary-container);
 }
 
+.suggestedLawsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.suggestedLaw {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--surface-container-low);
+  border: 1px solid var(--surface-variant);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.suggestedLaw:hover {
+  background: var(--surface-container);
+  border-color: var(--primary-container);
+}
+
+.lawArticleNum {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--primary);
+  font-family: var(--font-serif);
+}
+
+.lawOffenseName {
+  font-size: 13px;
+  color: var(--on-surface);
+}
+
+.lawSource {
+  font-size: 11px;
+  color: var(--on-surface-variant);
+  font-style: italic;
+}
+
 .lawModalOverlay {
   position: fixed;
   inset: 0;

@@ -42,11 +42,71 @@ from dotenv import load_dotenv
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 load_dotenv(dotenv_path=_PROJECT_ROOT / ".env", override=False)
 
+_RESULTS_DIR = Path(__file__).resolve().parent / "results"
+
 # ── Articles that are procedural/supporting — never the primary crime article ──
 _PROCEDURAL = {
     "7",  "28", "32", "34", "42", "45", "46", "47", "48", "49", "50",
     "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "65",
 }
+
+# Known BLTTHS-ONLY numbers — kept empty; nearest-marker logic handles disambiguation.
+# DO NOT add crime-range numbers: BLHS 2015 crime articles go up to ~425 and overlap
+# heavily with BLTTHS procedural numbers (e.g. Điều 260, 306, 315 are BLHS crimes).
+_BLTTHS_ARTICLES: set = set()
+
+_BLTTHS_MARKERS = ["tố tụng hình sự", "bltths", "b.l.t.t.h.s", "luật tố tụng"]
+_BLHS_MARKERS   = ["bộ luật hình sự", "blhs", "b.l.h.s", "luật hình sự"]
+
+
+def _nearest_marker_dist(t_low: str, art_mid: int, markers: list, window: int) -> int:
+    """Return character distance from art_mid to the nearest marker within window. Returns window+1 if not found."""
+    best = window + 1
+    lo, hi = max(0, art_mid - window), min(len(t_low), art_mid + window)
+    region = t_low[lo:hi]
+    for mk in markers:
+        idx = 0
+        while True:
+            pos = region.find(mk, idx)
+            if pos == -1:
+                break
+            dist = abs((lo + pos) - art_mid)
+            if dist < best:
+                best = dist
+            idx = pos + 1
+    return best
+
+
+def _extract_blhs_articles(text: str):
+    """Extract only BLHS (penal code) article numbers from verdict text.
+    Uses nearest-marker distance: BLHS win=300, BLTTHS win=150.
+    When both markers appear, the closest one determines the law.
+    This handles long citation chains like:
+      'Điều 295; ...Điều 35 Bộ luật hình sự...; ...Điều 136 BLTTHS'"""
+    BLHS_WIN   = 300
+    BLTTHS_WIN = 160
+    t_low = text.lower()
+    seen: dict = {}
+    for m in re.finditer(r"(?:đi[eề]u|dieu)\s*(\d+[a-z]?)", t_low):
+        num     = m.group(1)
+        art_mid = (m.start() + m.end()) // 2
+        blhs_dist   = _nearest_marker_dist(t_low, art_mid, _BLHS_MARKERS,   BLHS_WIN)
+        bltths_dist = _nearest_marker_dist(t_low, art_mid, _BLTTHS_MARKERS, BLTTHS_WIN)
+        found_blhs   = blhs_dist   <= BLHS_WIN
+        found_bltths = bltths_dist <= BLTTHS_WIN
+        if found_blhs and found_bltths:
+            if blhs_dist <= bltths_dist and num not in seen:
+                seen[num] = None
+        elif found_blhs:
+            if num not in seen:
+                seen[num] = None
+        elif found_bltths:
+            pass  # procedural — skip
+        else:
+            if num not in _BLTTHS_ARTICLES and num not in _PROCEDURAL:
+                if num not in seen:
+                    seen[num] = None
+    return list(seen.keys())
 
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -80,7 +140,7 @@ def setup_logging(log_file: Optional[str]) -> logging.Logger:
 
 
 # ── Dataset helpers ───────────────────────────────────────────────────────────
-def _article_num(s: str) -> Optional[str]:
+def _article_num(s: str):
     """Extract numeric article identifier, e.g. '173' from 'Điều 173 - BLHS 2015...'"""
     m = re.search(r"(\d+[A-Za-z]?)", str(s))
     return m.group(1) if m else None
@@ -93,13 +153,11 @@ def _extract_nums_from_text(text: str) -> set:
     ))
 
 
+
 def load_cases(dataset_path: str, _unused: str = "") -> list:
     """
-    Build ordered case list from case_eval_dataset.json. Each case has:
-      - case_url
-      - case_description  (sent to /predict)
-      - primary_article   (first non-procedural Điều extracted from final_verdict)
-      - final_verdict     (ground truth)
+    Build ordered case list from case_eval_dataset.json.
+    Uses BLHS-aware article extractor to filter out BLTTHS procedural citations.
     """
     with open(dataset_path, encoding="utf-8") as f:
         data = json.load(f)
@@ -109,19 +167,11 @@ def load_cases(dataset_path: str, _unused: str = "") -> list:
         url         = entry.get("url", "")
         final_text  = entry.get("final_verdict", "")
 
-        # Extract all Điều numbers from the actual court verdict
-        all_nums = re.findall(r"(?i:điều|dieu|điêu|đều)\s*(\d+[A-Za-z]?)",
-                              final_text)
-        # Remove duplicates, keep order
-        seen_nums: dict = {}
-        for n in all_nums:
-            if n not in seen_nums:
-                seen_nums[n] = None
-        all_gt_nums = list(seen_nums.keys())
+        all_gt_nums = _extract_blhs_articles(final_text)
 
-        # Primary = first non-procedural article
+        # Primary = first article not in procedural/BLTTHS lists
         primary_num = next(
-            (n for n in all_gt_nums if n not in _PROCEDURAL), None
+            (n for n in all_gt_nums if n not in _PROCEDURAL and n not in _BLTTHS_ARTICLES), None
         )
         if not primary_num:
             continue  # skip: no identifiable crime article in verdict
@@ -217,12 +267,12 @@ def main():
         description="Primary Article Recall evaluation for VNPLaw AI service."
     )
     parser.add_argument("--dataset",
-                        default="ai-service/evaluation/thesis_eval_unique.json",
+                        default=str(_PROJECT_ROOT / "ai-service/evaluation/thesis_eval_unique.json"),
                         help="Path to case_eval_dataset.json")
     parser.add_argument("--output",
-                        default="ai-service/evaluation/results/primary_recall_results.jsonl")
+                        default=str(_RESULTS_DIR / "primary_recall_results.jsonl"))
     parser.add_argument("--summary",
-                        default="ai-service/evaluation/results/primary_recall_summary.json")
+                        default=str(_RESULTS_DIR / "primary_recall_summary.json"))
     parser.add_argument("--ai-url",
                         default=os.getenv("AI_SERVICE_URL", "http://localhost:8000"))
     parser.add_argument("--timeout",  type=int, default=120,

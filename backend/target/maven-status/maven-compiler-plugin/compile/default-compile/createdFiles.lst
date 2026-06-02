@@ -32,7 +32,6 @@ com/penallaw/backend/dto/AdminDTOs$MessageSummary.class
 com/penallaw/backend/repository/ChatMessageRepository.class
 com/penallaw/backend/security/JwtAuthenticationFilter.class
 com/penallaw/backend/dto/AuthDTOs$LoginRequest.class
-com/penallaw/backend/dto/AdminDTOs$DashboardStats.class
 com/penallaw/backend/converter/JsonMapConverter.class
 com/penallaw/backend/repository/ChatSessionRepository.class
 com/penallaw/backend/entity/User$UserBuilder.class

@@ -49,7 +49,7 @@ os.environ["GRPC_TRACE"] = ""
 
 # --- CPU PERFORMANCE OPTIMIZATION ---
 # Force PyTorch and underlying C++ math libraries to use all available physical
-# CPU cores optimally.
+# CPU cores optimally. Crucial for CPU inference performance on rented vCPUs.
 # intra_op_threads: parallelism WITHIN a single op (e.g. matrix multiplication)
 # inter_op_threads: parallelism BETWEEN independent ops (pipeline parallelism)
 _cores = os.cpu_count() or 4
@@ -314,65 +314,64 @@ def _load_peft_with_compat(base_model, adapter_name: str):
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-# No longer used: Switched to Jina embeddings
-# class LoRABGEM3Embeddings(Embeddings):
-#     def __init__(self, base_model_name: str, adapter_name: str, device: str = "cuda"):
-#         print(f"🔄 Loading BGE-M3 base model on {device}...")
-#         self.device = device
+class LoRABGEM3Embeddings(Embeddings):
+    def __init__(self, base_model_name: str, adapter_name: str, device: str = "cuda"):
+        print(f"🔄 Loading BGE-M3 base model on {device}...")
+        self.device = device
 
-#         # Load tokenizer
-#         self.tokenizer = AutoTokenizer.from_pretrained(
-#             base_model_name, trust_remote_code=True
-#         )
+        # Load tokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            base_model_name, trust_remote_code=True
+        )
 
-#         # Load base transformer model.
-#         # use_safetensors=True bypasses torch.load and the CVE-2025-32434 security
-#         # check added in transformers>=4.57 that blocks torch<2.6.
-#         # BAAI/bge-m3 ships model.safetensors so this is always safe.
-#         base_model = AutoModel.from_pretrained(
-#             base_model_name, trust_remote_code=True, use_safetensors=True
-#         )
+        # Load base transformer model.
+        # use_safetensors=True bypasses torch.load and the CVE-2025-32434 security
+        # check added in transformers>=4.57 that blocks torch<2.6.
+        # BAAI/bge-m3 ships model.safetensors so this is always safe.
+        base_model = AutoModel.from_pretrained(
+            base_model_name, trust_remote_code=True, use_safetensors=True
+        )
 
-#         # Apply LoRA via PEFT — with automatic config-patching for version skew
-#         print(f"⬇️  Applying LoRA adapter via PEFT: {adapter_name}")
-#         self.model = _load_peft_with_compat(base_model, adapter_name)
+        # Apply LoRA via PEFT — with automatic config-patching for version skew
+        print(f"⬇️  Applying LoRA adapter via PEFT: {adapter_name}")
+        self.model = _load_peft_with_compat(base_model, adapter_name)
 
-#         self.model = self.model.to(device)
-#         self.model.eval()
+        self.model = self.model.to(device)
+        self.model.eval()
 
-#     def _mean_pooling(self, model_output, attention_mask):
-#         """Mean pool token embeddings, weighted by attention mask."""
-#         token_embeddings = model_output[0]  # (batch, seq, hidden)
-#         mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
-#         return torch.sum(token_embeddings * mask_expanded, 1) / torch.clamp(
-#             mask_expanded.sum(1), min=1e-9
-#         )
+    def _mean_pooling(self, model_output, attention_mask):
+        """Mean pool token embeddings, weighted by attention mask."""
+        token_embeddings = model_output[0]  # (batch, seq, hidden)
+        mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+        return torch.sum(token_embeddings * mask_expanded, 1) / torch.clamp(
+            mask_expanded.sum(1), min=1e-9
+        )
 
-#     def _encode_batch(self, texts: List[str]) -> np.ndarray:
-#         encoded = self.tokenizer(
-#             texts,
-#             padding=True,
-#             truncation=True,
-#             max_length=512,
-#             return_tensors="pt",
-#         )
-#         encoded = {k: v.to(self.device) for k, v in encoded.items()}
-#         with torch.no_grad():
-#             output = self.model(**encoded)
-#         embeddings = self._mean_pooling(output, encoded["attention_mask"])
-#         embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
-#         return embeddings.cpu().numpy()
+    def _encode_batch(self, texts: List[str]) -> np.ndarray:
+        encoded = self.tokenizer(
+            texts,
+            padding=True,
+            truncation=True,
+            max_length=512,
+            return_tensors="pt",
+        )
+        encoded = {k: v.to(self.device) for k, v in encoded.items()}
+        with torch.no_grad():
+            output = self.model(**encoded)
+        embeddings = self._mean_pooling(output, encoded["attention_mask"])
+        embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
+        return embeddings.cpu().numpy()
 
-#     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-#         all_embeddings: List[List[float]] = []
-#         batch_size = 32
-#         for i in range(0, len(texts), batch_size):
-#             batch = texts[i : i + batch_size]
-#             all_embeddings.extend(self._encode_batch(batch).tolist())
-#         return all_embeddings
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        all_embeddings: List[List[float]] = []
+        batch_size = 32
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i : i + batch_size]
+            all_embeddings.extend(self._encode_batch(batch).tolist())
+        return all_embeddings
 
-#     def embed_query(self, text: str) -> List[float]:
-#         return self._encode_batch([text])[0].tolist()
+    def embed_query(self, text: str) -> List[float]:
+        return self._encode_batch([text])[0].tolist()
 
 
 # ===========================================================
@@ -524,10 +523,10 @@ _EDITION_RANGES = [
 ]
 
 _ALWAYS_KEEP_BY_EDITION = {
-    "BLHS 1999":                  {"7", "36", "38", "41", "46", "47", "48", "49", "50", "51", "52", "60"},
-    "BLHS 1999 (sửa đổi 2009)": {"7", "36", "38", "41", "46", "47", "48", "49", "50", "51", "52", "60"},
-    "BLHS 2015 (sửa đổi 2017)": {"7", "38", "47", "48", "51", "52", "53", "54", "55", "56", "57", "65"},
-    "BLHS 2015 (sửa đổi 2025)": {"7", "38", "47", "48", "51", "52", "53", "54", "55", "56", "57", "65"},
+    "BLHS 1999":                  {"7", "46", "47", "48", "49", "50", "51", "52", "60"},
+    "BLHS 1999 (sửa đổi 2009)": {"7", "46", "47", "48", "49", "50", "51", "52", "60"},
+    "BLHS 2015 (sửa đổi 2017)": {"7", "51", "52", "53", "54", "55", "56", "57", "65"},
+    "BLHS 2015 (sửa đổi 2025)": {"7", "51", "52", "53", "54", "55", "56", "57", "65"},
 }
 
 
@@ -614,186 +613,11 @@ _ROLE_CIRCUMSTANCE_INSTRUCTION = {
 _MAX_SEMANTIC_DOCS = 5
 
 # ===========================================================
-# ROBUST JSON EXTRACTION — used by every LLM-output parser
-# ===========================================================
-def _extract_json(text: str) -> Any:
-    """Extract the first valid JSON object or array from LLM output.
-
-    Strategy:
-    1. Strip markdown code fences (```json ... ```).
-    2. Find the first '{' or '[' and the last matching '}' or ']'.
-    3. Parse the substring with json.loads().
-
-    This is far more robust than the naive regex+strip approach because
-    it handles conversational preamble, trailing commentary, and partial
-    fences that LLMs commonly produce.
-    """
-    # Step 1: strip markdown fences
-    cleaned = re.sub(r"```(?:json|JSON)?\s*", "", text).strip().rstrip("`").strip()
-
-    # Step 2: find outermost JSON brackets
-    obj_start = cleaned.find("{")
-    arr_start = cleaned.find("[")
-
-    if obj_start == -1 and arr_start == -1:
-        raise ValueError(f"No JSON object or array found in: {cleaned[:200]}")
-
-    # Pick whichever bracket comes first
-    if arr_start == -1 or (obj_start != -1 and obj_start < arr_start):
-        start = obj_start
-        end = cleaned.rfind("}")
-        if end == -1 or end <= start:
-            raise ValueError(f"Unmatched '{{' in: {cleaned[:200]}")
-    else:
-        start = arr_start
-        end = cleaned.rfind("]")
-        if end == -1 or end <= start:
-            raise ValueError(f"Unmatched '[' in: {cleaned[:200]}")
-
-    return json.loads(cleaned[start:end + 1])
-
-
-# ===========================================================
-# ANSWER VERIFICATION — module-level helpers
-# ===========================================================
-_ARTICLE_CITE_PAT = re.compile(
-    # Matches "Điều 51", "điều 51", "Dieu 51" etc.
-    # Uses literal Vietnamese vowels to avoid raw-string \u escape ambiguity.
-    r"(?:[Ðđ]i[ềêẻẽẹ]u|[Dd]ieu)\s+(\d+)",
-    re.IGNORECASE,
-)
-
-
-def _verify_no_hallucinated_articles(
-    text: str,
-    mapped_laws: List[Dict[str, Any]],
-    documents: List[Document],
-) -> List[str]:
-    """L1-A: Return article numbers cited in the AI's OWN citation table but absent
-    from the retrieved context.
-
-    KEY DESIGN DECISION: We scan ONLY the 'ĐIỀU KHOẢN ÁP DỤNG' table at the bottom
-    of the response — not the full body text. This prevents false positives caused by
-    cross-references that appear INSIDE quoted law text (e.g. Điều 173 Khoản 1b
-    literally says 'các điều 168, 169, 170...' as internal references, which the AI
-    correctly quotes verbatim but never independently applies).
-
-    GROUNDING RULE: Only articles present in the retrieved documents are considered
-    grounded. mapped_laws is intentionally excluded from the allowed set — if the
-    LLM in map_laws cited an article not in the retrieved context (using parametric
-    training knowledge), that should be detected and flagged here.
-    """
-    # Extract only the citation table section to avoid false positives
-    # from cross-references inside quoted law body text.
-    table_section = text
-    for marker in ["ĐIỀU KHOẢN ÁP DỤNG", "Điều khoản áp dụng", "ĐIỀU LUẬT ÁP DỤNG"]:
-        idx = text.find(marker)
-        if idx != -1:
-            table_section = text[idx:]
-            break
-
-    cited = set(_ARTICLE_CITE_PAT.findall(table_section))
-
-    # Only allow articles that were physically retrieved from the vector DB
-    allowed: set = {str(d.metadata.get("article_number", "")) for d in documents}
-    allowed |= {"7"}  # Điều 7 retroactivity — always valid
-    allowed.discard("")
-    return sorted(cited - allowed)
-
-
-def _verify_temporal_validity(
-    text: str,
-    crime_date: str,
-    documents: List[Document],
-    per_defendant_dates: Optional[List[dict]] = None,
-) -> List[str]:
-    """L1-B: Return 'Điều X (WrongEdition)' where wrong BLHS edition is cited.
-
-    KEY DESIGN DECISIONS:
-    1. We SKIP documents whose _temporal_role is 'comparison' or 'adjustment'
-       because those are intentionally fetched for retroactivity analysis or
-       general sentencing mechanics — citing them is legal.
-    2. For multi-defendant cases, we collect ALL valid crime editions from
-       per_defendant_dates so defendants across BLHS boundaries don't trigger
-       false positives.
-    """
-    # Build the set of valid editions
-    valid_editions: set = set()
-    if per_defendant_dates:
-        for d_info in per_defendant_dates:
-            ed = _edition_for_date(d_info.get("ngay_pham_toi", ""))
-            if ed:
-                valid_editions.add(ed)
-    if not valid_editions:
-        ed = _edition_for_date(crime_date)
-        if ed:
-            valid_editions.add(ed)
-    if not valid_editions:
-        return []
-
-    cited_arts = set(_ARTICLE_CITE_PAT.findall(text))
-    wrong: List[str] = []
-    for d in documents:
-        role = d.metadata.get("_temporal_role", "")
-        # Skip comparison/adjustment docs — they are intentionally multi-edition
-        if role in ("comparison", "adjustment"):
-            continue
-        src = d.metadata.get("source", "")
-        art = str(d.metadata.get("article_number", ""))
-        if src and src not in valid_editions and art in cited_arts:
-            wrong.append(f"Điều {art} ({src})")
-    return wrong
-
-
-def _verify_role_signal(text: str, role: str) -> float:
-    """
-    L1-C: Keyword direction score for the assigned role. Returns 0.0–1.0.
-    Below 0.35 = likely role drift.
-    Self-contained vocab — no external dependency.
-    """
-    _ROLE_SIGNAL_VOCAB = {
-        "defense": {
-            "toward":  ["án treo", "cải tạo không giam giữ", "dưới mức thấp nhất",
-                        "đề nghị giảm", "xin giảm nhẹ", "mức án thấp nhất", "khoan hồng",
-                        "thành khẩn", "tình tiết giảm nhẹ", "thân chủ", "bào chữa",
-                        "ăn năn", "lần đầu phạm tội", "nhân thân tốt"],
-            "against": ["mức án cao nhất", "phạt tù dài hạn", "không cho hưởng án treo",
-                        "tước quyền", "tịch thu", "xử nghiêm minh", "hình phạt nghiêm khắc"],
-        },
-        "victim": {
-            "toward":  ["mức án cao nhất", "hình phạt nghiêm khắc", "không cho hưởng án treo",
-                        "không áp dụng án treo", "tước quyền", "bồi thường thiệt hại",
-                        "yêu cầu bồi thường", "đề nghị phạt nặng", "bị hại",
-                        "tình tiết tăng nặng", "hậu quả nghiêm trọng"],
-            "against": ["đề nghị án treo", "xin miễn", "giảm nhẹ hình phạt",
-                        "nên áp dụng án treo", "không đáng bị phạt", "thân chủ"],
-        },
-        "neutral": {
-            "toward":  ["căn cứ", "nhận định", "xem xét", "cân nhắc", "theo quy định",
-                        "hội đồng xét xử", "quy định tại", "pháp luật quy định"],
-            "against": ["kiên quyết đề nghị", "nhất định phải phạt",
-                        "bảo vệ bị cáo bằng mọi giá", "phải trả giá"],
-        },
-    }
-    t = text.lower()
-    role_cfg = _ROLE_SIGNAL_VOCAB.get(role, {})
-    toward  = role_cfg.get("toward", [])
-    against = role_cfg.get("against", [])
-    pos = sum(1 for k in toward  if k in t)
-    neg = sum(1 for k in against if k in t)
-    score = (pos / max(len(toward), 1)) - 0.5 * (neg / max(len(against), 1))
-    return round(max(0.0, min(1.0, score)), 4)
-
-
-
-# ===========================================================
 # UTILITY: DETERMINISTIC SENTENCING CALCULATIONS
 # ===========================================================
 def parse_date(text: str) -> Optional[datetime]:
-    """Try multiple date formats to parse a date string.
-    Returns None for non-string, empty, or unparseable input."""
-    if not isinstance(text, str) or not text.strip():
-        return None
+    """Try multiple date formats to parse a date string."""
+    # BUG-05 FIX: Removed the unused `patterns` parameter — it was always ignored.
     for pattern in ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d"]:
         try:
             return datetime.strptime(text.strip(), pattern)
@@ -883,7 +707,7 @@ def cleanup_response(text: str) -> str:
     that the LLM generates to match wide column content, which causes multi-MB JSONL lines.
     """
     text = sanitize_text(text)
-    # Replace " BLHS " or " BLHS," with the full name "Bộ luật Hình sự" (Vietnamese Penal Code)
+    # Replace " BLHS " or " BLHS," with " Bộ luật Hình sự "
     text = re.sub(r"\bBLHS\b", "Bộ luật Hình sự", text, flags=re.IGNORECASE)
     # Collapse overly long markdown table separator dashes inside cell boundaries.
     # Pattern: | :---...---  | or | ---...--- | → | :--- | or | --- |
@@ -1050,71 +874,6 @@ async def lifespan(app: FastAPI):
             all_scores.extend(logits.cpu().tolist())
         return all_scores
 
-    # -------------------------------------------------------
-    # 5. BM25 Keyword Index (built once at startup from Milvus corpus)
-    # -------------------------------------------------------
-    # rank_bm25 is a pure-Python library — no GPU, no latency per request.
-    # We load the entire Milvus collection into memory once and tokenize it.
-    # Each request then calls bm25_index.get_scores() which is microsecond-fast.
-    #
-    # Fault-tolerant design:
-    #   - If rank_bm25 is not installed  → server starts normally, BM25 disabled.
-    #   - If Milvus full-scan fails       → server starts normally, BM25 disabled.
-    #   - If BM25 returns no results      → silently skipped, no crash.
-    _bm25_index = None
-    _bm25_docs: list[Document] = []
-
-    try:
-        from rank_bm25 import BM25Okapi
-
-        print("📚 Building BM25 keyword index from Milvus corpus...")
-        _all_milvus_docs: list[Document] = []
-
-        # Query ALL documents. offset/limit paging handles large collections.
-        _batch_size = 1000
-        _offset     = 0
-        _page_num   = 0
-        while True:
-            _batch = milvus_client.query(
-                collection_name=COLLECTION_NAME,
-                filter="",               # no filter = all documents
-                output_fields=_OUTPUT_FIELDS,
-                limit=_batch_size,
-                offset=_offset,
-            )
-            if not _batch:
-                break
-            _page_num += 1
-            for h in _batch:
-                _all_milvus_docs.append(Document(
-                    page_content=sanitize_text(h.get("content", "")),
-                    metadata={
-                        k: sanitize_text(h.get(k, "")) if isinstance(h.get(k, ""), str) else h.get(k, "")
-                        for k in _OUTPUT_FIELDS if k != "content"
-                    },
-                ))
-            print(f"  [BM25 INIT] Page {_page_num}: fetched {len(_batch)} docs "
-                  f"(running total: {len(_all_milvus_docs)})")
-            _offset += _batch_size
-            if len(_batch) < _batch_size:
-                break  # last page
-
-        # Tokenize: simple whitespace split is sufficient for Vietnamese BM25.
-        # BM25 works on term frequency — no need for full NLP tokenization.
-        _tokenized = [doc.page_content.lower().split() for doc in _all_milvus_docs]
-        _bm25_index = BM25Okapi(_tokenized)
-        _bm25_docs  = _all_milvus_docs
-
-        print(f"✅ BM25 index built: {len(_bm25_docs)} documents indexed "
-              f"({len(_tokenized)} tokenized corpus entries).")
-
-    except ImportError:
-        print("⚠️  rank_bm25 not installed — BM25 keyword retrieval disabled. "
-              "Run: pip install rank-bm25>=0.2.2")
-    except Exception as _bm25_err:
-        print(f"⚠️  BM25 index build failed ({type(_bm25_err).__name__}: {_bm25_err}) "
-              "— keyword retrieval disabled, dense-only fallback active.")
-
 
     # -------------------------------------------------------
     # NODE DEFINITIONS
@@ -1171,7 +930,10 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=f"NỘI DUNG VỤ ÁN:\n{case_text}")
             ]))
-            facts = _extract_json(response.content)
+            raw = response.content.strip()
+            # Strip markdown code fences (handles ```json, ```JSON, or plain ```)
+            raw = re.sub(r"```(?:json)?\s*", "", raw).strip()
+            facts = json.loads(raw)
         except Exception as e:
             print(f"⚠️  Fact extraction failed: {e}")
             facts = {}
@@ -1203,7 +965,6 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
     # NODE 2.5: CLARIFICATION CHECK
     def clarification_check_node(state: AgentState) -> dict:
         """Validates MUST HAVE fields; writes _missing_fields to state."""
-        print("[NODE: clarification_check]")
         facts = state.get("extracted_facts") or {}
         missing = [f for f in REQUIRED_FIELDS if not facts.get(f)]
 
@@ -1217,10 +978,6 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
                 except (ValueError, AttributeError):
                     continue
 
-        if missing:
-            print(f"  [CLARIFICATION CHECK] Missing fields: {missing}")
-        else:
-            print("  [CLARIFICATION CHECK] All required fields present — continuing")
         return {"_missing_fields": missing}
 
     def clarification_router(state: AgentState) -> str:
@@ -1233,19 +990,15 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
         of the expected JSON, resulting in a parse error.
         """
         if state.get("is_practice_mode"):
-            print("  [ROUTER: clarification] practice_mode=True → continue")
             return "continue"
-        route = "clarify" if state.get("_missing_fields") else "continue"
-        print(f"  [ROUTER: clarification] → {route}")
-        return route
+        return "clarify" if state.get("_missing_fields") else "continue"
 
     def clarification_node(state: AgentState) -> dict:
-        print("[NODE: clarification]")
         missing = state.get("_missing_fields", [])
         if "_date_out_of_range" in missing:
             facts = state.get("extracted_facts") or {}
             reply = (
-                f"**Ngày phạm tội không hợp lệ:** `{facts.get('ngay_pham_toi', '?')}`\n\n"
+                f"⚠️ **Ngày phạm tội không hợp lệ:** `{facts.get('ngay_pham_toi', '?')}`\n\n"
                 "Hệ thống chỉ hỗ trợ các vụ án có ngày phạm tội từ **01/07/2000** trở đi "
                 "(ngày BLHS 1999 có hiệu lực).\n\n"
                 "Vui lòng kiểm tra lại ngày phạm tội và gửi lại."
@@ -1254,12 +1007,12 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
 
         needed_labels = [REQUIRED_FIELDS[f] for f in missing if f in REQUIRED_FIELDS]
         reply = (
-            "Để phân tích chính xác, hệ thống cần thêm thông tin sau:\n\n"
+            "ℹ️ Để phân tích chính xác, hệ thống cần thêm thông tin sau:\n\n"
             + "\n".join(f"{i+1}. **{label}**" for i, label in enumerate(needed_labels))
             + "\n\nVui lòng bổ sung và gửi lại mô tả vụ án."
         )
         reply += (
-            "\n\n**Thông tin tham khảo** (không bắt buộc, nhưng giúp phân tích tốt hơn):\n"
+            "\n\n💡 **Thông tin tham khảo** (không bắt buộc, nhưng giúp phân tích tốt hơn):\n"
             "- Hậu quả gây ra (thương tích, thiệt hại tài sản)\n"
             "- Bị cáo có tiền án tiền sự không?\n"
             "- Bị cáo có thành khẩn khai báo / bồi thường không?\n"
@@ -1297,9 +1050,6 @@ QUY TẮc BẮT BUỘC:
 
 YÊU CẦU:
 - behavior_query: Mô tả hành vi phạm tội cụ thể — bị cáo đã làm gì, với ai, bằng phương tiện gì, gây hậu quả gì.
-  ⚠️ QUY TẮC QUAN TRỌNG: Tên tội danh chính xác (ví dụ: "trộm cắp", "cướp", "giết người", "công nhiên chiếm đoạt")
-  phải xuất hiện NGUYÊN VĂN trong behavior_query nếu có trong trường "hanh_vi".
-  KHÔNG được thay thế tên tội danh bằng cách mô tả hành động vật lý (ví dụ: không được viết chỉ "lấy", "chiếm đoạt" thay cho "trộm cắp").
 - circumstance_query: {circumstance_instruction}
 - evidence_query: Mô tả tang vật, công cụ phạm tội, số lượng, trọng lượng,
   giá trị tài sản cụ thể có trong vụ án. Nếu không có tang vật → null.
@@ -1310,7 +1060,8 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
 
         try:
             response = llm.invoke(_sanitize_msgs([HumanMessage(content=prompt)]))
-            queries = _extract_json(response.content)
+            raw = re.sub(r"```(?:json)?\s*", "", response.content.strip()).strip()
+            queries = json.loads(raw)
             q_list = [
                 q for q in [
                     queries.get("behavior_query"),
@@ -1320,16 +1071,12 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
             ]
             if not q_list:
                 raise ValueError("All queries null")
-        # in case Openrouter LLM fails, we build query manually from the concated 
-        # facts retrieved
         except Exception:
             hanh_vi  = facts.get("hanh_vi", "")
             hau_qua  = facts.get("hau_qua", "")
             tang_vat = facts.get("tang_vat_loai", "")
             giam_nhe = ", ".join(facts.get("tinh_tiet_giam_nhe") or [])
             tang_nang = ", ".join(facts.get("tinh_tiet_tang_nang") or [])
-            # Fallback Q1: explicitly prepend crime name from hanh_vi so BM25
-            # can always keyword-match to the correct primary law article.
             q1 = f"{hanh_vi}. {hau_qua}".strip(". ") or case_text[:300]
             q2 = (
                 f"{giam_nhe}. {tang_nang}".strip(". ")
@@ -1356,68 +1103,18 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
         all_docs      = []
 
         # Step 1: Semantic search (up to 3 queries)
-        for q_idx, q in enumerate(queries, start=1):
+        for q in queries:
             if not q:
                 continue
-            print(f"  [SEMANTIC Q{q_idx}] {q[:100]!r}...")
             try:
                 docs = retriever.invoke(q)
-                added_sem = 0
                 for d in docs:
                     key = (d.metadata.get("article_number", ""), d.metadata.get("source", ""))
                     if key not in seen_ids:
                         seen_ids.add(key)
                         all_docs.append(d)
-                        added_sem += 1
-                print(f"    → {len(docs)} retrieved, {added_sem} new unique")
             except Exception as e:
-                print(f"  [SEMANTIC ERROR Q{q_idx}] {type(e).__name__}: {e}")
-
-        # Step 1B: BM25 Keyword Search (up to 5 chunks per query)
-        # Runs against the in-memory index built at startup — zero Milvus I/O per request.
-        # Complements dense search by anchoring retrieval to exact legal terminology
-        # (e.g., "trộm cắp" will surface Điều 173 even if the vector was confused).
-        BM25_TOP_K = 5
-        if _bm25_index is not None and _bm25_docs:
-            for q_idx, q in enumerate(queries, start=1):
-                if not q:
-                    continue
-                try:
-                    tokenized_q = q.lower().split()
-                    scores      = _bm25_index.get_scores(tokenized_q)
-                    top_indices = sorted(
-                        range(len(scores)),
-                        key=lambda i: scores[i],
-                        reverse=True,
-                    )[:BM25_TOP_K]
-                    added_bm25 = 0
-                    skipped    = 0
-                    print(f"  [BM25 Q{q_idx}] Scoring {len(scores)} docs, top {BM25_TOP_K} candidates:")
-                    for idx in top_indices:
-                        if scores[idx] <= 0:
-                            break  # no keyword overlap at all — ignore remaining
-                        d   = _bm25_docs[idx]
-                        art = d.metadata.get("article_number", "?")
-                        src = d.metadata.get("source", "?")
-                        key = (d.metadata.get("article_number", ""),
-                               d.metadata.get("source", ""))
-                        if key not in seen_ids:
-                            seen_ids.add(key)
-                            # Tag so we can log and distinguish from semantic hits
-                            d.metadata["_retrieval_source"] = "bm25"
-                            all_docs.append(d)
-                            added_bm25 += 1
-                            print(f"    [BM25 NEW] score={scores[idx]:.4f}  Điều {art} | {src}")
-                        else:
-                            skipped += 1
-                            print(f"    [BM25 DUP] score={scores[idx]:.4f}  Điều {art} | {src} — already in pool")
-                    print(f"    → {added_bm25} new unique, {skipped} duplicate(s) skipped")
-                except Exception as _bm25_q_err:
-                    print(f"  [BM25 ERROR Q{q_idx}] {type(_bm25_q_err).__name__}: "
-                          f"{_bm25_q_err} — skipping this query")
-        else:
-            if _bm25_index is None:
-                print("  [BM25] Index not available — keyword retrieval skipped (check startup logs)")
+                print(f"[RETRIEVE ERROR] {type(e).__name__}: {e}")
 
         # Step 2: Pinned fetch — edition-aware, multi-defendant safe
         if per_defendant:
@@ -1465,12 +1162,9 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
                     print(f"  [PINNED] Failed to fetch Điều {art_no} ({purpose}): {e}")
 
         n_pinned   = sum(1 for d in all_docs if d.metadata.get("_pinned"))
-        n_bm25     = sum(1 for d in all_docs if d.metadata.get("_retrieval_source") == "bm25")
-        n_semantic = len(all_docs) - n_pinned - n_bm25
-        print(f"  [RETRIEVE] Total: {len(all_docs)} docs "
-              f"(semantic={n_semantic}, bm25={n_bm25}, pinned={n_pinned})")
+        n_semantic = len(all_docs) - n_pinned
+        print(f"  [RETRIEVE] Total: {len(all_docs)} docs (semantic={n_semantic}, pinned={n_pinned})")
         return {"documents": all_docs}
-
 
     # NODE 5: TEMPORAL PRIORITY TAGGER
     def temporal_priority_tagger(state: AgentState) -> dict:
@@ -1513,7 +1207,7 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
             art_no     = str(d.metadata.get("article_number", ""))
             src        = d.metadata.get("source", "")
             
-            # Discard documents from BLHS editions that are completely irrelevant
+            # BUG FIX: Discard documents from BLHS editions that are completely irrelevant
             # to the case's temporal context (e.g. dropping BLHS 1999 if case is in 2022).
             if src in all_known_editions and src not in relevant_editions:
                 continue
@@ -1543,8 +1237,6 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
     def rerank_node(state: AgentState) -> dict:
         print("[NODE: rerank]")
         docs = state.get("documents", [])
-
-        # if there is no documents to rerank then exit 
         if not docs:
             return {"documents": [], "is_relevant": False}
 
@@ -1573,7 +1265,7 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
         ]
 
         if semantic_docs:
-            _q = query[:1024]
+            _q = query[:512]
             pairs  = [(_q, d.page_content) for d in semantic_docs]
             scores = _rerank_scores(pairs)
             ranked_semantic = sorted(zip(scores, semantic_docs), key=lambda x: x[0], reverse=True)
@@ -1618,12 +1310,9 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
           - 'generate'          : Standard Mode — normal legal argument generation
         """
         if state.get("is_practice_mode"):
-            print("  [ROUTER: app_mode] → practice_evaluate")
             return "practice_evaluate"
         if state.get("rebuttal_against"):
-            print("  [ROUTER: app_mode] → rebuttal")
             return "rebuttal"
-        print("  [ROUTER: app_mode] → generate")
         return "generate"
 
     # NODE 7: MAP LAWS (fixed — no truncation, retroactivity prompt)
@@ -1658,16 +1347,6 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
 KHÔNG được áp dụng bất kỳ điều nào của Bộ luật Tố tụng hình sự (BLTTHS), Bộ luật Dân sự,
 Bộ luật Lao động, hôn nhân gia đình, hay bất kỳ bộ luật, nghị định, thông tư nào khác.
 
-❌ NGHIÊM CẤM: CHỈ được ánh xạ vào các ĐIỀU LUẬT có số hiệu XUẤT HIỆN TRONG VĂN BẢN LUẬT ĐÃ CUNG CẤP Ở TRÊN.
-NGHIÊM CẤM truy xuất bất kỳ số điều nào từ kiến thức nội tại (training knowledge) không có trong tài liệu trên.
-Nếu tài liệu cung cấp không chứa điều luật phù hợp, chỉ ánh xạ đến những gì có trong tài liệu và ghi rõ hạn chế này trong applicable_reason.
-
-QUY TẮC KHOẢN — BẮT BUỘC:
-- Mỗi hành vi phạm tội CHỈ được ánh xạ vào ĐÚNG MỘT khoản duy nhất (khoản áp dụng trực tiếp).
-- KHÔNG được liệt kê cùng một điều luật ở nhiều khoản khác nhau cho cùng một hành vi.
-- Tái phạm nguy hiểm (Điều 52/53) là TÌNH TIẾT TĂNG NẶNG TRÁCH NHIỆM HÌNH SỰ, KHÔNG phải căn cứ để chuyển sang khoản cao hơn trừ khi điều luật tội danh CHÍNH THỨC quy định tái phạm là dấu hiệu định khung khoản đó.
-- Ví dụ: Điều 173 Khoản 1 điểm b ('đã bị kết án về tội này... chưa được xóa án tích') → đây là điểm định khung TRONG Khoản 1, không phải Khoản 2.
-
 NGUYÊN TẮC THỜI HIỆU (Điều 7 BLHS) — BẮT BUỘC ÁP DỤNG:
 1. QUY TẮC CƠ BẢN: Áp dụng luật có hiệu lực tại THỜI ĐIỂM PHẠM TỘI (tài liệu có role=primary).
 2. NGOẠI LỆ HỒI TỐ CÓ LỢI: Nếu luật MỚI HƠN (role=comparison) quy định hình phạt NHẸ HƠN, BẮT BUỘC áp dụng.
@@ -1683,7 +1362,7 @@ Trả về JSON array:
     "offense_name": "Tội cướp tài sản",
     "applicable_reason": "Lý do áp dụng điều này",
     "edition_applied": "BLHS 2015 (sửa đổi 2017)",
-    "edition_reason": "Nếu KHÔNG có tài liệu comparison: 'Áp dụng luật có hiệu lực tại thời điểm phạm tội'. Nếu CÓ tài liệu comparison: 'Áp dụng luật tại thời điểm phạm tội do luật mới không có lợi hơn'."
+    "edition_reason": "Áp dụng luật tại thời điểm phạm tội. Luật 2025 không có lợi hơn."
   }
 ]
 OUTPUT: CHỈ JSON array hợp lệ."""
@@ -1693,7 +1372,8 @@ OUTPUT: CHỈ JSON array hợp lệ."""
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=f"SỰ KIỆN:\n{facts_str}\n\nVĂN BẢN LUẬT (có nhãn role):\n{context}\n\nVỤ ÁN:\n{case_text}")
             ]))
-            mapped = _extract_json(response.content)
+            raw    = re.sub(r"```(?:json)?\s*", "", response.content.strip()).strip()
+            mapped = json.loads(raw)
             if not isinstance(mapped, list) or len(mapped) == 0:
                 raise ValueError("Empty or non-list mapped_laws")
         except Exception as e:
@@ -1707,12 +1387,6 @@ OUTPUT: CHỈ JSON array hợp lệ."""
                 "_mapping_error": True,
             }]
 
-        if mapped and not mapped[0].get("_mapping_error"):
-            print(f"  [MAP_LAWS] Mapped {len(mapped)} offense(s):")
-            for m in mapped:
-                print(f"    → {m.get('article','?')} {m.get('clause','?')} | {m.get('offense_name','?')} | {m.get('edition_applied','?')}")
-        else:
-            print("  [MAP_LAWS] Mapping returned error sentinel — check LLM output")
         return {"mapped_laws": mapped}
 
 
@@ -1795,10 +1469,10 @@ OUTPUT: CHỈ JSON array hợp lệ."""
                 "|------|----------|---------------|------------------|\n"
             )
 
-        # ── Criminal record context — role-aware ────────────────────────────────
-        # co_tien_an = True means prior conviction(s) exist (even if record is cleared).
-        # Judge / victim: warn it raises sentence into mid-range, bars suspended sentence.
-        # Defense: reframe as advantage (record cleared → no habitual-offender clause under Article 52).
+        # ── Nhân thân context — role-aware ────────────────────────────────
+        # co_tien_an = True means prior conviction(s) exist (even if án tích cleared).
+        # Judge / victim: warn it raises sentence into mid-range, bars án treo.
+        # Defense: reframe as advantage (án tích cleared → no tái phạm under Điều 52).
         nhan_than_context = ""
         _facts = state.get("extracted_facts") or {}
         if _facts.get("co_tien_an"):
@@ -1851,7 +1525,7 @@ Nhiệm vụ: Đọc kỹ hồ sơ vụ án và SOẠN LUẬN ĐIỂM BÀO CHỮ
 
 LƯU Ý KHI BÀO CHỮA:
 0. **CHỈ trích dẫn điều khoản thuộc Bộ luật Hình sự (BLHS).** KHÔNG được nhắc đến bất kỳ điều nào của Bộ luật Tố tụng hình sự (BLTTHS), Bộ luật Dân sự, hay bộ luật khác.
-**CHỐNG HALLUCINATION (BẮT BUỘC):** TUYỆT ĐỐI KHÔNG bịa đặt hoặc giả định bất kỳ tình tiết nào không có trong hồ sơ vụ án. Nếu hồ sơ không nêu rõ bị cáo "ăn năn hối cải", "bồi thường thiệt hại", "phạm tội lần đầu", hay "có nhân thân tốt" — KHÔNG được khẳng định các điều đó như sự thật. Thay vào đó, chỉ được dùng ngôn ngữ chiến lược như: "đề nghị thu thập bằng chứng về...", "nếu xác minh được... thì đây là tình tiết giảm nhẹ", "khuyến nghị thân chủ chủ động...".
+⚠️ **CHỐNG HALLUCINATION (BẮT BUỘC):** TUYỆT ĐỐI KHÔNG bịa đặt hoặc giả định bất kỳ tình tiết nào không có trong hồ sơ vụ án. Nếu hồ sơ không nêu rõ bị cáo "ăn năn hối cải", "bồi thường thiệt hại", "phạm tội lần đầu", hay "có nhân thân tốt" — KHÔNG được khẳng định các điều đó như sự thật. Thay vào đó, chỉ được dùng ngôn ngữ chiến lược như: "đề nghị thu thập bằng chứng về...", "nếu xác minh được... thì đây là tình tiết giảm nhẹ", "khuyến nghị thân chủ chủ động...".
 1. Ưu tiên tìm tình tiết giảm nhẹ (Điều 51 Bộ luật Hình sự): thành khẩn, bồi thường, nhân thân tốt, phạm tội lần đầu — nhưng CHỈ khẳng định tình tiết nào đã được xác nhận trong hồ sơ, còn lại chỉ đề xuất chiến lược chứng minh.
 2. Phân tích xem có thể đề nghị án treo không (án ≤ 3 năm + không tái phạm + có nơi cư trú ổn định).
 3. Nếu có nhiều tội, đề xuất tách riêng hoặc giảm nhẹ từng tội.
@@ -1946,7 +1620,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 **ĐIỀU KHOẢN ÁP DỤNG:**
 (Bảng tổng hợp — CHỈ liệt kê các điều luật đã được trích dẫn CỤ THỂ trong nội dung phân tích ở trên. TUYỆT ĐỐI KHÔNG thêm điều luật chưa được đề cập. BẮT BUỘC trình bày bảng đúng chuẩn Markdown, phải có ĐÚNG 4 cột và hàng phân cách phải đủ 4 cột `|---|---|---|---|`.)
 
-| Điều | Tội danh/Nội dung | Văn bản bộ luật hình sự | Lý do |
+| Điều | Tội danh/Nội dung | Nguồn áp dụng | Lý do chọn nguồn |
 |---|---|---|---|
 | (số điều) | (nội dung) | (tên bộ luật + năm) | (lý do áp dụng) |
 """
@@ -2012,11 +1686,11 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 
         prompt = ChatPromptTemplate.from_template(prompt_template)
         
-        # Change history messages into List[BaseMessage]
+        # Biến đổi history thành dạng List[BaseMessage]
         history_msgs = []
         if history:
-            # get only 8 closest messages to avoid context overflow
-            for msg in history[-8:]:
+            # Lấy 4 tin nhắn gần nhất để tránh tràn context
+            for msg in history[-4:]:
                 if msg.get("role") == "user":
                     history_msgs.append(HumanMessage(content=sanitize_text(msg.get("content", ""))))
                 else:
@@ -2025,7 +1699,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
         chain = prompt | llm | StrOutputParser()
 
         try:
-            # Create prompt
+            # Tạo prompt chính thức
             formatted_prompt = prompt.format_messages(
                 role_instruction=role_instruction,
                 context=context_text,
@@ -2035,8 +1709,8 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
                 nhan_than_context=nhan_than_context,
             )
             
-            # Prepend conversation history before the main prompt.
-            # ChatPromptTemplate returns a List[BaseMessage], so we concatenate directly.
+            # Nối lịch sử vào TRƯỚC prompt chính nhưng SAU system prompt (nếu có thể),
+            # hoặc đơn giản là ghép tất cả lại. ChatPromptTemplate trả ra List[BaseMessage]
             final_messages = history_msgs + formatted_prompt
             
             response = llm.invoke(_sanitize_msgs(final_messages)).content
@@ -2095,10 +1769,10 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
             ),
         }.get(role, "Bạn là chuyên gia luật hình sự Việt Nam.")
 
-        # Build prior conversation context (last 8 turns max)
+        # Build prior conversation context (last 4 turns max)
         history_text = ""
         if chat_history:
-            recent = chat_history[-8:]
+            recent = chat_history[-4:]
             history_text = "\n".join(
                 f"{msg.get('role','').upper()}: {msg.get('content','')[:500]}"
                 for msg in recent
@@ -2142,197 +1816,6 @@ QUY TẮC:
             return {"messages": [AIMessage(
                 content="Xin lỗi, hệ thống gặp lỗi khi xử lý phản biện của bạn. Vui lòng thử lại."
             )]}
-
-    # NODE: ANSWER VERIFY (final quality gate for generate + rebuttal)
-    def answer_verify(state: AgentState) -> dict:
-        """
-        Final answer verification — 2-layer hybrid, cost-optimised.
-
-        Layer 1: Pure Python ($0, always runs)
-          L1-A  Hallucination  — article numbers cited but not in retrieved context
-          L1-B  Temporal       — wrong BLHS edition cited for the crime date
-          L1-C  Role signal    — keyword direction mismatch for assigned role
-
-        Layer 2: LLM Judge (~$0.0005/call, skipped if L1 already found ≥ 2 issues)
-          Q1  Factual consistency — did the AI invent facts not in extracted_facts?
-          Q2  Role adherence      — is tone/argument direction consistent with role?
-
-        On success: returns {} (silent pass-through — original message unchanged).
-        On issues:  appends a ⚠️ warning block to the last AIMessage.
-        """
-        print("[NODE: answer_verify]")
-        messages = state.get("messages") or []
-        last_msg = messages[-1] if messages else None
-        if not last_msg or not isinstance(last_msg, AIMessage):
-            print("  [VERIFY] No AIMessage found — skipping verification.")
-            return {}
-
-        ai_text     = last_msg.content
-        role        = state.get("user_role", "neutral")
-        facts       = state.get("extracted_facts") or {}
-        mapped_laws = state.get("mapped_laws") or []
-        documents   = state.get("documents") or []
-        crime_date  = facts.get("ngay_pham_toi", "")
-
-        cited_articles = set(_ARTICLE_CITE_PAT.findall(ai_text))
-        print(f"  [VERIFY] role={role} | crime_date={crime_date} | "
-              f"mapped_laws={len(mapped_laws)} | docs={len(documents)} | "
-              f"cited_articles={sorted(cited_articles)}")
-
-        issues: List[str] = []
-
-        # ─────────────────────────────────────────────────────────
-        # LAYER 1 — Deterministic ($0 cost)
-        # ─────────────────────────────────────────────────────────
-
-        # L1-A: Hallucination check
-        hallucinated = _verify_no_hallucinated_articles(ai_text, mapped_laws, documents)
-        if hallucinated:
-            arts = ", ".join(f"Điều {a}" for a in hallucinated)
-            issues.append(
-                f"Trích dẫn không có cơ sở: {arts} "
-                f"— không tìm thấy trong văn bản luật đã truy xuất."
-            )
-            print(f"  [VERIFY L1-A] ❌ Hallucinated articles: {hallucinated}")
-        else:
-            print(f"  [VERIFY L1-A] ✅ All cited articles verified.")
-
-        # L1-B: Temporal validity check
-        per_defendant = state.get("per_defendant_dates") or None
-        wrong_edition = _verify_temporal_validity(
-            ai_text, crime_date, documents, per_defendant_dates=per_defendant
-        )
-        if wrong_edition:
-            correct = _edition_for_date(crime_date) or "không xác định"
-            issues.append(
-                f"Có thể áp dụng sai phiên bản luật: {', '.join(wrong_edition)}. "
-                f"Ngày phạm tội {crime_date} → phải dùng {correct}."
-            )
-            print(f"  [VERIFY L1-B] ❌ Wrong edition(s) cited: {wrong_edition} "
-                  f"(expected: {correct})")
-        else:
-            print(f"  [VERIFY L1-B] ✅ Temporal edition check passed.")
-
-        # L1-C: Role signal check
-        role_score = _verify_role_signal(ai_text, role)
-        if role_score < 0.35:
-            issues.append(
-                f"Giọng văn có thể chưa nhất quán với vai '{role}' "
-                f"(điểm tín hiệu = {role_score:.2f}/1.00)."
-            )
-            print(f"  [VERIFY L1-C] ❌ Role signal weak: score={role_score:.2f} "
-                  f"(threshold=0.35) for role='{role}'")
-        else:
-            print(f"  [VERIFY L1-C] ✅ Role signal OK: score={role_score:.2f} "
-                  f"for role='{role}'")
-
-        # ─────────────────────────────────────────────────────────
-        # LAYER 2 — LLM Judge (skip if L1 already caught ≥ 2 issues)
-        # ─────────────────────────────────────────────────────────
-        if len(issues) < 2:
-            # Trim inputs aggressively to minimise token cost
-            response_snippet = ai_text[:1500]
-            key_facts = {
-                k: facts.get(k)
-                for k in [
-                    "hanh_vi", "hau_qua", "co_tien_an",
-                    "tinh_tiet_tang_nang", "tinh_tiet_giam_nhe", "ngay_pham_toi",
-                ]
-                if facts.get(k) is not None
-            }
-            # Build a human-readable plain-Vietnamese summary of the facts
-            # so the judge (and its output) never needs to mention raw field names.
-            fact_lines = []
-            if key_facts.get("hanh_vi"):
-                fact_lines.append(f"- Hành vi phạm tội: {key_facts['hanh_vi']}")
-            if key_facts.get("hau_qua"):
-                fact_lines.append(f"- Hậu quả: {key_facts['hau_qua']}")
-            if key_facts.get("ngay_pham_toi"):
-                fact_lines.append(f"- Ngày phạm tội: {key_facts['ngay_pham_toi']}")
-            if key_facts.get("co_tien_an") is not None:
-                tien_an_text = "có tiền án" if key_facts["co_tien_an"] else "không có tiền án"
-                fact_lines.append(f"- Nhân thân bị cáo: {tien_an_text} (hồ sơ không cung cấp chi tiết bản án cụ thể)")
-            if key_facts.get("tinh_tiet_tang_nang"):
-                fact_lines.append(f"- Tình tiết tăng nặng: {key_facts['tinh_tiet_tang_nang']}")
-            if key_facts.get("tinh_tiet_giam_nhe"):
-                fact_lines.append(f"- Tình tiết giảm nhẹ: {key_facts['tinh_tiet_giam_nhe']}")
-            fact_summary = "\n".join(fact_lines) if fact_lines else "(Không có dữ liệu)"
-
-            role_map = {
-                "defense": "Luật sư bào chữa — phải bảo vệ bị cáo, xin giảm nhẹ.",
-                "victim":  "Luật sư bị hại — phải đòi xử nghiêm, bồi thường tối đa.",
-                "neutral": "Thẩm phán — phải trung lập, phân tích hai chiều.",
-            }
-            raw_case_text = state.get("full_case_content", state["question"])
-            
-            judge_prompt = (
-                "Bạn là kiểm tra viên pháp lý. Đánh giá đoạn phân tích AI dưới đây.\n\n"
-                f"SỰ KIỆN THỰC TẾ (Bản tóm tắt):\n"
-                f"{fact_summary}\n\n"
-                f"NGUYÊN VĂN VỤ ÁN TỪ NGƯỜI DÙNG (Căn cứ gốc):\n"
-                f"{raw_case_text}\n\n"
-                f"VAI TRÒ YÊU CẦU: {role_map.get(role, role)}\n\n"
-                f"ĐOẠN PHÂN TÍCH AI (đã rút gọn):\n{response_snippet}\n\n"
-                'Trả lời 2 câu hỏi sau bằng JSON:\n'
-                '{\n'
-                '  "factual_ok": true/false,\n'
-                '  "factual_issue": "mô tả ngắn bằng tiếng Việt thân thiện nếu false, null nếu true",\n'
-                '  "role_ok": true/false,\n'
-                '  "role_issue": "mô tả ngắn bằng tiếng Việt thân thiện nếu false, null nếu true"\n'
-                '}\n\n'
-                "QUY TẮC:\n"
-                "- factual_ok = false CHỈ KHI AI bịa ra chi tiết cụ thể (số tiền, số bản án, ngày tháng cụ thể) KHÔNG có trong NGUYÊN VĂN VỤ ÁN.\n"
-                "- Nếu thông tin có trong NGUYÊN VĂN VỤ ÁN nhưng không có trong Bản tóm tắt thì VẪN HỢP LỆ (factual_ok = true).\n"
-                "- role_ok = false CHỈ KHI AI rõ ràng lập luận SAI chiều với vai trò được giao.\n"
-                "- Nếu không chắc → true (tránh false positive).\n"
-                "- TUYỆT ĐỐI KHÔNG đề cập tên trường kỹ thuật trong mô tả.\n"
-                "- Viết mô tả bằng tiếng Việt dễ hiểu cho người dùng thông thường.\n"
-                "OUTPUT: Chỉ JSON hợp lệ, không markdown."
-            )
-            try:
-                # Use a lightweight judge client — same model but max_tokens capped
-                # to hard-limit output cost. bind() injects generation kwargs for
-                # ChatOpenAI/OpenRouter without touching the global llm object.
-                judge_llm = llm.bind(max_tokens=150)
-                judge_resp = judge_llm.invoke(
-                    _sanitize_msgs([HumanMessage(content=judge_prompt)])
-                )
-                verdict = _extract_json(judge_resp.content)
-                if not verdict.get("factual_ok", True) and verdict.get("factual_issue"):
-                    issues.append(
-                        f"Nhất quán dữ liệu thực tế: {verdict['factual_issue']}"
-                    )
-                if not verdict.get("role_ok", True) and verdict.get("role_issue"):
-                    issues.append(
-                        f"Nhập vai (LLM): {verdict['role_issue']}"
-                    )
-            except Exception as judge_err:
-                # Fail open — never crash the main response pipeline
-                print(
-                    f"  [answer_verify] L2 judge error "
-                    f"({type(judge_err).__name__}): {judge_err} — skipping L2."
-                )
-        else:
-            print(
-                f"  [answer_verify] L2 skipped — "
-                f"L1 already found {len(issues)} issue(s)."
-            )
-
-        # ─────────────────────────────────────────────────────────
-        # RESULT
-        # ─────────────────────────────────────────────────────────
-        if not issues:
-            print("  ✅ Answer verification passed — no issues detected.")
-            return {}  # Silent pass-through
-
-        warning_block = (
-            "\n\n---\n"
-            "**Ghi chú hệ thống (Kiểm chứng câu trả lời):**\n"
-            + "\n".join(f"- {i}" for i in issues)
-            + "\n\n*(Vui lòng đối chiếu với văn bản luật gốc để xác nhận.)*"
-        )
-        print(f"  ⚠️ Answer verification: {len(issues)} issue(s) detected.")
-        return {"messages": [AIMessage(content=ai_text + warning_block)]}
 
     # NODE: PRACTICE EVALUATE (Practice Mode — grades user's own written analysis)
     def practice_evaluate_node(state: AgentState) -> dict:
@@ -2381,7 +1864,7 @@ QUY TẮC:
         role_criteria = {
             "neutral": """
 - Xác định đúng tội danh và điều luật áp dụng (điều luật chính xác, đúng phiên bản BLHS theo ngày phạm tội).
-- Phân tích đầy đủ cả tình tiết giảm nhẹ (Điều 51) VÀ tăng nặng (Điều 52) một cách trung lập.
+- Phân tích đầy đủ cả tình tiết tăng nặng (Điều 51) VÀ giảm nhẹ (Điều 52) một cách trung lập.
 - Lượng hình hợp lý trong đúng khung, có tổng hợp hình phạt theo Điều 55 nếu nhiều tội.
 - Tính thời gian tạm giam đã khấu trừ vào mức án.
 - Quyết định về trách nhiệm dân sự (bồi thường thiệt hại) nếu có.
@@ -2424,9 +1907,9 @@ TIÊU CHÍ CHẤM ĐIỂM (dành cho vai trò {role_label}):
 {role_criteria}
 
 NHIỆM VỤ:
-1. Đánh giá tính chính xác của các điều luật, khoản mục, và phiên bản Bộ luật Hình sự mà người học viện dẫn.
-2. Đánh giá chất lượng, tính logic và sức thuyết phục của lập luận dựa trên tiêu chí vai trò đã nêu.
-3. Chỉ ra các điểm mạnh và những thiếu sót cần cải thiện trong bài phân tích.
+1. So sánh bài phân tích của người học với kết quả chuẩn từ hệ thống.
+2. Đánh giá tính chính xác của điều luật viện dẫn (số điều, phiên bản BLHS, khoản mục).
+3. Đánh giá chất lượng lập luận theo tiêu chí vai trò đã nêu.
 4. Chấm điểm tổng thể từ 0 đến 100.
 
 QUY TẮC CHẤM ĐIỂM:
@@ -2455,8 +1938,11 @@ OUTPUT: CHỈ JSON hợp lệ."""
         try:
             raw_response = llm.invoke(_sanitize_msgs([
                 HumanMessage(content=eval_prompt)
-            ])).content
-            data = _extract_json(raw_response)
+            ])).content.strip()
+            # Strip any accidental markdown fences
+            raw_response = re.sub(r"```(?:json)?\s*", "", raw_response).strip()
+            raw_response = raw_response.rstrip("`").strip()
+            data = json.loads(raw_response)
 
             feedback = data.get("feedback", {})
 
@@ -2551,14 +2037,7 @@ OUTPUT: CHỈ JSON hợp lệ."""
 
         Practice Mode always routes as 'new_case' — the case description is always
         a legal case, never a greeting or follow-up, regardless of its length.
-
-        Robustness layers (in order of cost):
-          1. Practice Mode bypass  (free)
-          2. Expanded keyword fast-paths  (free)
-          3. Length heuristics  (free)
-          4. LLM classification with conversation context  (~$0.0003/call)
         """
-        # ── Layer 1: Practice Mode bypass ─────────────────────────────────────
         # Practice Mode: bypass ALL heuristics — always go through the full pipeline.
         # The case input can be short (e.g. "Nam giết người") but must still reach
         # extract_facts → map_laws → practice_evaluate_node.
@@ -2566,95 +2045,56 @@ OUTPUT: CHỈ JSON hợp lệ."""
             print("  [INTENT] Practice Mode → new_case (bypass heuristics)")
             return "new_case"
 
-        history  = state.get("chat_history", []) or []
+        history = state.get("chat_history", []) or []
         question = state["question"].strip()
-        q_lower  = question.lower()
 
-        # ── Layer 2a: Greeting / casual fast-path ─────────────────────────────
-        # Short greetings and off-topic phrases that can never be a legal case.
-        CASUAL_PHRASES = [
-            "xin chào", "chào bạn", "hi", "hello", "hey", "helo", "ola",
-            "bạn là ai", "bạn là gì", "chatbot là gì", "cảm ơn", "thank",
-            "ok bạn", "được rồi", "bye", "tạm biệt", "hẹn gặp",
-        ]
-        if any(phrase in q_lower for phrase in CASUAL_PHRASES) and len(question) < 80:
-            print(f"  [INTENT] Greeting phrase detected → casual | query='{question[:60]}'")
-            return "casual"
+        # Fast rule: very short input with no legal keywords → likely casual
+        LEGAL_KEYWORDS = ["điều", "khoản", "bộ luật", "tội", "hình phạt", "bị cáo",
+                          "bị hại", "tòa án", "viện kiểm sát", "ngày", "năm", "tháng",
+                          "tạm giam", "xét xử", "phạt", "án", "hành vi", "law", "penal"]
+        is_short = len(question) < 120
+        has_legal = any(kw in question.lower() for kw in LEGAL_KEYWORDS)
 
-        # ── Layer 2b: Expanded legal keyword detection ────────────────────────
-        # Covers: criminal acts, legal process, evidence, actors, penal terms
-        LEGAL_KEYWORDS = [
-            # Legal acts
-            "điều", "khoản", "bộ luật", "tội", "hình phạt", "hành vi", "án",
-            "phạt", "tù", "phạm tội", "phạm tội", "ngày", "năm", "tháng",
-            # Actors
-            "bị cáo", "bị hại", "nạn nhân", "bị can", "nghi phạm", "thủ phạm",
-            "luật sư", "viện kiểm sát", "tòa án", "công an", "cảnh sát", "thẩm phán",
-            # Criminal acts (Vietnamese)
-            "giết", "đánh", "chém", "bắn", "cướp", "trộm", "lừa đảo", "hiếp",
-            "tống tiền", "bắt cóc", "đốt", "buôn bán", "ma túy", "mua bán",
-            "tàng trữ", "sản xuất", "vận chuyển", "chiếm đoạt", "xâm phạm",
-            "gây thương tích", "tham nhũng", "hối lộ", "trốn thuế", "gian lận",
-            # Legal process
-            "tạm giam", "xét xử", "khởi tố", "điều tra", "truy tố", "kết án",
-            "bắt giữ", "khám xét", "thu giữ", "tang vật", "biên bản",
-            # Sentencing
-            "tình tiết", "giảm nhẹ", "tăng nặng", "án treo", "cải tạo",
-            "chung thân", "tử hình", "bồi thường", "tịch thu",
-            # English fallback
-            "law", "penal", "crime", "criminal", "offense", "sentence",
-        ]
-        has_legal = any(kw in q_lower for kw in LEGAL_KEYWORDS)
-
-        # ── Layer 2c: No legal keywords and no history → casual ───────────────
-        if len(question) < 120 and not has_legal and not history:
+        if is_short and not has_legal and not history:
             print(f"  [INTENT] Short + no legal keywords + no history → casual")
             return "casual"
 
-        # ── Layer 2d: Long input with legal keywords → new_case ───────────────
-        if len(question) > 400 and has_legal:
-            print(f"  [INTENT] Long ({len(question)} chars) + legal keywords → new_case")
+        # Long input is almost certainly a new case dump
+        if len(question) > 500:
+            print("  [INTENT] Long input → new_case")
             return "new_case"
 
-        # Long input even without legal keywords is almost certainly a case dump
-        if len(question) > 600:
-            print("  [INTENT] Very long input → new_case (no keyword check)")
-            return "new_case"
-
-        # ── Layer 2e: No history → treat as new case ──────────────────────────
+        # No history → first message, send to full pipeline
         if not history:
             print("  [INTENT] No history → new_case")
             return "new_case"
 
-        # ── Layer 2f: Follow-up phrase fast-path ──────────────────────────────
-        # Detects obvious elaboration requests that clearly reference prior output.
-        FOLLOWUP_PHRASES = [
-            "giải thích thêm", "tại sao", "vì sao", "thế còn", "thế nếu",
-            "còn điều", "điều đó có nghĩa", "bạn vừa nói", "ý bạn là",
-            "phân tích thêm", "nói rõ hơn", "chi tiết hơn", "ví dụ",
-            "như vậy thì", "trong trường hợp", "nếu bị cáo", "nếu nạn nhân",
-            "why", "what if", "can you explain", "elaborate", "clarify",
-            "you said", "earlier you", "in that case",
-        ]
-        if any(phrase in q_lower for phrase in FOLLOWUP_PHRASES) and history:
-            print(f"  [INTENT] Follow-up phrase detected → followup | query='{question[:60]}'")
-            return "followup"
-
-        # ── Layer 3: Deterministic fallback (no LLM) ─────────────────────────
-        # If none of the rule-based fast-paths matched and there IS prior history,
-        # the safest assumption is the user is elaborating on the prior analysis.
-        # If there is no history, it must be a new case.
-        if history:
-            intent = "followup"
-            print(f"  [INTENT] No fast-path matched + has history → followup (default)")
-        else:
-            intent = "new_case"
-            print(f"  [INTENT] No fast-path matched + no history → new_case (default)")
+        classification_prompt = (
+            "Bạn là bộ phân loại đầu vào cho một hệ thống chatbot pháp luật hình sự Việt Nam.\n"
+            f"Lịch sử hội thoại có {len(history)} tin nhắn.\n"
+            f"Tin nhắn mới của người dùng: \"{question[:400]}\"\n\n"
+            "Phân loại tin nhắn này thành MỘT trong ba loại:\n"
+            "- \"casual\": Chào hỏi, hỏi chatbot là gì, nói chuyện phiếm, hoặc nội dung "
+            "HOÀN TOÀN không liên quan đến pháp luật hình sự.\n"
+            "- \"followup\": Hỏi thêm, yêu cầu giải thích, phân tích lại điểm cụ thể, "
+            "cung cấp thêm thông tin mới để AI xem xét lại — LIÊN QUAN đến phân tích AI đã trả lời.\n"
+            "- \"new_case\": Hồ sơ vụ án mới hoàn toàn hoặc câu hỏi pháp lý mới "
+            "không liên quan đến cuộc hội thoại hiện tại.\n\n"
+            "Chỉ trả về đúng một từ: \"casual\", \"followup\", hoặc \"new_case\"."
+        )
+        try:
+            result = llm.invoke(_sanitize_msgs([HumanMessage(content=classification_prompt)])).content.strip().lower()
+            if "casual" in result:
+                intent = "casual"
+            elif "followup" in result:
+                intent = "followup"
+            else:
+                intent = "new_case"
+        except Exception:
+            intent = "new_case"  # fail-safe
 
         print(f"  [INTENT] → {intent} | query='{question[:80]}'")
         return intent
-
-
 
     # NODE: CASUAL RESPOND
     def casual_respond(state: AgentState) -> dict:
@@ -2665,7 +2105,6 @@ OUTPUT: CHỈ JSON hợp lệ."""
         # Detect greeting
         GREETINGS = ["hi", "hello", "chào", "xin chào", "hey", "helo", "ola"]
         is_greeting = any(q in question for q in GREETINGS) or len(question) <= 10
-        print(f"  [CASUAL] is_greeting={is_greeting} | query='{state['question'][:60]}'")
 
         if is_greeting:
             reply = (
@@ -2712,7 +2151,6 @@ OUTPUT: CHỈ JSON hợp lệ."""
         chat_history = (state.get("chat_history") or [])[-6:]
         question     = state["question"]
         role         = state.get("user_role", "neutral")
-        print(f"  [FOLLOWUP] role={role} | history_turns={len(chat_history)} | query='{question[:60]}'")
 
         # Try to get cached documents first; if empty (followup bypasses pipeline),
         # do a lightweight retrieval using the user's follow-up question.
@@ -2765,7 +2203,6 @@ OUTPUT: CHỈ JSON hợp lệ."""
     workflow.add_node("map_laws",                 map_laws_node)
     workflow.add_node("generate",                 generate)
     workflow.add_node("rebuttal",                 rebuttal_node)
-    workflow.add_node("answer_verify",            answer_verify)
     workflow.add_node("practice_evaluate",        practice_evaluate_node)
     workflow.add_node("followup",                 followup_generate)
     workflow.add_node("casual",                   casual_respond)
@@ -2799,11 +2236,8 @@ OUTPUT: CHỈ JSON hợp lệ."""
             "generate":          "generate",
         }
     )
-    # generate + rebuttal both pass through the answer_verify quality gate
-    workflow.add_edge("generate",      "answer_verify")
-    workflow.add_edge("rebuttal",      "answer_verify")
-    workflow.add_edge("answer_verify", END)
-    # practice_evaluate bypasses verification (has its own grading logic)
+    workflow.add_edge("generate",          END)
+    workflow.add_edge("rebuttal",          END)
     workflow.add_edge("practice_evaluate", END)
     workflow.add_edge("followup",          END)
     workflow.add_edge("casual",            END)
@@ -2824,7 +2258,7 @@ OUTPUT: CHỈ JSON hợp lệ."""
 # FASTAPI APP
 # ===========================================================
 app = FastAPI(
-    title="Vietnamese Legal AI Chatbot - AI Service",
+    title="Vietnamese Legal AI Chatbot — AI Service",
     description="RAG-powered legal analysis using LangGraph + Milvus + OpenRouter",
     version="1.0.0",
     lifespan=lifespan,
@@ -2948,7 +2382,10 @@ async def practice_evaluate(req: PracticeEvalRequest):
     try:
         output = await graph.ainvoke(inputs)
         # practice_evaluate_node writes a JSON string as the final AIMessage
-        data = _extract_json(output["messages"][-1].content)
+        raw = output["messages"][-1].content.strip()
+        raw = re.sub(r"```(?:json)?\s*", "", raw).strip()
+        raw = raw.rstrip("`").strip()
+        data = json.loads(raw)
 
         feedback = data.get("feedback", {})
         return PracticeEvalResponse(

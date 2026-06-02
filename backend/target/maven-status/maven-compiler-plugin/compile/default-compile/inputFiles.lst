@@ -14,11 +14,13 @@
 /Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/dto/AuthDTOs.java
 /Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/dto/ChatDTOs.java
 /Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/dto/LawDTOs.java
+/Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/dto/StatsDTOs.java
 /Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/entity/ChatMessage.java
 /Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/entity/ChatSession.java
 /Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/entity/Feedback.java
 /Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/entity/Law.java
 /Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/entity/User.java
+/Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/entity/VisitorLog.java
 /Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/exception/GlobalExceptionHandler.java
 /Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/exception/RateLimitException.java
 /Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/repository/ChatMessageRepository.java
@@ -26,8 +28,12 @@
 /Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/repository/FeedbackRepository.java
 /Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/repository/LawRepository.java
 /Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/repository/UserRepository.java
+/Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/repository/VisitorLogRepository.java
 /Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/security/JwtAuthenticationFilter.java
 /Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/security/JwtService.java
+/Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/security/VisitorTrackingFilter.java
 /Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/service/AdminService.java
 /Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/service/AuthService.java
 /Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/service/ChatService.java
+/Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/service/StatsService.java
+/Users/hieuhoang/Desktop/Projects/PenalLawChatbot/backend/src/main/java/com/penallaw/backend/service/VisitorTrackingService.java

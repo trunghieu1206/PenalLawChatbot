@@ -34,6 +34,9 @@ from dotenv import load_dotenv
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 load_dotenv(dotenv_path=_PROJECT_ROOT / ".env", override=False)
 
+# Results directory (absolute, works from any cwd)
+_RESULTS_DIR = Path(__file__).resolve().parent / "results"
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 WEIGHTS = {"l1": 0.30, "l2": 0.30, "l3": 0.25, "l4": 0.15}
 
@@ -104,14 +107,16 @@ def load_cases(dataset_path: str, _unused: str = "") -> list:
 
 
 def _valid_article_set(dataset_path: str, _unused: str = "") -> set:
-    """All article numbers cited in final_verdict texts — treated as known-valid corpus."""
+    """All BLHS article numbers cited in final_verdict texts — treated as known-valid corpus.
+    Uses BLHS-aware extraction to exclude BLTTHS procedural articles."""
+    from eval_primary_recall import _extract_blhs_articles as _recall_extract
     with open(dataset_path, encoding="utf-8") as f:
         data = json.load(f)
     nums: set = set()
     for entry in data:
-        for m in re.finditer(r"(?i:điều|diều|điêu|đều)\s*(\d+[A-Za-z]?)",
-                             entry.get("final_verdict", "")):
-            nums.add(m.group(1))
+        # eval_primary_recall._extract_blhs_articles returns a plain list (no confidence tuple)
+        arts = _recall_extract(entry.get("final_verdict", ""))
+        nums.update(arts)
     return nums
 
 
@@ -172,38 +177,33 @@ def _article_num(s: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
-# ── LAYER 1: Article Existence ─────────────────────────────────────────────────
+# ── LAYER 1: Article Existence ─────────────────────────────────────────────
 def layer1_article_existence(mapped_laws: list, gt_nums: set,
                               valid_corpus: set) -> dict:
     """
-    Flag articles cited by the system that are:
-      - NOT in the ground-truth verdict, AND
-      - NOT in the always-valid procedural set, AND
-      - NOT in the full BLHS corpus (i.e., article doesn't exist at all)
+    L1: Did the system cite an article that does NOT exist in the BLHS corpus?
+    This is the only check -- a pure fabrication detector.
+
+    gt_nums is intentionally ignored here: we do NOT penalise the system for citing
+    correct articles that the court happened not to mention (that is Recall's job).
+    Only articles whose number is completely absent from the valid corpus are flagged.
     """
     false_arts = []
     for law in mapped_laws:
         if law.get("_mapping_error"):
             continue
-        num = _article_num(law.get("article",""))
+        num = _article_num(law.get("article", ""))
         if not num:
             continue
         if num in _ALWAYS_VALID:
             continue
-        if num not in gt_nums and num not in valid_corpus:
+        if num not in valid_corpus:
             false_arts.append({
-                "article": law.get("article",""),
+                "article": law.get("article", ""),
                 "reason": "not_in_corpus",
-            })
-        elif num not in gt_nums and num in valid_corpus:
-            # Article exists in BLHS but court didn't apply it → weaker hallucination
-            false_arts.append({
-                "article": law.get("article",""),
-                "reason": "not_in_verdict",
             })
     flagged = len(false_arts) > 0
     return {"triggered": flagged, "flagged": flagged, "false_articles": false_arts}
-
 
 # ── LAYER 2: Edition / Retroactivity ──────────────────────────────────────────
 def layer2_edition(mapped_laws: list, extracted_facts: dict) -> dict:
@@ -415,10 +415,10 @@ def main():
         description="4-Layer hallucination evaluation for VNPLaw AI service."
     )
     parser.add_argument("--dataset",
-                        default="ai-service/evaluation/thesis_eval_unique.json",
+                        default=str(_PROJECT_ROOT / "ai-service/evaluation/thesis_eval_unique.json"),
                         help="Path to case_eval_dataset.json")
-    parser.add_argument("--output",   default="ai-service/evaluation/results/hallucination_results.jsonl")
-    parser.add_argument("--summary",  default="ai-service/evaluation/results/hallucination_summary.json")
+    parser.add_argument("--output",   default=str(_RESULTS_DIR / "hallucination_results.jsonl"))
+    parser.add_argument("--summary",  default=str(_RESULTS_DIR / "hallucination_summary.json"))
     parser.add_argument("--ai-url",   default=os.getenv("AI_SERVICE_URL", "http://localhost:8000"))
     parser.add_argument("--model",    default=os.getenv("LLM_JUDGE_MODEL", "google/gemini-2.5-pro"))
     parser.add_argument("--timeout",  type=int, default=120,
@@ -464,8 +464,15 @@ def main():
                     pass
         log.info(f"Resume: {len(done_urls)} cases already done.")
 
-    oai = OpenAI(api_key=os.getenv("OPENROUTER_LLM_JUDGE_KEY") or os.getenv("OPENROUTER_API_KEY") or "missing",
-                 base_url="https://openrouter.ai/api/v1")
+    or_headers = {
+        "HTTP-Referer": "http://localhost:8000",
+        "X-Title": "VNPLaw Eval",
+    }
+    oai = OpenAI(
+        api_key=os.getenv("OPENROUTER_LLM_JUDGE_KEY") or os.getenv("OPENROUTER_API_KEY") or "missing",
+        base_url="https://openrouter.ai/api/v1",
+        default_headers=or_headers,
+    )
 
     scores, l1_flags, l2_flags, l3_flags, l4_flags = [], [], [], [], []
     processed = 0
@@ -489,8 +496,9 @@ def main():
             mapped_laws    = pred.get("mapped_laws") or []
             extracted_facts = pred.get("extracted_facts") or {}
 
-            # Ground-truth article numbers extracted from final_verdict text
-            gt = _gt_nums_from_text(case["final_verdict"])
+            # Ground-truth BLHS article numbers (BLTTHS procedural articles excluded)
+            from eval_primary_recall import _extract_blhs_articles as _recall_extract
+            gt = set(_recall_extract(case["final_verdict"]))
 
             # Run layers
             l1 = layer1_article_existence(mapped_laws, gt, valid_corpus)

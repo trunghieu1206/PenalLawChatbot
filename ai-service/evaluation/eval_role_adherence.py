@@ -33,6 +33,8 @@ from dotenv import load_dotenv
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 load_dotenv(dotenv_path=_PROJECT_ROOT / ".env", override=False)
 
+_RESULTS_DIR = Path(__file__).resolve().parent / "results"
+
 ROLES = ["neutral", "defense", "victim"]
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -433,12 +435,12 @@ def main():
         description="Role Adherence evaluation for VNPLaw AI service."
     )
     parser.add_argument("--dataset",
-                        default="ai-service/evaluation/thesis_eval_unique.json",
+                        default=str(_PROJECT_ROOT / "ai-service/evaluation/thesis_eval_unique.json"),
                         help="Path to case_eval_dataset.json")
     parser.add_argument("--output",
-                        default="ai-service/evaluation/results/role_adherence_results.jsonl")
+                        default=str(_RESULTS_DIR / "role_adherence_results.jsonl"))
     parser.add_argument("--summary",
-                        default="ai-service/evaluation/results/role_adherence_summary.json")
+                        default=str(_RESULTS_DIR / "role_adherence_summary.json"))
     parser.add_argument("--ai-url",
                         default=os.getenv("AI_SERVICE_URL", "http://localhost:8000"))
     parser.add_argument("--model",

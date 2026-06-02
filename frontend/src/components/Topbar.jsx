@@ -19,10 +19,7 @@ export default function Topbar() {
         </nav>
       </div>
       <div className="flex items-center gap-4">
-        <div className="relative hidden lg:block">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm">search</span>
-          <input className="pl-9 pr-4 py-1.5 bg-surface-container-low border border-surface-variant rounded-full text-sm font-body-md focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none w-64 transition-all" placeholder="Tìm kiếm án lệ..." type="text"/>
-        </div>
+
         
         <div className="flex items-center gap-3 border-l border-surface-variant pl-4 ml-2">
           {user ? (

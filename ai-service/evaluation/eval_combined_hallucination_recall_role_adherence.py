@@ -6,6 +6,17 @@ Compares System (RAG) vs Baseline (gemini-2.5-flash) to reduce LLM calls threefo
 L4 Hallucination is removed per request to minimize LLM judge cost.
 
 HOW TO RUN EXAMPLES:
+  # start a new tmux session (survives SSH disconnect)
+    apt-get install -y tmux
+    tmux new -s eval
+    # → run your python command inside tmux
+    # → detach (leave running): Ctrl+B then D
+    # → re-attach from any new SSH session:
+    tmux attach -t eval
+
+  # check if process is running
+    ps aux | grep eval_combined | grep -v grep
+
   # Run from anywhere — paths are resolved automatically
   python3 /root/PenalLawChatbot/ai-service/evaluation/eval_combined_hallucination_recall_role_adherence.py \
     --start 1 \
@@ -19,7 +30,15 @@ HOW TO RUN EXAMPLES:
   #### skip rubric (USE THIS)
   python3 /root/PenalLawChatbot/ai-service/evaluation/eval_combined_hallucination_recall_role_adherence.py \
     --start 1 \
+    --end 10 \
+    --skip-rubric \
+    --log-file /root/PenalLawChatbot/ai-service/logs/eval_combined_1_100.txt
+
+  #### resume
+  python3 /root/PenalLawChatbot/ai-service/evaluation/eval_combined_hallucination_recall_role_adherence.py \
+    --start 21 \
     --end 100 \
+    --resume \
     --skip-rubric \
     --log-file /root/PenalLawChatbot/ai-service/logs/eval_combined_1_100.txt
 
@@ -43,10 +62,23 @@ HOW TO RUN EXAMPLES:
 
 
 OUTPUTS:
-  combined_results.jsonl  — full raw data per case (for programmatic analysis)
-  combined_summary.json   — final aggregated scores (JSON)
-  combined_report.txt     — human-readable report with per-case details + final %
+  /root/PenalLawChatbot/ai-service/evaluation/results/combined_results.jsonl  — full raw data per case (for programmatic analysis)
+  /root/PenalLawChatbot/ai-service/evaluation/results/combined_summary.json   — final aggregated scores (JSON)
+  /root/PenalLawChatbot/ai-service/evaluation/results/combined_report.txt     — human-readable report with per-case details + final %
                             (download this file to review results offline)
+  /root/PenalLawChatbot/ai-service/evaluation/results/combined_results_role_progress.jsonl  — role adherence progress
+
+DOWNLOAD output to local machine
+# Download all result files (primary server)
+scp -P 2423 -r \
+  'root@n3.ckey.vn:~/PenalLawChatbot/ai-service/evaluation/results/' \
+  ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/
+
+# Download log files too
+scp -P 2423 \
+  'root@n3.ckey.vn:~/PenalLawChatbot/ai-service/logs/eval_*.txt' \
+  ~/Desktop/Projects/PenalLawChatbot/ai-service/logs/
+
 """
 
 import os, json, re, sys, time, argparse, logging
@@ -314,33 +346,126 @@ _PROCEDURAL = {
     "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "65",
 }
 
+# ── Known BLTTHS-ONLY citation article numbers ────────────────────────────────
+# IMPORTANT: Keep this list VERY narrow.
+# The fallback (no marker found) path uses this list, so anything here will
+# be silently dropped. Only include articles whose number CANNOT appear as a
+# BLHS crime article. BLHS 2015 has crime articles up to ~425, so overlap is
+# very real — DO NOT add crime-range numbers here.
+#
+# Safe to include: purely procedural BLTTHS articles almost never cited as
+# crime articles — mainly the higher appeal/execution procedure ones.
+# We keep this empty; rely on _BLHS_MARKERS / nearest-marker logic instead.
+_BLTTHS_ARTICLES: set = set()  # kept empty: marker-distance logic handles disambiguation
+
+# _PROCEDURAL contains general/sentencing support articles that are always
+# support articles in BLHS (never the primary crime article):
+
+# Markers indicating BLTTHS context (to skip those article citations)
+_BLTTHS_MARKERS = [
+    "tố tụng hình sự", "bltths", "b.l.t.t.h.s", "luật tố tụng",
+]
+# Markers indicating BLHS context (to keep those article citations)
+_BLHS_MARKERS = [
+    "bộ luật hình sự", "blhs", "b.l.h.s", "luật hình sự",
+]
+
+
+def _nearest_marker_dist(t_low: str, art_mid: int, markers: list, window: int) -> int:
+    """Return the character distance from art_mid to the nearest occurrence of any marker.
+    Returns window+1 (i.e. 'not found') if no marker is within the window."""
+    best = window + 1
+    lo, hi = max(0, art_mid - window), min(len(t_low), art_mid + window)
+    region = t_low[lo:hi]
+    for mk in markers:
+        idx = 0
+        while True:
+            pos = region.find(mk, idx)
+            if pos == -1:
+                break
+            abs_pos = lo + pos
+            dist = abs(abs_pos - art_mid)
+            if dist < best:
+                best = dist
+            idx = pos + 1
+    return best
+
+
+def _extract_blhs_articles(text: str):
+    """
+    Extract article numbers that are BLHS (Bộ luật Hình sự) crime articles,
+    not BLTTHS (Bộ luật Tố tụng Hình sự) procedural articles.
+
+    Strategy:
+      1. For each 'Điều X', measure the distance to the nearest BLHS and BLTTHS marker.
+         - Only BLHS marker found within ±300 chars  → accept (crime article)
+         - Only BLTTHS marker found within ±150 chars → reject (procedural)
+         - Both found → the CLOSEST marker wins
+           (handles 'Điều 295; ...Điều 35 Bộ luật hình sự...; ...Điều 136 BLTTHS')
+         - Neither found → fall back to known-number exclusion lists.
+    Returns (blhs_nums, confidence):
+      blhs_nums  : list of article numbers (str), deduplicated, order-preserving
+      confidence : 'high' if at least one explicit BLHS marker found, else 'low'
+    """
+    BLHS_WIN  = 300   # wider — BLHS label may be at end of long citation chain
+    BLTTHS_WIN = 160  # narrower — BLTTHS label must be immediately adjacent
+
+    t_low = text.lower()
+    art_iter = re.finditer(r"(?:đi[eề]u|dieu)\s*(\d+[a-z]?)", t_low)
+
+    seen: dict = {}
+    has_explicit_blhs = False
+
+    for m in art_iter:
+        num     = m.group(1)
+        art_mid = (m.start() + m.end()) // 2
+
+        blhs_dist   = _nearest_marker_dist(t_low, art_mid, _BLHS_MARKERS,   BLHS_WIN)
+        bltths_dist = _nearest_marker_dist(t_low, art_mid, _BLTTHS_MARKERS, BLTTHS_WIN)
+
+        found_blhs   = blhs_dist   <= BLHS_WIN
+        found_bltths = bltths_dist <= BLTTHS_WIN
+
+        if found_blhs and found_bltths:
+            # Both markers present — closest one determines the law
+            if blhs_dist <= bltths_dist:
+                has_explicit_blhs = True
+                if num not in seen:
+                    seen[num] = None
+            # else: BLTTHS is closer → procedural, skip
+        elif found_blhs:
+            has_explicit_blhs = True
+            if num not in seen:
+                seen[num] = None
+        elif found_bltths:
+            pass  # definitely procedural — skip
+        else:
+            # No explicit law marker — use fallback exclusion lists
+            if num not in _BLTTHS_ARTICLES and num not in _PROCEDURAL:
+                if num not in seen:
+                    seen[num] = None
+
+    confidence = "high" if has_explicit_blhs else "low"
+    return list(seen.keys()), confidence
+
+
 def load_all_cases(dataset_path: str) -> list:
     """
     Permissive loader — loads ALL cases from the dataset.
-    Attempts to extract primary_article from final_verdict,
-    but does NOT skip cases where extraction fails.
-    (Unlike eval_primary_recall.load_cases which skips them.)
+    Uses BLHS-aware article extractor to avoid picking up BLTTHS procedural articles.
+    Cases where GT confidence is 'low' are flagged for manual review.
     """
-    import re
     with open(dataset_path, encoding="utf-8") as f:
         data = json.load(f)
 
     cases = []
     for entry in data:
         final_text = entry.get("final_verdict", "")
-        all_nums_raw = re.findall(
-            r"(?i:điều|dieu|điêu|đều)\s*(\d+[A-Za-z]?)", final_text
-        )
-        # De-duplicate while preserving order
-        seen: dict = {}
-        for n in all_nums_raw:
-            if n not in seen:
-                seen[n] = None
-        all_gt_nums = list(seen.keys())
+        all_gt_nums, confidence = _extract_blhs_articles(final_text)
 
-        # Primary = first non-procedural article (may be None if verdict is missing/empty)
+        # Primary = first non-procedural BLHS article
         primary_num = next(
-            (n for n in all_gt_nums if n not in _PROCEDURAL), None
+            (n for n in all_gt_nums if n not in _PROCEDURAL and n not in _BLTTHS_ARTICLES), None
         )
 
         cases.append({
@@ -350,9 +475,10 @@ def load_all_cases(dataset_path: str) -> list:
             "question":         entry.get("case_description", ""),
             "final_verdict":    final_text,
             "primary_article":  f"Điều {primary_num}" if primary_num else "N/A",
-            "primary_num":      primary_num,  # may be None — recall skipped for these
+            "primary_num":      primary_num,
             "all_gt_articles":  [f"Điều {n}" for n in all_gt_nums],
-            "explanation":      entry.get("explanation", ""),  # court's Nhận định (for neutral rubric)
+            "explanation":      entry.get("explanation", ""),
+            "gt_confidence":    confidence,  # 'high'=explicit BLHS label found, 'low'=heuristic only
         })
     return cases
 
@@ -362,14 +488,17 @@ def call_system(ai_url, question, role, timeout, log):
         r = requests.post(
             f"{ai_url.rstrip('/')}/predict",
             json={"case_content": question, "role": role, "conversation_history": []},
-            headers={"Connection": "close"},  # prevent urllib3 keep-alive → stops uvicorn 'Invalid HTTP request' warnings
+            headers={"Connection": "close"},
             timeout=timeout,
         )
         r.raise_for_status()
         return r.json()
+    except requests.exceptions.Timeout:
+        log.warning(f"  /predict TIMEOUT after {timeout}s — skipping this role eval")
+        return {"_timeout": True}   # sentinel: distinguishable from clarification
     except Exception as e:
         log.warning(f"  /predict failed: {e}")
-        return {}
+        return {"_error": True, "_error_msg": str(e)}
 
 def composite_hallucination(l1, l2, l3):
     score = 0.0
@@ -392,12 +521,25 @@ def evaluate_metrics(response_dict, case, gt_nums, valid_corpus, role,
         extracted_facts = response_dict.get("extracted_facts") or {}
 
     # 1. Primary Recall
+    # Always extract what the system cited — useful for manual review even when GT is N/A
+    _sys_cited = sorted({
+        m.get("article", "").split()[-1]   # "Điều 134" → "134"
+        for m in mapped_laws
+        if m.get("article") and not m.get("_mapping_error")
+    } | _extract_nums_from_text(result_text))
+    _sys_doc = next(
+        (m.get("edition_applied") or m.get("source", "") for m in mapped_laws
+         if m.get("article") and not m.get("_mapping_error")),
+        "N/A"
+    ) or "N/A"
+
     if case.get("primary_num"):
         recall = check_primary_hit(case["primary_num"], mapped_laws, result_text)
         recall_hit, recall_source = recall["hit"], recall["source"]
-        recall_cited, recall_doc  = recall["cited_nums"], recall.get("document_source") or "N/A"
+        recall_cited, recall_doc  = recall["cited_nums"], recall.get("document_source") or _sys_doc
     else:
-        recall_hit, recall_source, recall_cited, recall_doc = None, "n/a", [], "N/A"
+        recall_hit, recall_source = None, "n/a"
+        recall_cited, recall_doc  = _sys_cited, _sys_doc  # show what system cited even with no GT
 
     # 2. Hallucination L1-L3 (deterministic — instant)
     l1 = layer1_article_existence(mapped_laws, gt_nums, valid_corpus)
@@ -431,7 +573,24 @@ def evaluate_metrics(response_dict, case, gt_nums, valid_corpus, role,
         "role_llm_score":   llm_result.get("score"),
         "role_llm_answers": llm_result.get("answers", {}),
         "text_preview":     result_text[:300],
+        "full_response":    result_text,   # full text saved for offline LLM-as-a-judge rubric scoring
     }
+
+
+def _is_clarification(pred: dict) -> bool:
+    """Return True if the system returned a clarification request instead of a legal analysis.
+    Detected by: non-empty response with empty mapped_laws AND clarification marker text.
+    NOTE: timeout/error responses ({"_timeout": True} or {"_error": True}) are NOT clarifications."""
+    if not pred or pred.get("_timeout") or pred.get("_error"):
+        return False  # timeout/error — handled separately, not a clarification
+    mapped = pred.get("mapped_laws") or []
+    result = pred.get("result", "")
+    is_clarification_text = (
+        "\u2139\ufe0f" in result[:30]
+        or "\u24d8" in result[:30]
+        or result.strip().startswith("Để phân tích chính xác")
+    )
+    return (not mapped) and is_clarification_text
 
 def _pct(val):
     return f"{val * 100:.1f}%"
@@ -441,13 +600,15 @@ def _print_case_report(report, cidx, total, case, role, sys_eval, rubric=None):
     r_icon  = ("✅" if sys_eval["recall"] else "❌") if sys_eval["recall"] is not None else "➖"
     h_icon  = "✅" if sys_eval["hallucination"] == 0        else "⚠️ "
     ro_icon = "✅" if (sys_eval["role_adherence"] or 0) >= 0.7 else "⚠️ "
+    gt_conf = case.get("gt_confidence", "high")
+    gt_flag = "  ⚠️ [GT LOW CONFIDENCE — manual check needed]" if gt_conf == "low" else ""
 
     report(f"  ┌─ [{cidx}/{total}]  Role: {role.upper()}  ──────────────────────────────────────")
     report(f"  │  Crime  : {case.get('crime_type', 'N/A')}")
     report(f"  │")
     sys_recall_text = "N/A (No GT)" if sys_eval['recall'] is None else ('HIT' if sys_eval['recall'] else 'MISS')
-    report(f"  │  {r_icon} Recall        : {sys_recall_text}")
-    report(f"  │       Ground truth article (from court verdict) : {case.get('primary_article', 'N/A')}")
+    report(f"  │  {r_icon} Recall        : {sys_recall_text}{gt_flag}")
+    report(f"  │       Ground truth article (from court verdict) : {case.get('primary_article', 'N/A')}  [GT confidence: {gt_conf}]")
     report(f"  │       Article cited by system                   : {', '.join(sys_eval.get('recall_cited', [])) or 'None'}")
     report(f"  │       Law document source of cited article      : {sys_eval.get('recall_doc', 'N/A')}")
     report(f"  │       Hit method                                : {sys_eval.get('recall_source', 'N/A')}")
@@ -490,15 +651,20 @@ def _print_running_totals(report, metrics, processed):
     s = metrics["system"]
     def _avg(lst): return sum(lst)/len(lst) if lst else 0.0
 
-    sys_recall = s["recall_hits"] / n
+    r_total = s["recall_total"]
+    r_hits  = s["recall_hits"]
+    r_miss  = r_total - r_hits
+    sys_recall = r_hits / r_total if r_total else 0.0
     sys_hall   = _avg(s["hallucination_scores"])
     sys_role   = _avg(s["role_scores"])
+    low_conf   = len(s["low_conf_cases"])
 
     report(f"  📊 Running totals after {processed} case(s)  ({n} role evals)")
     report(f"     {'Metric':<22} {'System':>9}  Target")
     report(f"     {'-'*45}")
     report(f"     {'Primary Recall':<22} {_pct(sys_recall):>9}  ≥90%  "
-           f"{'✅' if sys_recall >= 0.90 else '❌'}")
+           f"{'✅' if sys_recall >= 0.90 else '❌'}  "
+           f"(miss={r_miss}/{r_total}{'  ⚠️ '+str(low_conf)+' low-conf GT' if low_conf else ''})")
     report(f"     {'Hallucination Rate':<22} {_pct(sys_hall):>9}  ≤10%  "
            f"{'✅' if sys_hall <= 0.10 else '❌'}")
     report(f"     {'Role Adherence':<22} {_pct(sys_role):>9}  ≥85%  "
@@ -514,7 +680,7 @@ def main():
     parser.add_argument("--ai-url",         default=os.getenv("AI_SERVICE_URL", "http://localhost:8000"))
     parser.add_argument("--judge-model",    default=os.getenv("LLM_JUDGE_MODEL", "google/gemini-2.5-pro"))
     parser.add_argument("--baseline-model", default=os.getenv("LLM_MODEL", "google/gemini-2.5-flash"))
-    parser.add_argument("--timeout",        type=int,   default=300,
+    parser.add_argument("--timeout",        type=int,   default=600,
                         help="/predict request timeout in seconds (default: 300s to handle severe OpenRouter rate-limiting backoffs)")
     parser.add_argument("--skip-rubric",    action="store_true",
                         help="Skip rubric LLM scoring (saves ~6 OpenRouter calls per case). Run eval_rubric_*.py separately for rubric.")
@@ -560,12 +726,69 @@ def main():
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     done_urls = set()
+    preloaded = {          # metrics pre-aggregated from already-completed cases in JSONL
+        "recall_hits": 0, "recall_total": 0,
+        "hallucination_scores": [], "role_scores": [],
+        "clarification_skipped": 0, "timeout_skipped": 0,
+        "recall_misses": [], "low_conf_cases": [],
+    }
     if args.resume and out_path.exists():
         with open(out_path, encoding="utf-8") as f:
             for line in f:
-                try: done_urls.add(json.loads(line)["case_url"])
-                except: pass
-        report(f"Resume mode: {len(done_urls)} cases already done — skipping.")
+                try:
+                    row = json.loads(line)
+                    done_urls.add(row["case_url"])
+                    for role, ev in row.get("evaluations", {}).items():
+                        sys_ev = ev.get("system", {})
+                        if sys_ev.get("_skipped_clarification"):
+                            preloaded["clarification_skipped"] += 1
+                            continue
+                        if sys_ev.get("_skipped_timeout"):
+                            preloaded["timeout_skipped"] += 1
+                            continue
+                        rec = sys_ev.get("recall")
+                        if rec is not None:
+                            preloaded["recall_hits"]  += int(rec)
+                            preloaded["recall_total"] += 1
+                            if not rec:
+                                preloaded["recall_misses"].append({
+                                    "case_index": row.get("case_index"),
+                                    "case_url":   row["case_url"],
+                                    "gt_article": sys_ev.get("gt_article", "N/A"),
+                                    "role":       role,
+                                })
+                        h = sys_ev.get("hallucination")
+                        if h is not None:
+                            preloaded["hallucination_scores"].append(h)
+                        ra = sys_ev.get("role_adherence")
+                        if ra is not None:
+                            preloaded["role_scores"].append(ra)
+                except Exception:
+                    pass
+        n_done = len(done_urls)
+        report(f"Resume mode: {n_done} cases fully done — skipping.")
+        rh = preloaded["recall_hits"]; rt = preloaded["recall_total"]
+        nh = len(preloaded["hallucination_scores"]); nr = len(preloaded["role_scores"])
+        report(f"  Pre-loaded from JSONL: recall={rh}/{rt}  hall_evals={nh}  role_evals={nr}")
+
+    # ── Role-level progress sidecar (tracks partial-case completions) ──────────
+    # Format: one line per completed role: {"url": "...", "role": "neutral", "eval": {...}}
+    prog_path = out_path.with_name(out_path.stem + "_role_progress.jsonl")
+    done_roles: dict[str, set] = {}   # url -> {roles already done}
+    if args.resume and prog_path.exists():
+        with open(prog_path, encoding="utf-8") as pf:
+            for line in pf:
+                try:
+                    entry = json.loads(line)
+                    u, r = entry["url"], entry["role"]
+                    if u not in done_roles:
+                        done_roles[u] = set()
+                    done_roles[u].add(r)
+                except Exception:
+                    pass
+        partial_cases = {u for u, rs in done_roles.items() if u not in done_urls and len(rs) < 3}
+        if partial_cases:
+            report(f"  Role-progress sidecar: {len(partial_cases)} partial case(s) found — will resume mid-case.")
 
     # OpenRouter requires HTTP-Referer and X-Title headers, otherwise some models silently return empty content.
     or_headers = {
@@ -610,14 +833,27 @@ def main():
         report("  ⚡ --skip-rubric: rubric LLM scoring disabled")
 
     metrics = {
-        "system": {"recall_hits": 0, "recall_total": 0, "hallucination_scores": [], "role_scores": [], "rubric_scores": []},
-        "total_evals": 0,
+        "system": {
+            # Seeded with preloaded values when --resume is used (otherwise all zeros/empty)
+            "recall_hits":           preloaded["recall_hits"],
+            "recall_total":          preloaded["recall_total"],
+            "hallucination_scores":  list(preloaded["hallucination_scores"]),
+            "role_scores":           list(preloaded["role_scores"]),
+            "rubric_scores":         [],
+            "recall_misses":         list(preloaded["recall_misses"]),
+            "low_conf_cases":        list(preloaded["low_conf_cases"]),
+            "clarification_skipped": preloaded["clarification_skipped"],
+            "timeout_skipped":       preloaded["timeout_skipped"],
+        },
+        "total_evals": len(preloaded["hallucination_scores"]),  # seeded from prior role evals
     }
-    processed = 0
+    processed   = len(done_urls)  # seeded from preloaded case count
+    n_preloaded = len(done_urls)  # for summary: "N preloaded + M new"
 
     interrupted = False
     try:
-        with open(out_path, "a", encoding="utf-8") as out_f:
+        with open(out_path, "a", encoding="utf-8") as out_f, \
+             open(prog_path, "a", encoding="utf-8") as prog_f:
             for i, case in enumerate(tqdm(cases, desc="Evaluating", unit="case")):
                 url = case["case_url"]
                 if url in done_urls:
@@ -636,6 +872,20 @@ def main():
                 roles = ["neutral", "defense", "victim"]
 
                 for role in roles:
+                    # Skip this role if it was already completed in a previous interrupted run
+                    if url in done_roles and role in done_roles[url]:
+                        report(f"  ⏭️  [SKIP-ROLE] {role.upper()} already done for this case — skipping.")
+                        # Re-use the stored eval from the progress sidecar to restore metrics
+                        try:
+                            stored_ev = next(
+                                json.loads(l)["eval"]
+                                for l in open(prog_path, encoding="utf-8")
+                                if json.loads(l).get("url") == url and json.loads(l).get("role") == role
+                            )
+                            row["evaluations"][role] = {"system": stored_ev, "rubric": {}}
+                        except Exception:
+                            pass
+                        continue
                     report(f"  ┌─ ⏳ Processing Role: {role.upper()} ───────────────────────")
 
                     # 1. Fetch RAG system response
@@ -659,18 +909,58 @@ def main():
                     # 4. Print & Save
                     _print_case_report(report, cidx, total, case, role, sys_eval, rubric if rubric else None)
                     row["evaluations"][role] = {"system": sys_eval, "rubric": rubric}
+                    # Write role-level progress entry immediately (enables mid-case resume).
+                    # full_response is already inside sys_eval — written to disk so that an
+                    # offline LLM-as-a-judge rubric script can read responses without re-calling the system.
+                    prog_f.write(json.dumps({"url": url, "role": role, "eval": sys_eval}, ensure_ascii=False) + "\n")
+                    prog_f.flush()
+                    if url not in done_roles:
+                        done_roles[url] = set()
+                    done_roles[url].add(role)
 
                     metrics["total_evals"] += 1
+
+                    # ── Skip timeout / error responses ─────────────────────────────
+                    if sys_pred.get("_timeout") or sys_pred.get("_error"):
+                        metrics["system"]["timeout_skipped"] += 1
+                        reason = "TIMEOUT" if sys_pred.get("_timeout") else "ERROR"
+                        report(f"  ⚠️  [{reason}] Role {role.upper()} — /predict did not respond in time. Excluded from metrics.")
+                        time.sleep(args.delay)
+                        continue
+
+                    # ── Skip clarification responses ───────────────────────────────
+                    if _is_clarification(sys_pred):
+                        metrics["system"]["clarification_skipped"] += 1
+                        report(f"  ⤼ [SKIP] Role {role.upper()} returned a clarification request — excluded from metrics.")
+                        time.sleep(args.delay)
+                        continue
+                    # ─────────────────────────────────────────────────────────────
+
                     if sys_eval["recall"] is not None:
-                        metrics["system"]["recall_hits"] += int(sys_eval["recall"])
+                        hit = sys_eval["recall"]
+                        metrics["system"]["recall_hits"] += int(hit)
                         metrics["system"]["recall_total"] += 1
+                        if not hit:
+                            metrics["system"]["recall_misses"].append({
+                                "case_index": cidx,
+                                "case_url":   url,
+                                "gt_article": case.get("primary_article", "N/A"),
+                                "gt_conf":    case.get("gt_confidence", "?"),
+                                "cited":      sys_eval.get("recall_cited", []),
+                                "role":       role,
+                            })
+                    # Track low-confidence GT cases (only once per case, on neutral role)
+                    if role == "neutral" and case.get("gt_confidence") == "low":
+                        metrics["system"]["low_conf_cases"].append({
+                            "case_index": cidx,
+                            "case_url":   url,
+                            "gt_article": case.get("primary_article", "N/A"),
+                        })
 
                     metrics["system"]["hallucination_scores"].append(sys_eval["hallucination"])
                     metrics["system"]["role_scores"].append(sys_eval["role_adherence"])
                     if rubric.get("sys", {}).get("normalized") is not None:
                         metrics["system"]["rubric_scores"].append(rubric["sys"]["normalized"])
-
-                    time.sleep(args.delay)
 
                 out_f.write(json.dumps(row, ensure_ascii=False) + "\n")
                 out_f.flush()
@@ -727,7 +1017,15 @@ def main():
 
         report("")
         report("=" * 70)
-        report(f"  {'⚠️  PARTIAL ' if interrupted else ''}RESULTS — {processed} cases  ({n_evals} role evals)  [{status}]")
+        n_clarif  = metrics["system"]["clarification_skipped"]
+        n_timeout = metrics["system"]["timeout_skipped"]
+        skip_parts = []
+        if n_clarif:  skip_parts.append(f"{n_clarif} clarification")
+        if n_timeout: skip_parts.append(f"{n_timeout} timeout")
+        skipped_note = f"  ({', '.join(skip_parts)} excluded)" if skip_parts else ""
+        new_cases = processed - n_preloaded
+        resume_note = f" ({n_preloaded} preloaded + {new_cases} new)" if n_preloaded else ""
+        report(f"  {'⚠️  PARTIAL ' if interrupted else ''}RESULTS — {processed} cases{resume_note}  ({n_evals} role evals)  [{status}]{skipped_note}")
         report("=" * 70)
         report(f"  {'Metric':<22} {'System':>9}  {'Target':>8}  Pass?")
         report(f"  {'-'*50}")
@@ -743,6 +1041,37 @@ def main():
         if interrupted:
             report(f"  ↺  Resume with: --resume --start {args.start} --end {'END' if not args.end else args.end}")
         report("=" * 70)
+
+        # ── Recall miss list (manual review) ────────────────────────────────
+        misses = metrics["system"]["recall_misses"]
+        low_conf = metrics["system"]["low_conf_cases"]
+        if misses:
+            report("")
+            # Deduplicate to count unique (case_index, gt_article) pairs — same as list below
+            unique_miss_keys: set = set()
+            deduped_misses = []
+            clarification_count = 0
+            for m in misses:
+                key = (m['case_index'], m['gt_article'])
+                if key not in unique_miss_keys:
+                    unique_miss_keys.add(key)
+                    deduped_misses.append(m)
+                if m.get('cited') == [] or m.get('cited') is None:
+                    clarification_count += 1
+            report(f"  🔴 RECALL MISSES ({len(deduped_misses)} unique cases) — system cited wrong/no article:")
+            if clarification_count > 0:
+                report(f"  ⚠️  NOTE: {clarification_count} role eval(s) returned a clarification request (no mapped_laws).")
+                report(f"       This means the system asked for more info instead of analysing the case.")
+                report(f"       Check if case_description has explicit crime date (ngay_pham_toi) and behavior (hanh_vi).")
+            for m in deduped_misses:
+                report(f"    [{m['case_index']}] GT={m['gt_article']}  cited={m['cited']}  conf={m['gt_conf']}")
+                report(f"         {m['case_url']}")
+        if low_conf:
+            report("")
+            report(f"  ⚠️  LOW-CONFIDENCE GT ({len(low_conf)}) — no explicit BLHS label found in verdict, manual check recommended:")
+            for lc in low_conf:
+                report(f"    [{lc['case_index']}] GT={lc['gt_article']}  {lc['case_url']}")
+        report("")
 
         report_fh.flush()
         report_fh.close()

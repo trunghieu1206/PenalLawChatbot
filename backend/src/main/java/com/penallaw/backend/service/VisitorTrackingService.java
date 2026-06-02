@@ -1,7 +1,7 @@
 package com.penallaw.backend.service;
 
-import com.penallaw.backend.entity.DailyVisit;
-import com.penallaw.backend.repository.DailyVisitRepository;
+import com.penallaw.backend.entity.VisitorLog;
+import com.penallaw.backend.repository.VisitorLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,7 +14,7 @@ import java.time.LocalDate;
 @Slf4j
 public class VisitorTrackingService {
 
-    private final DailyVisitRepository dailyVisitRepository;
+    private final VisitorLogRepository visitorLogRepository;
 
     /**
      * Record a unique daily visit.
@@ -23,7 +23,7 @@ public class VisitorTrackingService {
      *   - visitorId is a UUID generated once by the browser and stored in localStorage.
      *   - We record at most ONE row per (visitorId, today) pair.
      *   - If the pair already exists → no-op (idempotent).
-     *   - The DB unique constraint (uq_daily_visits_visitor_date) is the final safety net.
+     *   - The DB unique constraint (uq_visitor_logs_visitor_date) is the final safety net.
      *
      * This means:
      *   - Same user browsing 10 pages in one day  → counted ONCE
@@ -37,12 +37,12 @@ public class VisitorTrackingService {
         if (visitorId == null || visitorId.isBlank()) return;
 
         LocalDate today = LocalDate.now();
-        if (dailyVisitRepository.existsByVisitorIdAndVisitDate(visitorId, today)) {
+        if (visitorLogRepository.existsByVisitorIdAndVisitDate(visitorId, today)) {
             return; // Already counted today — no-op
         }
 
         try {
-            dailyVisitRepository.save(DailyVisit.builder()
+            visitorLogRepository.save(VisitorLog.builder()
                     .visitorId(visitorId)
                     .visitDate(today)
                     .build());
@@ -60,6 +60,6 @@ public class VisitorTrackingService {
      * Persistent across server restarts and migrations (stored in PostgreSQL).
      */
     public long getTotalVisitorCount() {
-        return dailyVisitRepository.count();
+        return visitorLogRepository.count();
     }
 }
