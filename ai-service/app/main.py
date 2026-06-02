@@ -614,6 +614,46 @@ _ROLE_CIRCUMSTANCE_INSTRUCTION = {
 _MAX_SEMANTIC_DOCS = 5
 
 # ===========================================================
+# ROBUST JSON EXTRACTION — used by every LLM-output parser
+# ===========================================================
+def _extract_json(text: str) -> Any:
+    """Extract the first valid JSON object or array from LLM output.
+
+    Strategy:
+    1. Strip markdown code fences (```json ... ```).
+    2. Find the first '{' or '[' and the last matching '}' or ']'.
+    3. Parse the substring with json.loads().
+
+    This is far more robust than the naive regex+strip approach because
+    it handles conversational preamble, trailing commentary, and partial
+    fences that LLMs commonly produce.
+    """
+    # Step 1: strip markdown fences
+    cleaned = re.sub(r"```(?:json|JSON)?\s*", "", text).strip().rstrip("`").strip()
+
+    # Step 2: find outermost JSON brackets
+    obj_start = cleaned.find("{")
+    arr_start = cleaned.find("[")
+
+    if obj_start == -1 and arr_start == -1:
+        raise ValueError(f"No JSON object or array found in: {cleaned[:200]}")
+
+    # Pick whichever bracket comes first
+    if arr_start == -1 or (obj_start != -1 and obj_start < arr_start):
+        start = obj_start
+        end = cleaned.rfind("}")
+        if end == -1 or end <= start:
+            raise ValueError(f"Unmatched '{{' in: {cleaned[:200]}")
+    else:
+        start = arr_start
+        end = cleaned.rfind("]")
+        if end == -1 or end <= start:
+            raise ValueError(f"Unmatched '[' in: {cleaned[:200]}")
+
+    return json.loads(cleaned[start:end + 1])
+
+
+# ===========================================================
 # ANSWER VERIFICATION — module-level helpers
 # ===========================================================
 _ARTICLE_CITE_PAT = re.compile(
@@ -665,17 +705,42 @@ def _verify_temporal_validity(
     text: str,
     crime_date: str,
     documents: List[Document],
+    per_defendant_dates: Optional[List[dict]] = None,
 ) -> List[str]:
-    """L1-B: Return 'Điều X (WrongEdition)' where wrong BLHS edition is cited."""
-    correct_edition = _edition_for_date(crime_date)
-    if not correct_edition:
+    """L1-B: Return 'Điều X (WrongEdition)' where wrong BLHS edition is cited.
+
+    KEY DESIGN DECISIONS:
+    1. We SKIP documents whose _temporal_role is 'comparison' or 'adjustment'
+       because those are intentionally fetched for retroactivity analysis or
+       general sentencing mechanics — citing them is legal.
+    2. For multi-defendant cases, we collect ALL valid crime editions from
+       per_defendant_dates so defendants across BLHS boundaries don't trigger
+       false positives.
+    """
+    # Build the set of valid editions
+    valid_editions: set = set()
+    if per_defendant_dates:
+        for d_info in per_defendant_dates:
+            ed = _edition_for_date(d_info.get("ngay_pham_toi", ""))
+            if ed:
+                valid_editions.add(ed)
+    if not valid_editions:
+        ed = _edition_for_date(crime_date)
+        if ed:
+            valid_editions.add(ed)
+    if not valid_editions:
         return []
+
     cited_arts = set(_ARTICLE_CITE_PAT.findall(text))
     wrong: List[str] = []
     for d in documents:
+        role = d.metadata.get("_temporal_role", "")
+        # Skip comparison/adjustment docs — they are intentionally multi-edition
+        if role in ("comparison", "adjustment"):
+            continue
         src = d.metadata.get("source", "")
         art = str(d.metadata.get("article_number", ""))
-        if src and src != correct_edition and art in cited_arts:
+        if src and src not in valid_editions and art in cited_arts:
             wrong.append(f"Điều {art} ({src})")
     return wrong
 
@@ -725,8 +790,10 @@ def _verify_role_signal(text: str, role: str) -> float:
 # UTILITY: DETERMINISTIC SENTENCING CALCULATIONS
 # ===========================================================
 def parse_date(text: str) -> Optional[datetime]:
-    """Try multiple date formats to parse a date string."""
-    # BUG-05 FIX: Removed the unused `patterns` parameter — it was always ignored.
+    """Try multiple date formats to parse a date string.
+    Returns None for non-string, empty, or unparseable input."""
+    if not isinstance(text, str) or not text.strip():
+        return None
     for pattern in ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d"]:
         try:
             return datetime.strptime(text.strip(), pattern)
@@ -1104,10 +1171,7 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=f"NỘI DUNG VỤ ÁN:\n{case_text}")
             ]))
-            raw = response.content.strip()
-            # Strip markdown code fences (handles ```json, ```JSON, or plain ```)
-            raw = re.sub(r"```(?:json)?\s*", "", raw).strip()
-            facts = json.loads(raw)
+            facts = _extract_json(response.content)
         except Exception as e:
             print(f"⚠️  Fact extraction failed: {e}")
             facts = {}
@@ -1233,6 +1297,9 @@ QUY TẮc BẮT BUỘC:
 
 YÊU CẦU:
 - behavior_query: Mô tả hành vi phạm tội cụ thể — bị cáo đã làm gì, với ai, bằng phương tiện gì, gây hậu quả gì.
+  ⚠️ QUY TẮC QUAN TRỌNG: Tên tội danh chính xác (ví dụ: "trộm cắp", "cướp", "giết người", "công nhiên chiếm đoạt")
+  phải xuất hiện NGUYÊN VĂN trong behavior_query nếu có trong trường "hanh_vi".
+  KHÔNG được thay thế tên tội danh bằng cách mô tả hành động vật lý (ví dụ: không được viết chỉ "lấy", "chiếm đoạt" thay cho "trộm cắp").
 - circumstance_query: {circumstance_instruction}
 - evidence_query: Mô tả tang vật, công cụ phạm tội, số lượng, trọng lượng,
   giá trị tài sản cụ thể có trong vụ án. Nếu không có tang vật → null.
@@ -1243,8 +1310,7 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
 
         try:
             response = llm.invoke(_sanitize_msgs([HumanMessage(content=prompt)]))
-            raw = re.sub(r"```(?:json)?\s*", "", response.content.strip()).strip()
-            queries = json.loads(raw)
+            queries = _extract_json(response.content)
             q_list = [
                 q for q in [
                     queries.get("behavior_query"),
@@ -1262,6 +1328,8 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
             tang_vat = facts.get("tang_vat_loai", "")
             giam_nhe = ", ".join(facts.get("tinh_tiet_giam_nhe") or [])
             tang_nang = ", ".join(facts.get("tinh_tiet_tang_nang") or [])
+            # Fallback Q1: explicitly prepend crime name from hanh_vi so BM25
+            # can always keyword-match to the correct primary law article.
             q1 = f"{hanh_vi}. {hau_qua}".strip(". ") or case_text[:300]
             q2 = (
                 f"{giam_nhe}. {tang_nang}".strip(". ")
@@ -1625,8 +1693,7 @@ OUTPUT: CHỈ JSON array hợp lệ."""
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=f"SỰ KIỆN:\n{facts_str}\n\nVĂN BẢN LUẬT (có nhãn role):\n{context}\n\nVỤ ÁN:\n{case_text}")
             ]))
-            raw    = re.sub(r"```(?:json)?\s*", "", response.content.strip()).strip()
-            mapped = json.loads(raw)
+            mapped = _extract_json(response.content)
             if not isinstance(mapped, list) or len(mapped) == 0:
                 raise ValueError("Empty or non-list mapped_laws")
         except Exception as e:
@@ -2131,7 +2198,10 @@ QUY TẮC:
             print(f"  [VERIFY L1-A] ✅ All cited articles verified.")
 
         # L1-B: Temporal validity check
-        wrong_edition = _verify_temporal_validity(ai_text, crime_date, documents)
+        per_defendant = state.get("per_defendant_dates") or None
+        wrong_edition = _verify_temporal_validity(
+            ai_text, crime_date, documents, per_defendant_dates=per_defendant
+        )
         if wrong_edition:
             correct = _edition_for_date(crime_date) or "không xác định"
             issues.append(
@@ -2227,10 +2297,7 @@ QUY TẮC:
                 judge_resp = judge_llm.invoke(
                     _sanitize_msgs([HumanMessage(content=judge_prompt)])
                 )
-                raw_verdict = re.sub(
-                    r"```(?:json)?\s*", "", judge_resp.content.strip()
-                ).strip()
-                verdict = json.loads(raw_verdict)
+                verdict = _extract_json(judge_resp.content)
                 if not verdict.get("factual_ok", True) and verdict.get("factual_issue"):
                     issues.append(
                         f"Nhất quán dữ liệu thực tế: {verdict['factual_issue']}"
@@ -2314,7 +2381,7 @@ QUY TẮC:
         role_criteria = {
             "neutral": """
 - Xác định đúng tội danh và điều luật áp dụng (điều luật chính xác, đúng phiên bản BLHS theo ngày phạm tội).
-- Phân tích đầy đủ cả tình tiết tăng nặng (Điều 51) VÀ giảm nhẹ (Điều 52) một cách trung lập.
+- Phân tích đầy đủ cả tình tiết giảm nhẹ (Điều 51) VÀ tăng nặng (Điều 52) một cách trung lập.
 - Lượng hình hợp lý trong đúng khung, có tổng hợp hình phạt theo Điều 55 nếu nhiều tội.
 - Tính thời gian tạm giam đã khấu trừ vào mức án.
 - Quyết định về trách nhiệm dân sự (bồi thường thiệt hại) nếu có.
@@ -2388,11 +2455,8 @@ OUTPUT: CHỈ JSON hợp lệ."""
         try:
             raw_response = llm.invoke(_sanitize_msgs([
                 HumanMessage(content=eval_prompt)
-            ])).content.strip()
-            # Strip any accidental markdown fences
-            raw_response = re.sub(r"```(?:json)?\s*", "", raw_response).strip()
-            raw_response = raw_response.rstrip("`").strip()
-            data = json.loads(raw_response)
+            ])).content
+            data = _extract_json(raw_response)
 
             feedback = data.get("feedback", {})
 
@@ -2884,10 +2948,7 @@ async def practice_evaluate(req: PracticeEvalRequest):
     try:
         output = await graph.ainvoke(inputs)
         # practice_evaluate_node writes a JSON string as the final AIMessage
-        raw = output["messages"][-1].content.strip()
-        raw = re.sub(r"```(?:json)?\s*", "", raw).strip()
-        raw = raw.rstrip("`").strip()
-        data = json.loads(raw)
+        data = _extract_json(output["messages"][-1].content)
 
         feedback = data.get("feedback", {})
         return PracticeEvalResponse(
