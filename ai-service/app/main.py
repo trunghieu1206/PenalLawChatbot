@@ -990,6 +990,7 @@ async def lifespan(app: FastAPI):
         # Query ALL documents. offset/limit paging handles large collections.
         _batch_size = 1000
         _offset     = 0
+        _page_num   = 0
         while True:
             _batch = milvus_client.query(
                 collection_name=COLLECTION_NAME,
@@ -1000,6 +1001,7 @@ async def lifespan(app: FastAPI):
             )
             if not _batch:
                 break
+            _page_num += 1
             for h in _batch:
                 _all_milvus_docs.append(Document(
                     page_content=sanitize_text(h.get("content", "")),
@@ -1008,6 +1010,8 @@ async def lifespan(app: FastAPI):
                         for k in _OUTPUT_FIELDS if k != "content"
                     },
                 ))
+            print(f"  [BM25 INIT] Page {_page_num}: fetched {len(_batch)} docs "
+                  f"(running total: {len(_all_milvus_docs)})")
             _offset += _batch_size
             if len(_batch) < _batch_size:
                 break  # last page
@@ -1268,18 +1272,22 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
         all_docs      = []
 
         # Step 1: Semantic search (up to 3 queries)
-        for q in queries:
+        for q_idx, q in enumerate(queries, start=1):
             if not q:
                 continue
+            print(f"  [SEMANTIC Q{q_idx}] {q[:100]!r}...")
             try:
                 docs = retriever.invoke(q)
+                added_sem = 0
                 for d in docs:
                     key = (d.metadata.get("article_number", ""), d.metadata.get("source", ""))
                     if key not in seen_ids:
                         seen_ids.add(key)
                         all_docs.append(d)
+                        added_sem += 1
+                print(f"    → {len(docs)} retrieved, {added_sem} new unique")
             except Exception as e:
-                print(f"[RETRIEVE ERROR] {type(e).__name__}: {e}")
+                print(f"  [SEMANTIC ERROR Q{q_idx}] {type(e).__name__}: {e}")
 
         # Step 1B: BM25 Keyword Search (up to 5 chunks per query)
         # Runs against the in-memory index built at startup — zero Milvus I/O per request.
@@ -1287,7 +1295,7 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
         # (e.g., "trộm cắp" will surface Điều 173 even if the vector was confused).
         BM25_TOP_K = 5
         if _bm25_index is not None and _bm25_docs:
-            for q in queries:
+            for q_idx, q in enumerate(queries, start=1):
                 if not q:
                     continue
                 try:
@@ -1298,11 +1306,15 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
                         key=lambda i: scores[i],
                         reverse=True,
                     )[:BM25_TOP_K]
-                    added = 0
+                    added_bm25 = 0
+                    skipped    = 0
+                    print(f"  [BM25 Q{q_idx}] Scoring {len(scores)} docs, top {BM25_TOP_K} candidates:")
                     for idx in top_indices:
                         if scores[idx] <= 0:
                             break  # no keyword overlap at all — ignore remaining
                         d   = _bm25_docs[idx]
+                        art = d.metadata.get("article_number", "?")
+                        src = d.metadata.get("source", "?")
                         key = (d.metadata.get("article_number", ""),
                                d.metadata.get("source", ""))
                         if key not in seen_ids:
@@ -1310,13 +1322,18 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
                             # Tag so we can log and distinguish from semantic hits
                             d.metadata["_retrieval_source"] = "bm25"
                             all_docs.append(d)
-                            added += 1
+                            added_bm25 += 1
+                            print(f"    [BM25 NEW] score={scores[idx]:.4f}  Điều {art} | {src}")
+                        else:
+                            skipped += 1
+                            print(f"    [BM25 DUP] score={scores[idx]:.4f}  Điều {art} | {src} — already in pool")
+                    print(f"    → {added_bm25} new unique, {skipped} duplicate(s) skipped")
                 except Exception as _bm25_q_err:
-                    print(f"  [BM25] Query error ({type(_bm25_q_err).__name__}): "
+                    print(f"  [BM25 ERROR Q{q_idx}] {type(_bm25_q_err).__name__}: "
                           f"{_bm25_q_err} — skipping this query")
         else:
             if _bm25_index is None:
-                print("  [BM25] Index not available — keyword retrieval skipped")
+                print("  [BM25] Index not available — keyword retrieval skipped (check startup logs)")
 
         # Step 2: Pinned fetch — edition-aware, multi-defendant safe
         if per_defendant:
