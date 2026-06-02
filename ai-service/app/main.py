@@ -524,10 +524,10 @@ _EDITION_RANGES = [
 ]
 
 _ALWAYS_KEEP_BY_EDITION = {
-    "BLHS 1999":                  {"7", "46", "47", "48", "49", "50", "51", "52", "60"},
-    "BLHS 1999 (sửa đổi 2009)": {"7", "46", "47", "48", "49", "50", "51", "52", "60"},
-    "BLHS 2015 (sửa đổi 2017)": {"7", "51", "52", "53", "54", "55", "56", "57", "65"},
-    "BLHS 2015 (sửa đổi 2025)": {"7", "51", "52", "53", "54", "55", "56", "57", "65"},
+    "BLHS 1999":                  {"7", "36", "38", "41", "46", "47", "48", "49", "50", "51", "52", "60"},
+    "BLHS 1999 (sửa đổi 2009)": {"7", "36", "38", "41", "46", "47", "48", "49", "50", "51", "52", "60"},
+    "BLHS 2015 (sửa đổi 2017)": {"7", "38", "47", "48", "51", "52", "53", "54", "55", "56", "57", "65"},
+    "BLHS 2015 (sửa đổi 2025)": {"7", "38", "47", "48", "51", "52", "53", "54", "55", "56", "57", "65"},
 }
 
 
@@ -629,14 +629,30 @@ def _verify_no_hallucinated_articles(
     mapped_laws: List[Dict[str, Any]],
     documents: List[Document],
 ) -> List[str]:
-    """L1-A: Return article numbers cited in text but absent from retrieved context.
+    """L1-A: Return article numbers cited in the AI's OWN citation table but absent
+    from the retrieved context.
+
+    KEY DESIGN DECISION: We scan ONLY the 'ĐIỀU KHOẢN ÁP DỤNG' table at the bottom
+    of the response — not the full body text. This prevents false positives caused by
+    cross-references that appear INSIDE quoted law text (e.g. Điều 173 Khoản 1b
+    literally says 'các điều 168, 169, 170...' as internal references, which the AI
+    correctly quotes verbatim but never independently applies).
 
     GROUNDING RULE: Only articles present in the retrieved documents are considered
     grounded. mapped_laws is intentionally excluded from the allowed set — if the
     LLM in map_laws cited an article not in the retrieved context (using parametric
     training knowledge), that should be detected and flagged here.
     """
-    cited = set(_ARTICLE_CITE_PAT.findall(text))
+    # Extract only the citation table section to avoid false positives
+    # from cross-references inside quoted law body text.
+    table_section = text
+    for marker in ["ĐIỀU KHOẢN ÁP DỤNG", "Điều khoản áp dụng", "ĐIỀU LUẬT ÁP DỤNG"]:
+        idx = text.find(marker)
+        if idx != -1:
+            table_section = text[idx:]
+            break
+
+    cited = set(_ARTICLE_CITE_PAT.findall(table_section))
 
     # Only allow articles that were physically retrieved from the vector DB
     allowed: set = {str(d.metadata.get("article_number", "")) for d in documents}
@@ -1577,6 +1593,12 @@ Bộ luật Lao động, hôn nhân gia đình, hay bất kỳ bộ luật, ngh�
 ❌ NGHIÊM CẤM: CHỈ được ánh xạ vào các ĐIỀU LUẬT có số hiệu XUẤT HIỆN TRONG VĂN BẢN LUẬT ĐÃ CUNG CẤP Ở TRÊN.
 NGHIÊM CẤM truy xuất bất kỳ số điều nào từ kiến thức nội tại (training knowledge) không có trong tài liệu trên.
 Nếu tài liệu cung cấp không chứa điều luật phù hợp, chỉ ánh xạ đến những gì có trong tài liệu và ghi rõ hạn chế này trong applicable_reason.
+
+QUY TẮC KHOẢN — BẮT BUỘC:
+- Mỗi hành vi phạm tội CHỈ được ánh xạ vào ĐÚNG MỘT khoản duy nhất (khoản áp dụng trực tiếp).
+- KHÔNG được liệt kê cùng một điều luật ở nhiều khoản khác nhau cho cùng một hành vi.
+- Tái phạm nguy hiểm (Điều 52/53) là TÌNH TIẾT TĂNG NẶNG TRÁCH NHIỆM HÌNH SỰ, KHÔNG phải căn cứ để chuyển sang khoản cao hơn trừ khi điều luật tội danh CHÍNH THỨC quy định tái phạm là dấu hiệu định khung khoản đó.
+- Ví dụ: Điều 173 Khoản 1 điểm b ('đã bị kết án về tội này... chưa được xóa án tích') → đây là điểm định khung TRONG Khoản 1, không phải Khoản 2.
 
 NGUYÊN TẮC THỜI HIỆU (Điều 7 BLHS) — BẮT BUỘC ÁP DỤNG:
 1. QUY TẮC CƠ BẢN: Áp dụng luật có hiệu lực tại THỜI ĐIỂM PHẠM TỘI (tài liệu có role=primary).
