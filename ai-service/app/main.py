@@ -2121,7 +2121,7 @@ QUY TẮC:
         warning_block = (
             "\n\n---\n"
             "**Ghi chú hệ thống (Kiểm chứng câu trả lời):**\n"
-            + "\n".join(f"- ⚠️ {i}" for i in issues)
+            + "\n".join(f"- {i}" for i in issues)
             + "\n\n*(Vui lòng đối chiếu với văn bản luật gốc để xác nhận.)*"
         )
         print(f"  ⚠️ Answer verification: {len(issues)} issue(s) detected.")
