@@ -524,10 +524,10 @@ _EDITION_RANGES = [
 ]
 
 _ALWAYS_KEEP_BY_EDITION = {
-    "BLHS 1999":                  {"7", "46", "47", "48", "49", "50", "51", "52", "60"},
-    "BLHS 1999 (sửa đổi 2009)": {"7", "46", "47", "48", "49", "50", "51", "52", "60"},
-    "BLHS 2015 (sửa đổi 2017)": {"7", "51", "52", "53", "54", "55", "56", "57", "65"},
-    "BLHS 2015 (sửa đổi 2025)": {"7", "51", "52", "53", "54", "55", "56", "57", "65"},
+    "BLHS 1999":                  {"7", "36", "38", "41", "46", "47", "48", "49", "50", "51", "52", "60"},
+    "BLHS 1999 (sửa đổi 2009)": {"7", "36", "38", "41", "46", "47", "48", "49", "50", "51", "52", "60"},
+    "BLHS 2015 (sửa đổi 2017)": {"7", "38", "47", "48", "51", "52", "53", "54", "55", "56", "57", "65"},
+    "BLHS 2015 (sửa đổi 2025)": {"7", "38", "47", "48", "51", "52", "53", "54", "55", "56", "57", "65"},
 }
 
 
@@ -614,6 +614,46 @@ _ROLE_CIRCUMSTANCE_INSTRUCTION = {
 _MAX_SEMANTIC_DOCS = 5
 
 # ===========================================================
+# ROBUST JSON EXTRACTION — used by every LLM-output parser
+# ===========================================================
+def _extract_json(text: str) -> Any:
+    """Extract the first valid JSON object or array from LLM output.
+
+    Strategy:
+    1. Strip markdown code fences (```json ... ```).
+    2. Find the first '{' or '[' and the last matching '}' or ']'.
+    3. Parse the substring with json.loads().
+
+    This is far more robust than the naive regex+strip approach because
+    it handles conversational preamble, trailing commentary, and partial
+    fences that LLMs commonly produce.
+    """
+    # Step 1: strip markdown fences
+    cleaned = re.sub(r"```(?:json|JSON)?\s*", "", text).strip().rstrip("`").strip()
+
+    # Step 2: find outermost JSON brackets
+    obj_start = cleaned.find("{")
+    arr_start = cleaned.find("[")
+
+    if obj_start == -1 and arr_start == -1:
+        raise ValueError(f"No JSON object or array found in: {cleaned[:200]}")
+
+    # Pick whichever bracket comes first
+    if arr_start == -1 or (obj_start != -1 and obj_start < arr_start):
+        start = obj_start
+        end = cleaned.rfind("}")
+        if end == -1 or end <= start:
+            raise ValueError(f"Unmatched '{{' in: {cleaned[:200]}")
+    else:
+        start = arr_start
+        end = cleaned.rfind("]")
+        if end == -1 or end <= start:
+            raise ValueError(f"Unmatched '[' in: {cleaned[:200]}")
+
+    return json.loads(cleaned[start:end + 1])
+
+
+# ===========================================================
 # ANSWER VERIFICATION — module-level helpers
 # ===========================================================
 _ARTICLE_CITE_PAT = re.compile(
@@ -629,14 +669,30 @@ def _verify_no_hallucinated_articles(
     mapped_laws: List[Dict[str, Any]],
     documents: List[Document],
 ) -> List[str]:
-    """L1-A: Return article numbers cited in text but absent from retrieved context.
+    """L1-A: Return article numbers cited in the AI's OWN citation table but absent
+    from the retrieved context.
+
+    KEY DESIGN DECISION: We scan ONLY the 'ĐIỀU KHOẢN ÁP DỤNG' table at the bottom
+    of the response — not the full body text. This prevents false positives caused by
+    cross-references that appear INSIDE quoted law text (e.g. Điều 173 Khoản 1b
+    literally says 'các điều 168, 169, 170...' as internal references, which the AI
+    correctly quotes verbatim but never independently applies).
 
     GROUNDING RULE: Only articles present in the retrieved documents are considered
     grounded. mapped_laws is intentionally excluded from the allowed set — if the
     LLM in map_laws cited an article not in the retrieved context (using parametric
     training knowledge), that should be detected and flagged here.
     """
-    cited = set(_ARTICLE_CITE_PAT.findall(text))
+    # Extract only the citation table section to avoid false positives
+    # from cross-references inside quoted law body text.
+    table_section = text
+    for marker in ["ĐIỀU KHOẢN ÁP DỤNG", "Điều khoản áp dụng", "ĐIỀU LUẬT ÁP DỤNG"]:
+        idx = text.find(marker)
+        if idx != -1:
+            table_section = text[idx:]
+            break
+
+    cited = set(_ARTICLE_CITE_PAT.findall(table_section))
 
     # Only allow articles that were physically retrieved from the vector DB
     allowed: set = {str(d.metadata.get("article_number", "")) for d in documents}
@@ -649,17 +705,42 @@ def _verify_temporal_validity(
     text: str,
     crime_date: str,
     documents: List[Document],
+    per_defendant_dates: Optional[List[dict]] = None,
 ) -> List[str]:
-    """L1-B: Return 'Điều X (WrongEdition)' where wrong BLHS edition is cited."""
-    correct_edition = _edition_for_date(crime_date)
-    if not correct_edition:
+    """L1-B: Return 'Điều X (WrongEdition)' where wrong BLHS edition is cited.
+
+    KEY DESIGN DECISIONS:
+    1. We SKIP documents whose _temporal_role is 'comparison' or 'adjustment'
+       because those are intentionally fetched for retroactivity analysis or
+       general sentencing mechanics — citing them is legal.
+    2. For multi-defendant cases, we collect ALL valid crime editions from
+       per_defendant_dates so defendants across BLHS boundaries don't trigger
+       false positives.
+    """
+    # Build the set of valid editions
+    valid_editions: set = set()
+    if per_defendant_dates:
+        for d_info in per_defendant_dates:
+            ed = _edition_for_date(d_info.get("ngay_pham_toi", ""))
+            if ed:
+                valid_editions.add(ed)
+    if not valid_editions:
+        ed = _edition_for_date(crime_date)
+        if ed:
+            valid_editions.add(ed)
+    if not valid_editions:
         return []
+
     cited_arts = set(_ARTICLE_CITE_PAT.findall(text))
     wrong: List[str] = []
     for d in documents:
+        role = d.metadata.get("_temporal_role", "")
+        # Skip comparison/adjustment docs — they are intentionally multi-edition
+        if role in ("comparison", "adjustment"):
+            continue
         src = d.metadata.get("source", "")
         art = str(d.metadata.get("article_number", ""))
-        if src and src != correct_edition and art in cited_arts:
+        if src and src not in valid_editions and art in cited_arts:
             wrong.append(f"Điều {art} ({src})")
     return wrong
 
@@ -709,8 +790,10 @@ def _verify_role_signal(text: str, role: str) -> float:
 # UTILITY: DETERMINISTIC SENTENCING CALCULATIONS
 # ===========================================================
 def parse_date(text: str) -> Optional[datetime]:
-    """Try multiple date formats to parse a date string."""
-    # BUG-05 FIX: Removed the unused `patterns` parameter — it was always ignored.
+    """Try multiple date formats to parse a date string.
+    Returns None for non-string, empty, or unparseable input."""
+    if not isinstance(text, str) or not text.strip():
+        return None
     for pattern in ["%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d"]:
         try:
             return datetime.strptime(text.strip(), pattern)
@@ -967,6 +1050,71 @@ async def lifespan(app: FastAPI):
             all_scores.extend(logits.cpu().tolist())
         return all_scores
 
+    # -------------------------------------------------------
+    # 5. BM25 Keyword Index (built once at startup from Milvus corpus)
+    # -------------------------------------------------------
+    # rank_bm25 is a pure-Python library — no GPU, no latency per request.
+    # We load the entire Milvus collection into memory once and tokenize it.
+    # Each request then calls bm25_index.get_scores() which is microsecond-fast.
+    #
+    # Fault-tolerant design:
+    #   - If rank_bm25 is not installed  → server starts normally, BM25 disabled.
+    #   - If Milvus full-scan fails       → server starts normally, BM25 disabled.
+    #   - If BM25 returns no results      → silently skipped, no crash.
+    _bm25_index = None
+    _bm25_docs: list[Document] = []
+
+    try:
+        from rank_bm25 import BM25Okapi
+
+        print("📚 Building BM25 keyword index from Milvus corpus...")
+        _all_milvus_docs: list[Document] = []
+
+        # Query ALL documents. offset/limit paging handles large collections.
+        _batch_size = 1000
+        _offset     = 0
+        _page_num   = 0
+        while True:
+            _batch = milvus_client.query(
+                collection_name=COLLECTION_NAME,
+                filter="",               # no filter = all documents
+                output_fields=_OUTPUT_FIELDS,
+                limit=_batch_size,
+                offset=_offset,
+            )
+            if not _batch:
+                break
+            _page_num += 1
+            for h in _batch:
+                _all_milvus_docs.append(Document(
+                    page_content=sanitize_text(h.get("content", "")),
+                    metadata={
+                        k: sanitize_text(h.get(k, "")) if isinstance(h.get(k, ""), str) else h.get(k, "")
+                        for k in _OUTPUT_FIELDS if k != "content"
+                    },
+                ))
+            print(f"  [BM25 INIT] Page {_page_num}: fetched {len(_batch)} docs "
+                  f"(running total: {len(_all_milvus_docs)})")
+            _offset += _batch_size
+            if len(_batch) < _batch_size:
+                break  # last page
+
+        # Tokenize: simple whitespace split is sufficient for Vietnamese BM25.
+        # BM25 works on term frequency — no need for full NLP tokenization.
+        _tokenized = [doc.page_content.lower().split() for doc in _all_milvus_docs]
+        _bm25_index = BM25Okapi(_tokenized)
+        _bm25_docs  = _all_milvus_docs
+
+        print(f"✅ BM25 index built: {len(_bm25_docs)} documents indexed "
+              f"({len(_tokenized)} tokenized corpus entries).")
+
+    except ImportError:
+        print("⚠️  rank_bm25 not installed — BM25 keyword retrieval disabled. "
+              "Run: pip install rank-bm25>=0.2.2")
+    except Exception as _bm25_err:
+        print(f"⚠️  BM25 index build failed ({type(_bm25_err).__name__}: {_bm25_err}) "
+              "— keyword retrieval disabled, dense-only fallback active.")
+
 
     # -------------------------------------------------------
     # NODE DEFINITIONS
@@ -1023,10 +1171,7 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=f"NỘI DUNG VỤ ÁN:\n{case_text}")
             ]))
-            raw = response.content.strip()
-            # Strip markdown code fences (handles ```json, ```JSON, or plain ```)
-            raw = re.sub(r"```(?:json)?\s*", "", raw).strip()
-            facts = json.loads(raw)
+            facts = _extract_json(response.content)
         except Exception as e:
             print(f"⚠️  Fact extraction failed: {e}")
             facts = {}
@@ -1152,6 +1297,9 @@ QUY TẮc BẮT BUỘC:
 
 YÊU CẦU:
 - behavior_query: Mô tả hành vi phạm tội cụ thể — bị cáo đã làm gì, với ai, bằng phương tiện gì, gây hậu quả gì.
+  ⚠️ QUY TẮC QUAN TRỌNG: Tên tội danh chính xác (ví dụ: "trộm cắp", "cướp", "giết người", "công nhiên chiếm đoạt")
+  phải xuất hiện NGUYÊN VĂN trong behavior_query nếu có trong trường "hanh_vi".
+  KHÔNG được thay thế tên tội danh bằng cách mô tả hành động vật lý (ví dụ: không được viết chỉ "lấy", "chiếm đoạt" thay cho "trộm cắp").
 - circumstance_query: {circumstance_instruction}
 - evidence_query: Mô tả tang vật, công cụ phạm tội, số lượng, trọng lượng,
   giá trị tài sản cụ thể có trong vụ án. Nếu không có tang vật → null.
@@ -1162,8 +1310,7 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
 
         try:
             response = llm.invoke(_sanitize_msgs([HumanMessage(content=prompt)]))
-            raw = re.sub(r"```(?:json)?\s*", "", response.content.strip()).strip()
-            queries = json.loads(raw)
+            queries = _extract_json(response.content)
             q_list = [
                 q for q in [
                     queries.get("behavior_query"),
@@ -1181,6 +1328,8 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
             tang_vat = facts.get("tang_vat_loai", "")
             giam_nhe = ", ".join(facts.get("tinh_tiet_giam_nhe") or [])
             tang_nang = ", ".join(facts.get("tinh_tiet_tang_nang") or [])
+            # Fallback Q1: explicitly prepend crime name from hanh_vi so BM25
+            # can always keyword-match to the correct primary law article.
             q1 = f"{hanh_vi}. {hau_qua}".strip(". ") or case_text[:300]
             q2 = (
                 f"{giam_nhe}. {tang_nang}".strip(". ")
@@ -1207,18 +1356,68 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
         all_docs      = []
 
         # Step 1: Semantic search (up to 3 queries)
-        for q in queries:
+        for q_idx, q in enumerate(queries, start=1):
             if not q:
                 continue
+            print(f"  [SEMANTIC Q{q_idx}] {q[:100]!r}...")
             try:
                 docs = retriever.invoke(q)
+                added_sem = 0
                 for d in docs:
                     key = (d.metadata.get("article_number", ""), d.metadata.get("source", ""))
                     if key not in seen_ids:
                         seen_ids.add(key)
                         all_docs.append(d)
+                        added_sem += 1
+                print(f"    → {len(docs)} retrieved, {added_sem} new unique")
             except Exception as e:
-                print(f"[RETRIEVE ERROR] {type(e).__name__}: {e}")
+                print(f"  [SEMANTIC ERROR Q{q_idx}] {type(e).__name__}: {e}")
+
+        # Step 1B: BM25 Keyword Search (up to 5 chunks per query)
+        # Runs against the in-memory index built at startup — zero Milvus I/O per request.
+        # Complements dense search by anchoring retrieval to exact legal terminology
+        # (e.g., "trộm cắp" will surface Điều 173 even if the vector was confused).
+        BM25_TOP_K = 5
+        if _bm25_index is not None and _bm25_docs:
+            for q_idx, q in enumerate(queries, start=1):
+                if not q:
+                    continue
+                try:
+                    tokenized_q = q.lower().split()
+                    scores      = _bm25_index.get_scores(tokenized_q)
+                    top_indices = sorted(
+                        range(len(scores)),
+                        key=lambda i: scores[i],
+                        reverse=True,
+                    )[:BM25_TOP_K]
+                    added_bm25 = 0
+                    skipped    = 0
+                    print(f"  [BM25 Q{q_idx}] Scoring {len(scores)} docs, top {BM25_TOP_K} candidates:")
+                    for idx in top_indices:
+                        if scores[idx] <= 0:
+                            break  # no keyword overlap at all — ignore remaining
+                        d   = _bm25_docs[idx]
+                        art = d.metadata.get("article_number", "?")
+                        src = d.metadata.get("source", "?")
+                        key = (d.metadata.get("article_number", ""),
+                               d.metadata.get("source", ""))
+                        if key not in seen_ids:
+                            seen_ids.add(key)
+                            # Tag so we can log and distinguish from semantic hits
+                            d.metadata["_retrieval_source"] = "bm25"
+                            all_docs.append(d)
+                            added_bm25 += 1
+                            print(f"    [BM25 NEW] score={scores[idx]:.4f}  Điều {art} | {src}")
+                        else:
+                            skipped += 1
+                            print(f"    [BM25 DUP] score={scores[idx]:.4f}  Điều {art} | {src} — already in pool")
+                    print(f"    → {added_bm25} new unique, {skipped} duplicate(s) skipped")
+                except Exception as _bm25_q_err:
+                    print(f"  [BM25 ERROR Q{q_idx}] {type(_bm25_q_err).__name__}: "
+                          f"{_bm25_q_err} — skipping this query")
+        else:
+            if _bm25_index is None:
+                print("  [BM25] Index not available — keyword retrieval skipped (check startup logs)")
 
         # Step 2: Pinned fetch — edition-aware, multi-defendant safe
         if per_defendant:
@@ -1266,9 +1465,12 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
                     print(f"  [PINNED] Failed to fetch Điều {art_no} ({purpose}): {e}")
 
         n_pinned   = sum(1 for d in all_docs if d.metadata.get("_pinned"))
-        n_semantic = len(all_docs) - n_pinned
-        print(f"  [RETRIEVE] Total: {len(all_docs)} docs (semantic={n_semantic}, pinned={n_pinned})")
+        n_bm25     = sum(1 for d in all_docs if d.metadata.get("_retrieval_source") == "bm25")
+        n_semantic = len(all_docs) - n_pinned - n_bm25
+        print(f"  [RETRIEVE] Total: {len(all_docs)} docs "
+              f"(semantic={n_semantic}, bm25={n_bm25}, pinned={n_pinned})")
         return {"documents": all_docs}
+
 
     # NODE 5: TEMPORAL PRIORITY TAGGER
     def temporal_priority_tagger(state: AgentState) -> dict:
@@ -1460,6 +1662,12 @@ Bộ luật Lao động, hôn nhân gia đình, hay bất kỳ bộ luật, ngh�
 NGHIÊM CẤM truy xuất bất kỳ số điều nào từ kiến thức nội tại (training knowledge) không có trong tài liệu trên.
 Nếu tài liệu cung cấp không chứa điều luật phù hợp, chỉ ánh xạ đến những gì có trong tài liệu và ghi rõ hạn chế này trong applicable_reason.
 
+QUY TẮC KHOẢN — BẮT BUỘC:
+- Mỗi hành vi phạm tội CHỈ được ánh xạ vào ĐÚNG MỘT khoản duy nhất (khoản áp dụng trực tiếp).
+- KHÔNG được liệt kê cùng một điều luật ở nhiều khoản khác nhau cho cùng một hành vi.
+- Tái phạm nguy hiểm (Điều 52/53) là TÌNH TIẾT TĂNG NẶNG TRÁCH NHIỆM HÌNH SỰ, KHÔNG phải căn cứ để chuyển sang khoản cao hơn trừ khi điều luật tội danh CHÍNH THỨC quy định tái phạm là dấu hiệu định khung khoản đó.
+- Ví dụ: Điều 173 Khoản 1 điểm b ('đã bị kết án về tội này... chưa được xóa án tích') → đây là điểm định khung TRONG Khoản 1, không phải Khoản 2.
+
 NGUYÊN TẮC THỜI HIỆU (Điều 7 BLHS) — BẮT BUỘC ÁP DỤNG:
 1. QUY TẮC CƠ BẢN: Áp dụng luật có hiệu lực tại THỜI ĐIỂM PHẠM TỘI (tài liệu có role=primary).
 2. NGOẠI LỆ HỒI TỐ CÓ LỢI: Nếu luật MỚI HƠN (role=comparison) quy định hình phạt NHẸ HƠN, BẮT BUỘC áp dụng.
@@ -1485,8 +1693,7 @@ OUTPUT: CHỈ JSON array hợp lệ."""
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=f"SỰ KIỆN:\n{facts_str}\n\nVĂN BẢN LUẬT (có nhãn role):\n{context}\n\nVỤ ÁN:\n{case_text}")
             ]))
-            raw    = re.sub(r"```(?:json)?\s*", "", response.content.strip()).strip()
-            mapped = json.loads(raw)
+            mapped = _extract_json(response.content)
             if not isinstance(mapped, list) or len(mapped) == 0:
                 raise ValueError("Empty or non-list mapped_laws")
         except Exception as e:
@@ -1991,7 +2198,10 @@ QUY TẮC:
             print(f"  [VERIFY L1-A] ✅ All cited articles verified.")
 
         # L1-B: Temporal validity check
-        wrong_edition = _verify_temporal_validity(ai_text, crime_date, documents)
+        per_defendant = state.get("per_defendant_dates") or None
+        wrong_edition = _verify_temporal_validity(
+            ai_text, crime_date, documents, per_defendant_dates=per_defendant
+        )
         if wrong_edition:
             correct = _edition_for_date(crime_date) or "không xác định"
             issues.append(
@@ -2087,10 +2297,7 @@ QUY TẮC:
                 judge_resp = judge_llm.invoke(
                     _sanitize_msgs([HumanMessage(content=judge_prompt)])
                 )
-                raw_verdict = re.sub(
-                    r"```(?:json)?\s*", "", judge_resp.content.strip()
-                ).strip()
-                verdict = json.loads(raw_verdict)
+                verdict = _extract_json(judge_resp.content)
                 if not verdict.get("factual_ok", True) and verdict.get("factual_issue"):
                     issues.append(
                         f"Nhất quán dữ liệu thực tế: {verdict['factual_issue']}"
@@ -2174,7 +2381,7 @@ QUY TẮC:
         role_criteria = {
             "neutral": """
 - Xác định đúng tội danh và điều luật áp dụng (điều luật chính xác, đúng phiên bản BLHS theo ngày phạm tội).
-- Phân tích đầy đủ cả tình tiết tăng nặng (Điều 51) VÀ giảm nhẹ (Điều 52) một cách trung lập.
+- Phân tích đầy đủ cả tình tiết giảm nhẹ (Điều 51) VÀ tăng nặng (Điều 52) một cách trung lập.
 - Lượng hình hợp lý trong đúng khung, có tổng hợp hình phạt theo Điều 55 nếu nhiều tội.
 - Tính thời gian tạm giam đã khấu trừ vào mức án.
 - Quyết định về trách nhiệm dân sự (bồi thường thiệt hại) nếu có.
@@ -2248,11 +2455,8 @@ OUTPUT: CHỈ JSON hợp lệ."""
         try:
             raw_response = llm.invoke(_sanitize_msgs([
                 HumanMessage(content=eval_prompt)
-            ])).content.strip()
-            # Strip any accidental markdown fences
-            raw_response = re.sub(r"```(?:json)?\s*", "", raw_response).strip()
-            raw_response = raw_response.rstrip("`").strip()
-            data = json.loads(raw_response)
+            ])).content
+            data = _extract_json(raw_response)
 
             feedback = data.get("feedback", {})
 
@@ -2744,10 +2948,7 @@ async def practice_evaluate(req: PracticeEvalRequest):
     try:
         output = await graph.ainvoke(inputs)
         # practice_evaluate_node writes a JSON string as the final AIMessage
-        raw = output["messages"][-1].content.strip()
-        raw = re.sub(r"```(?:json)?\s*", "", raw).strip()
-        raw = raw.rstrip("`").strip()
-        data = json.loads(raw)
+        data = _extract_json(output["messages"][-1].content)
 
         feedback = data.get("feedback", {})
         return PracticeEvalResponse(
