@@ -1739,7 +1739,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 **ĐIỀU KHOẢN ÁP DỤNG:**
 (Bảng tổng hợp — CHỈ liệt kê các điều luật đã được trích dẫn CỤ THỂ trong nội dung phân tích ở trên. TUYỆT ĐỐI KHÔNG thêm điều luật chưa được đề cập. BẮT BUỘC trình bày bảng đúng chuẩn Markdown, phải có ĐÚNG 4 cột và hàng phân cách phải đủ 4 cột `|---|---|---|---|`.)
 
-| Điều | Tội danh/Nội dung | Nguồn áp dụng | Lý do chọn nguồn |
+| Điều | Tội danh/Nội dung | Văn bản bộ luật hình sự | Lý do |
 |---|---|---|---|
 | (số điều) | (nội dung) | (tên bộ luật + năm) | (lý do áp dụng) |
 """
@@ -2030,28 +2030,53 @@ QUY TẮC:
                 ]
                 if facts.get(k) is not None
             }
+            # Build a human-readable plain-Vietnamese summary of the facts
+            # so the judge (and its output) never needs to mention raw field names.
+            fact_lines = []
+            if key_facts.get("hanh_vi"):
+                fact_lines.append(f"- Hành vi phạm tội: {key_facts['hanh_vi']}")
+            if key_facts.get("hau_qua"):
+                fact_lines.append(f"- Hậu quả: {key_facts['hau_qua']}")
+            if key_facts.get("ngay_pham_toi"):
+                fact_lines.append(f"- Ngày phạm tội: {key_facts['ngay_pham_toi']}")
+            if key_facts.get("co_tien_an") is not None:
+                tien_an_text = "có tiền án" if key_facts["co_tien_an"] else "không có tiền án"
+                fact_lines.append(f"- Nhân thân bị cáo: {tien_an_text} (hồ sơ không cung cấp chi tiết bản án cụ thể)")
+            if key_facts.get("tinh_tiet_tang_nang"):
+                fact_lines.append(f"- Tình tiết tăng nặng: {key_facts['tinh_tiet_tang_nang']}")
+            if key_facts.get("tinh_tiet_giam_nhe"):
+                fact_lines.append(f"- Tình tiết giảm nhẹ: {key_facts['tinh_tiet_giam_nhe']}")
+            fact_summary = "\n".join(fact_lines) if fact_lines else "(Không có dữ liệu)"
+
             role_map = {
                 "defense": "Luật sư bào chữa — phải bảo vệ bị cáo, xin giảm nhẹ.",
                 "victim":  "Luật sư bị hại — phải đòi xử nghiêm, bồi thường tối đa.",
                 "neutral": "Thẩm phán — phải trung lập, phân tích hai chiều.",
             }
+            raw_case_text = state.get("full_case_content", state["question"])
+            
             judge_prompt = (
                 "Bạn là kiểm tra viên pháp lý. Đánh giá đoạn phân tích AI dưới đây.\n\n"
-                f"SỰ KIỆN THỰC TẾ (nguồn đúng duy nhất):\n"
-                f"{json.dumps(key_facts, ensure_ascii=False)}\n\n"
+                f"SỰ KIỆN THỰC TẾ (Bản tóm tắt):\n"
+                f"{fact_summary}\n\n"
+                f"NGUYÊN VĂN VỤ ÁN TỪ NGƯỜI DÙNG (Căn cứ gốc):\n"
+                f"{raw_case_text}\n\n"
                 f"VAI TRÒ YÊU CẦU: {role_map.get(role, role)}\n\n"
                 f"ĐOẠN PHÂN TÍCH AI (đã rút gọn):\n{response_snippet}\n\n"
                 'Trả lời 2 câu hỏi sau bằng JSON:\n'
                 '{\n'
                 '  "factual_ok": true/false,\n'
-                '  "factual_issue": "mô tả ngắn nếu false, null nếu true",\n'
+                '  "factual_issue": "mô tả ngắn bằng tiếng Việt thân thiện nếu false, null nếu true",\n'
                 '  "role_ok": true/false,\n'
-                '  "role_issue": "mô tả ngắn nếu false, null nếu true"\n'
+                '  "role_issue": "mô tả ngắn bằng tiếng Việt thân thiện nếu false, null nếu true"\n'
                 '}\n\n'
                 "QUY TẮC:\n"
-                "- factual_ok = false CHỈ KHI AI bịa ra tình tiết KHÔNG có trong SỰ KIỆN THỰC TẾ.\n"
+                "- factual_ok = false CHỈ KHI AI bịa ra chi tiết cụ thể (số tiền, số bản án, ngày tháng cụ thể) KHÔNG có trong NGUYÊN VĂN VỤ ÁN.\n"
+                "- Nếu thông tin có trong NGUYÊN VĂN VỤ ÁN nhưng không có trong Bản tóm tắt thì VẪN HỢP LỆ (factual_ok = true).\n"
                 "- role_ok = false CHỈ KHI AI rõ ràng lập luận SAI chiều với vai trò được giao.\n"
                 "- Nếu không chắc → true (tránh false positive).\n"
+                "- TUYỆT ĐỐI KHÔNG đề cập tên trường kỹ thuật trong mô tả.\n"
+                "- Viết mô tả bằng tiếng Việt dễ hiểu cho người dùng thông thường.\n"
                 "OUTPUT: Chỉ JSON hợp lệ, không markdown."
             )
             try:
