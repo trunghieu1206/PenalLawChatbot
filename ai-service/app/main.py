@@ -507,6 +507,12 @@ class PracticeEvalResponse(BaseModel):
 # MODULE-LEVEL CONSTANTS — used by new RAG nodes
 # ===========================================================
 
+# Fields required to proceed past clarification check.
+# IMPORTANT: Only include fields that MUST be explicitly present in the case.
+# Inference fields (loi_pham_toi, giai_doan_pham_toi, vai_tro_dong_pham,
+# co_dau_hieu_loai_tru_tnhs) are nullable — null means "not applicable"
+# and must NOT block the pipeline. They are extracted by LLM and used
+# by retrieval/prompts, but their absence should not trigger clarification.
 REQUIRED_FIELDS = {
     "hanh_vi":       "mô tả hành vi phạm tội (bị cáo đã làm gì?)",
     "ngay_pham_toi": "ngày xảy ra hành vi phạm tội (dd/mm/yyyy)",
@@ -524,10 +530,32 @@ _EDITION_RANGES = [
 ]
 
 _ALWAYS_KEEP_BY_EDITION = {
-    "BLHS 1999":                  {"7", "36", "38", "41", "46", "47", "48", "49", "50", "51", "52", "60"},
-    "BLHS 1999 (sửa đổi 2009)": {"7", "36", "38", "41", "46", "47", "48", "49", "50", "51", "52", "60"},
-    "BLHS 2015 (sửa đổi 2017)": {"7", "38", "47", "48", "51", "52", "53", "54", "55", "56", "57", "65"},
-    "BLHS 2015 (sửa đổi 2025)": {"7", "38", "47", "48", "51", "52", "53", "54", "55", "56", "57", "65"},
+    # General Part articles that must survive reranking regardless of score.
+    # BLHS 1999 Phần chung (articles 1-77):
+    #   11=sự kiện bất ngờ (loại trừ TNHS), 13=không có năng lực TNHS,
+    #   14=phạm tội say rượu (vẫn TNHS!), 15=phòng vệ chính đáng,
+    #   16=tình thế cấp thiết, 17=chuẩn bị phạm tội,
+    #   18=phạm tội chưa đạt, 19=tự ý nửa chừng chấm dứt, 20=đồng phạm
+    #   46=giảm nhẹ, 47=dưới khung, 48=tăng nặng, 49=tái phạm,
+    #   50=tổng hợp hình phạt, 52=tăng nặng (also in Special Part), 60=án treo
+    # BLHS 2015 Phần chung (articles 1-107):
+    #   14=chuẩn bị, 15=phạm tội chưa đạt, 16=tự ý nửa chừng,
+    #   17=đồng phạm, 20=sự kiện bất ngờ, 21=không có năng lực TNHS,
+    #   22=phòng vệ chính đáng, 23=tình thế cấp thiết
+    #   51=giảm nhẹ, 52=tăng nặng, 53=tái phạm, 54=dưới khung,
+    #   55-56=tổng hợp hình phạt, 57=hình phạt tội chưa đạt, 59=miễn hình phạt, 65=án treo
+    # Điều 28 BLHS 1999 = các loại hình phạt (types of punishment — overview article)
+    # Điều 32 BLHS 2015 = các loại hình phạt (equivalent in new code)
+    # Điều 45 BLHS 1999 / Điều 50 BLHS 2015 = căn cứ quyết định hình phạt
+    # (sentencing basis — referenced in every generate prompt; must always be retrievable)
+    "BLHS 1999":                  {"7", "11", "13", "14", "15", "16", "17", "18", "19", "20",
+                                   "28", "41", "45", "46", "47", "48", "49", "50", "51", "52", "60"},
+    "BLHS 1999 (sửa đổi 2009)": {"7", "11", "13", "14", "15", "16", "17", "18", "19", "20",
+                                   "28", "41", "45", "46", "47", "48", "49", "50", "51", "52", "60"},
+    "BLHS 2015 (sửa đổi 2017)": {"7", "14", "15", "16", "17", "20", "21", "22", "23",
+                                   "32", "38", "47", "48", "50", "51", "52", "53", "54", "55", "56", "57", "59", "65"},
+    "BLHS 2015 (sửa đổi 2025)": {"7", "14", "15", "16", "17", "20", "21", "22", "23",
+                                   "32", "38", "47", "48", "50", "51", "52", "53", "54", "55", "56", "57", "59", "65"},
 }
 
 
@@ -546,52 +574,88 @@ def _edition_for_date(date_str: str) -> Optional[str]:
 
 
 _PINNED_MAP = {
-    ("mitigating",    "BLHS 1999"):                 "46",
-    ("aggravating",   "BLHS 1999"):                 "48",
-    ("recidivism",    "BLHS 1999"):                 "49",
-    ("below_min",     "BLHS 1999"):                 "47",
-    ("attempt",       "BLHS 1999"):                 "52",
-    ("consolidate",   "BLHS 1999"):                 "50",
-    ("suspended",     "BLHS 1999"):                 "60",
-    ("civil_comp",    "BLHS 1999"):                 "42",
-    ("penalty_types", "BLHS 1999"):                 "28",
-    ("retroactive",   "BLHS 1999"):                 "7",
-    ("mitigating",    "BLHS 1999 (sửa đổi 2009)"): "46",
-    ("aggravating",   "BLHS 1999 (sửa đổi 2009)"): "48",
-    ("recidivism",    "BLHS 1999 (sửa đổi 2009)"): "49",
-    ("below_min",     "BLHS 1999 (sửa đổi 2009)"): "47",
-    ("attempt",       "BLHS 1999 (sửa đổi 2009)"): "52",
-    ("consolidate",   "BLHS 1999 (sửa đổi 2009)"): "50",
-    ("suspended",     "BLHS 1999 (sửa đổi 2009)"): "60",
-    ("civil_comp",    "BLHS 1999 (sửa đổi 2009)"): "42",
-    ("penalty_types", "BLHS 1999 (sửa đổi 2009)"): "28",
-    ("retroactive",   "BLHS 1999 (sửa đổi 2009)"): "7",
-    ("mitigating",    "BLHS 2015 (sửa đổi 2017)"): "51",
-    ("aggravating",   "BLHS 2015 (sửa đổi 2017)"): "52",
-    ("recidivism",    "BLHS 2015 (sửa đổi 2017)"): "53",
-    ("below_min",     "BLHS 2015 (sửa đổi 2017)"): "54",
-    ("attempt",       "BLHS 2015 (sửa đổi 2017)"): "57",
-    ("consolidate",   "BLHS 2015 (sửa đổi 2017)"): "55",
-    ("suspended",     "BLHS 2015 (sửa đổi 2017)"): "65",
-    ("civil_comp",    "BLHS 2015 (sửa đổi 2017)"): "48",
-    ("penalty_types", "BLHS 2015 (sửa đổi 2017)"): "32",
-    ("retroactive",   "BLHS 2015 (sửa đổi 2017)"): "7",
-    ("mitigating",    "BLHS 2015 (sửa đổi 2025)"): "51",
-    ("aggravating",   "BLHS 2015 (sửa đổi 2025)"): "52",
-    ("recidivism",    "BLHS 2015 (sửa đổi 2025)"): "53",
-    ("below_min",     "BLHS 2015 (sửa đổi 2025)"): "54",
-    ("attempt",       "BLHS 2015 (sửa đổi 2025)"): "57",
-    ("consolidate",   "BLHS 2015 (sửa đổi 2025)"): "55",
-    ("suspended",     "BLHS 2015 (sửa đổi 2025)"): "65",
-    ("civil_comp",    "BLHS 2015 (sửa đổi 2025)"): "48",
-    ("penalty_types", "BLHS 2015 (sửa đổi 2025)"): "32",
-    ("retroactive",   "BLHS 2015 (sửa đổi 2025)"): "7",
+    # ── BLHS 1999 ─────────────────────────────────────────────────────────────
+    # CRITICAL: article numbers differ significantly from BLHS 2015!
+    #   attempt=18 (phạm tội chưa đạt) NOT 52 (tăng nặng)!
+    #   self_defense=15, necessity=16, co_participation=20, suspended=60
+    ("mitigating",        "BLHS 1999"):                 "46",   # Các tình tiết giảm nhẹ TNHS
+    ("aggravating",       "BLHS 1999"):                 "48",   # Các tình tiết tăng nặng TNHS
+    ("recidivism",        "BLHS 1999"):                 "49",   # Tái phạm, tái phạm nguy hiểm
+    ("below_min",         "BLHS 1999"):                 "47",   # Quyết định hình phạt dưới khung
+    ("attempt",           "BLHS 1999"):                 "18",   # Phạm tội chưa đạt
+    ("consolidate",       "BLHS 1999"):                 "50",   # Tổng hợp hình phạt nhiều tội
+    ("suspended",         "BLHS 1999"):                 "60",   # Án treo
+    ("civil_comp",        "BLHS 1999"):                 "42",   # Trách nhiệm bồi thường
+    ("penalty_types",     "BLHS 1999"):                 "28",   # Các loại hình phạt
+    ("sentencing_basis",  "BLHS 1999"):                 "45",   # Căn cứ quyết định hình phạt
+    ("retroactive",       "BLHS 1999"):                 "7",    # Hiệu lực về thời gian
+    ("self_defense",      "BLHS 1999"):                 "15",   # Phòng vệ chính đáng
+    ("necessity",         "BLHS 1999"):                 "16",   # Tình thế cấp thiết
+    ("co_participation",  "BLHS 1999"):                 "20",   # Đồng phạm
+    ("exemption",         "BLHS 1999"):                 "25",   # Miễn trách nhiệm hình sự
+    # ── BLHS 1999 (sửa đổi 2009) ─────────────────────────────────────────────
+    ("mitigating",        "BLHS 1999 (sửa đổi 2009)"): "46",
+    ("aggravating",       "BLHS 1999 (sửa đổi 2009)"): "48",
+    ("recidivism",        "BLHS 1999 (sửa đổi 2009)"): "49",
+    ("below_min",         "BLHS 1999 (sửa đổi 2009)"): "47",
+    ("attempt",           "BLHS 1999 (sửa đổi 2009)"): "18",   # Phạm tội chưa đạt
+    ("consolidate",       "BLHS 1999 (sửa đổi 2009)"): "50",
+    ("suspended",         "BLHS 1999 (sửa đổi 2009)"): "60",
+    ("civil_comp",        "BLHS 1999 (sửa đổi 2009)"): "42",
+    ("penalty_types",     "BLHS 1999 (sửa đổi 2009)"): "28",
+    ("sentencing_basis",  "BLHS 1999 (sửa đổi 2009)"): "45",   # Căn cứ quyết định hình phạt
+    ("retroactive",       "BLHS 1999 (sửa đổi 2009)"): "7",
+    ("self_defense",      "BLHS 1999 (sửa đổi 2009)"): "15",
+    ("necessity",         "BLHS 1999 (sửa đổi 2009)"): "16",
+    ("co_participation",  "BLHS 1999 (sửa đổi 2009)"): "20",
+    ("exemption",         "BLHS 1999 (sửa đổi 2009)"): "25",
+    # ── BLHS 2015 (sửa đổi 2017) ─────────────────────────────────────────────
+    # attempt=15 (phạm tội chưa đạt definition), 57 (sentencing rule for attempt)
+    # self_defense=22, necessity=23, co_participation=17, suspended=65, exemption=59
+    ("mitigating",        "BLHS 2015 (sửa đổi 2017)"): "51",   # Các tình tiết giảm nhẹ TNHS
+    ("aggravating",       "BLHS 2015 (sửa đổi 2017)"): "52",   # Các tình tiết tăng nặng TNHS
+    ("recidivism",        "BLHS 2015 (sửa đổi 2017)"): "53",   # Tái phạm, tái phạm nguy hiểm
+    ("below_min",         "BLHS 2015 (sửa đổi 2017)"): "54",   # Quyết định hình phạt dưới khung
+    ("attempt",           "BLHS 2015 (sửa đổi 2017)"): "57",   # Hình phạt đối với tội phạm chưa đạt
+    ("consolidate",       "BLHS 2015 (sửa đổi 2017)"): "55",   # Tổng hợp hình phạt nhiều tội
+    ("suspended",         "BLHS 2015 (sửa đổi 2017)"): "65",   # Án treo
+    ("civil_comp",        "BLHS 2015 (sửa đổi 2017)"): "48",   # Trách nhiệm bồi thường
+    ("penalty_types",     "BLHS 2015 (sửa đổi 2017)"): "32",   # Các loại hình phạt
+    ("sentencing_basis",  "BLHS 2015 (sửa đổi 2017)"): "50",   # Căn cứ quyết định hình phạt
+    ("retroactive",       "BLHS 2015 (sửa đổi 2017)"): "7",    # Hiệu lực về thời gian
+    ("self_defense",      "BLHS 2015 (sửa đổi 2017)"): "22",   # Phòng vệ chính đáng
+    ("necessity",         "BLHS 2015 (sửa đổi 2017)"): "23",   # Tình thế cấp thiết
+    ("co_participation",  "BLHS 2015 (sửa đổi 2017)"): "17",   # Đồng phạm
+    ("exemption",         "BLHS 2015 (sửa đổi 2017)"): "59",   # Miễn hình phạt
+    # ── BLHS 2015 (sửa đổi 2025) ─────────────────────────────────────────────
+    ("mitigating",        "BLHS 2015 (sửa đổi 2025)"): "51",
+    ("aggravating",       "BLHS 2015 (sửa đổi 2025)"): "52",
+    ("recidivism",        "BLHS 2015 (sửa đổi 2025)"): "53",
+    ("below_min",         "BLHS 2015 (sửa đổi 2025)"): "54",
+    ("attempt",           "BLHS 2015 (sửa đổi 2025)"): "57",
+    ("consolidate",       "BLHS 2015 (sửa đổi 2025)"): "55",
+    ("suspended",         "BLHS 2015 (sửa đổi 2025)"): "65",
+    ("civil_comp",        "BLHS 2015 (sửa đổi 2025)"): "48",
+    ("penalty_types",     "BLHS 2015 (sửa đổi 2025)"): "32",
+    ("sentencing_basis",  "BLHS 2015 (sửa đổi 2025)"): "50",   # Căn cứ quyết định hình phạt
+    ("retroactive",       "BLHS 2015 (sửa đổi 2025)"): "7",
+    ("self_defense",      "BLHS 2015 (sửa đổi 2025)"): "22",
+    ("necessity",         "BLHS 2015 (sửa đổi 2025)"): "23",
+    ("co_participation",  "BLHS 2015 (sửa đổi 2025)"): "17",
+    ("exemption",         "BLHS 2015 (sửa đổi 2025)"): "59",
 }
 
+# Purposes always pinned for each role — the core structural articles.
+# self_defense and necessity are CONDITIONALLY pinned in parallel_retrieve
+# based on extracted facts (co_dau_hieu_loai_tru_tnhs) to avoid wasting
+# context window on irrelevant articles for the vast majority of cases.
 _PINNED_PURPOSES = {
-    "neutral": ["retroactive", "mitigating", "aggravating", "consolidate"],
-    "defense": ["retroactive", "mitigating", "below_min", "attempt", "suspended"],
-    "victim":  ["retroactive", "aggravating", "recidivism", "civil_comp", "penalty_types"],
+    # sentencing_basis (Điều 45 BLHS 1999 / Điều 50 BLHS 2015) added to ALL roles:
+    # Every generate prompt references this article by number; without fetching it,
+    # the LLM has no retrieved text to ground that citation — hallucination risk.
+    "neutral": ["retroactive", "mitigating", "aggravating", "consolidate", "attempt", "co_participation", "sentencing_basis"],
+    "defense": ["retroactive", "mitigating", "below_min", "attempt", "suspended", "exemption", "co_participation", "sentencing_basis"],
+    "victim":  ["retroactive", "aggravating", "recidivism", "civil_comp", "penalty_types", "co_participation", "sentencing_basis"],
 }
 
 _ROLE_CIRCUMSTANCE_INSTRUCTION = {
@@ -884,7 +948,15 @@ def cleanup_response(text: str) -> str:
     """
     text = sanitize_text(text)
     # Replace " BLHS " or " BLHS," with the full name "Bộ luật Hình sự" (Vietnamese Penal Code)
-    text = re.sub(r"\bBLHS\b", "Bộ luật Hình sự", text, flags=re.IGNORECASE)
+    # Replace standalone "BLHS" abbreviation with full name, but PRESERVE
+    # edition strings like "BLHS 1999", "BLHS 2015 (sửa đổi 2017)" which
+    # the Java backend uses for exact-match lookup in suggested_laws.
+    text = re.sub(
+        r"\bBLHS\b(?!\s*(?:19|20)\d{2}|\s*\()",
+        "Bộ luật Hình sự",
+        text,
+        flags=re.IGNORECASE,
+    )
     # Collapse overly long markdown table separator dashes inside cell boundaries.
     # Pattern: | :---...---  | or | ---...--- | → | :--- | or | --- |
     # This prevents the LLM from generating thousands-of-chars separator rows.
@@ -1139,6 +1211,10 @@ Trả về JSON với các trường sau (dùng null nếu không tìm thấy th
   "tinh_tiet_giam_nhe": ["list tình tiết giảm nhẹ"],
   "ngay_pham_toi": "dd/mm/yyyy",
   "ngay_xet_xu": "dd/mm/yyyy nếu có trong mô tả, nếu không để null",
+  "loi_pham_toi": "cố ý trực tiếp | cố ý gián tiếp | vô ý quá tự tin | vô ý cẩu thả | null",
+  "giai_doan_pham_toi": "hoàn thành | chưa đạt | chuẩn bị | tự ý chấm dứt | null",
+  "vai_tro_dong_pham": "thực hành | tổ chức | xúi giục | giúp sức | null nếu phạm tội một mình",
+  "co_dau_hieu_loai_tru_tnhs": "mô tả ngắn gọn dấu hiệu loại trừ TNHS (phòng vệ chính đáng/tình thế cấp thiết/không có NLTNHS/sự kiện bất ngờ) nếu có, null nếu không",
   "ngay_sinh_nan_nhan": "dd/mm/yyyy",
   "ngay_sinh_bi_cao": "dd/mm/yyyy",
   "ngay_tam_giam": "dd/mm/yyyy",
@@ -1176,10 +1252,20 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
             print(f"⚠️  Fact extraction failed: {e}")
             facts = {}
 
-        # ngay_xet_xu fallback (uses module-level _VN_TZ)
+        # ngay_xet_xu fallback:
+        # Only default to today in practice_mode (scoring needs a concrete trial date).
+        # In normal chat mode, leave as None so temporal_priority_tagger does NOT
+        # spuriously trigger retroactivity comparison for all historical cases.
+        # When None, _edition_for_date returns None → trial_edition=None → needs_comparison
+        # defaults to False, preventing spurious 'comparison' docs for every old case.
         if not facts.get("ngay_xet_xu"):
-            facts["ngay_xet_xu"] = datetime.now(_VN_TZ).strftime("%d/%m/%Y")
-            print(f"  ngay_xet_xu not in input — defaulted to today (GMT+7): {facts['ngay_xet_xu']}")
+            if state.get("is_practice_mode"):
+                facts["ngay_xet_xu"] = datetime.now(_VN_TZ).strftime("%d/%m/%Y")
+                print(f"  ngay_xet_xu not in input (practice mode) — defaulted to today: {facts['ngay_xet_xu']}")
+            else:
+                # Leave as None — temporal_priority_tagger handles None safely
+                facts["ngay_xet_xu"] = None
+                print("  ngay_xet_xu not in input — left as None (no spurious retroactivity comparison)")
         else:
             print(f"  ngay_xet_xu extracted from input: {facts['ngay_xet_xu']}")
 
@@ -1289,7 +1375,7 @@ SỰ KIỆN ĐÃ TRÍCH XUẤT:
 
 QUY TẮc BẮT BUỘC:
 1. CHỈ sử dụng thông tin có trong "NỘI DUNG VỤ ÁN" hoặc "SỰ KIỆN ĐÃ TRÍCH XUẤT".
-2. TUYỆT ĐỐI KHÔNG thêm thông tin, suy luận, hoặc bọa đặt bất kỳ chi tiết nào.
+2. TUYỆT ĐỐI KHÔNG thêm thông tin, suy luận, hoặc bịa đặt bất kỳ chi tiết nào.
 3. KHÔNG được viết tên điều luật, số điều khoản (ví dụ "Điều 168", "Điều 51").
 4. KHÔNG dùng ngôn ngữ tòa án như "Tòa án áp dụng", "căn cứ vào", "bị truy tố về tội".
 5. Viết bằng tiếng Việt, văn phong bản án thực tế (ngôi thứ ba, quá khứ, mô tả sự kiện).
@@ -1432,16 +1518,28 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
 
         pinned_purposes = _PINNED_PURPOSES.get(role, _PINNED_PURPOSES["neutral"])
 
+        # COND-PIN: Conditionally pin self_defense/necessity articles only when
+        # the fact-extraction step found indicators (avoids wasting context on
+        # the ~95% of cases where these exclusions are irrelevant).
+        has_exclusion_indicators = bool(
+            (state.get("extracted_facts") or {}).get("co_dau_hieu_loai_tru_tnhs")
+        )
+        if has_exclusion_indicators:
+            conditional_purposes = list(pinned_purposes) + ["self_defense", "necessity"]
+            print(f"  [COND-PIN] Exclusion indicators found — adding self_defense/necessity to pin list")
+        else:
+            conditional_purposes = list(pinned_purposes)
+
         for edition in crime_editions:
-            for purpose in pinned_purposes:
+            for purpose in conditional_purposes:
                 art_no = _PINNED_MAP.get((purpose, edition))
                 if not art_no:
                     print(f"  [PINNED] No mapping for ({purpose}, {edition!r}) — skip")
                     continue
                 key = (art_no, edition)
                 if key in seen_ids:
-                    # Same article+edition already retrieved semantically — skip
-                    print(f"  [PINNED] Điều {art_no} ({purpose}) from {edition!r} — already in results")
+                    # Same article+edition already retrieved semantically — skip pinned fetch
+                    print(f"  [PINNED] Điều {art_no} ({purpose}) from {edition!r} — already in pool")
                     continue
                 try:
                     hits = milvus_client.query(
@@ -1852,32 +1950,43 @@ Nhiệm vụ: Đọc kỹ hồ sơ vụ án và SOẠN LUẬN ĐIỂM BÀO CHỮ
 LƯU Ý KHI BÀO CHỮA:
 0. **CHỈ trích dẫn điều khoản thuộc Bộ luật Hình sự (BLHS).** KHÔNG được nhắc đến bất kỳ điều nào của Bộ luật Tố tụng hình sự (BLTTHS), Bộ luật Dân sự, hay bộ luật khác.
 **CHỐNG HALLUCINATION (BẮT BUỘC):** TUYỆT ĐỐI KHÔNG bịa đặt hoặc giả định bất kỳ tình tiết nào không có trong hồ sơ vụ án. Nếu hồ sơ không nêu rõ bị cáo "ăn năn hối cải", "bồi thường thiệt hại", "phạm tội lần đầu", hay "có nhân thân tốt" — KHÔNG được khẳng định các điều đó như sự thật. Thay vào đó, chỉ được dùng ngôn ngữ chiến lược như: "đề nghị thu thập bằng chứng về...", "nếu xác minh được... thì đây là tình tiết giảm nhẹ", "khuyến nghị thân chủ chủ động...".
-1. Ưu tiên tìm tình tiết giảm nhẹ (Điều 51 Bộ luật Hình sự): thành khẩn, bồi thường, nhân thân tốt, phạm tội lần đầu — nhưng CHỈ khẳng định tình tiết nào đã được xác nhận trong hồ sơ, còn lại chỉ đề xuất chiến lược chứng minh.
-2. Phân tích xem có thể đề nghị án treo không (án ≤ 3 năm + không tái phạm + có nơi cư trú ổn định).
+1. Ưu tiên tìm tình tiết giảm nhẹ (Điều 46 BLHS 1999 / Điều 51 BLHS 2015): thành khẩn, bồi thường, nhân thân tốt, phạm tội lần đầu — nhưng CHỈ khẳng định tình tiết nào đã được xác nhận trong hồ sơ, còn lại chỉ đề xuất chiến lược chứng minh.
+2. Phân tích xem có thể đề nghị án treo không (Điều 60 BLHS 1999 / Điều 65 BLHS 2015 — ĐẦY ĐỦ 5 điều kiện: tổng án ≤ 3 năm, nhân thân tốt, có nơi cư trú ổn định, không tái phạm nguy hiểm, tính chất mức độ cho phép).
 3. Nếu có nhiều tội, đề xuất tách riêng hoặc giảm nhẹ từng tội.
-4. Trích dẫn chính xác điều khoản luật để tăng tính thuyết phục.
+4. Trích dẫn chính xác điều khoản luật (theo đúng ấn bản BLHS áp dụng) để tăng tính thuyết phục.
 5. Kiểm tra thời gian tạm giam để đề nghị khấu trừ.
+6. PHÒNG VỆ CHÍNH ĐÁNG / TÌNH THẾ CẤP THIẾT: Nếu hồ sơ có dấu hiệu thân chủ bị tấn công trước hoặc hành động trong tình thế nguy cấp → ưu tiên lập luận loại trừ TNHS theo Điều 15/16 BLHS 1999 hoặc Điều 22/23 BLHS 2015 TRƯỚC KHI xét giảm nhẹ. Nếu vượt quá giới hạn → lập luận giảm nhẹ do hoàn cảnh.
+7. GIAI ĐOẠN PHẠM TỘI: Nếu tội chưa đạt (Điều 18 BLHS 1999 / Điều 15 BLHS 2015) → áp dụng quy tắc hình phạt chưa đạt (không quá ¾ mức cao nhất). Nếu mới chuẩn bị (Điều 17 BLHS 1999 / Điều 14 BLHS 2015) → lập luận không truy tố đối với tội ít nghiêm trọng/nghiêm trọng. Nếu tự ý chấm dứt (Điều 19 BLHS 1999 / Điều 16 BLHS 2015) → đề nghị miễn TNHS.
+8. VAI TRÒ ĐỒNG PHẠM: Nếu thân chủ chỉ là người giúp sức (Điều 20 BLHS 1999 / Điều 17 BLHS 2015) → nhấn mạnh vai trò phụ, mức độ đóng góp thấp → đề nghị giảm nhẹ tương ứng.
+9. DƯỚI KHUNG: Nếu có ít nhất 2 tình tiết giảm nhẹ (Điều 46/51) và không có tình tiết tăng nặng → đề nghị áp dụng Điều 47 (BLHS 1999) / Điều 54 (BLHS 2015) để quyết định dưới mức thấp nhất của khung.
+10. MIỄN HÌNH PHẠT: Trường hợp đặc biệt (hối cải triệt để, hậu quả nhỏ, bồi thường đầy đủ, cộng đồng bảo lãnh) → đề nghị miễn hình phạt (Điều 25 BLHS 1999 / Điều 59 BLHS 2015).
+11. NGƯỜI DƯỚI 18 TUỔI: Nếu thân chủ dưới 18 tuổi lúc phạm tội → BẮT BUỘC viện dẫn Chương XII BLHS: mức án tối đa giảm ½ đến ¾, KHÔNG tù chung thân/tử hình, ưu tiên biện pháp giáo dục không giam giữ.
+12. CẢI TẠO KHÔNG GIAM GIỮ: Nếu mức án ≤ 3 năm → đề nghị thay thế tù giam bằng cải tạo không giam giữ (tra số điều theo ấn bản BLHS áp dụng).
 
 QUY TRÌNH TƯ DUY (BẮT BUỘC):
+BƯỚC 0: KIỂM TRA LOẠI TRỪ TNHS — Phòng vệ chính đáng (Điều 15 BLHS 1999 / Điều 22 BLHS 2015)? Tình thế cấp thiết (Điều 16/23)? Không có năng lực TNHS (Điều 13/21)? → Nếu có dấu hiệu, đây là lập luận ưu tiên số 1.
+BƯỚC 0.5: KIỂM TRA GIAI ĐOẠN — Chưa đạt (Điều 18 BLHS 1999 / Điều 15 BLHS 2015)? Chuẩn bị (Điều 17/14)? Tự ý chấm dứt (Điều 19/16)? → Nếu có, áp dụng quy tắc hình phạt tương ứng hoặc đề nghị miễn TNHS.
 BƯỚC 1: XÁC ĐỊNH tình tiết giảm nhẹ có lợi nhất.
 BƯỚC 2: ĐỀ XUẤT định tội danh nhẹ nhất có thể lập luận được.
-BƯỚC 3: TÍNH khung hình phạt thấp nhất + khấu trừ tạm giam.
-BƯỚC 4: Đánh giá khả năng án treo.
+BƯỚC 3: TÍNH khung hình phạt thấp nhất + kiểm tra dưới khung (Điều 47/54) + khấu trừ tạm giam.
+BƯỚC 4: Đánh giá khả năng án treo (Điều 60 BLHS 1999 / Điều 65 BLHS 2015 — đủ 5 điều kiện) hoặc cải tạo không giam giữ.
 
 ---------------------------------------------------------
 CẤU TRÚC OUTPUT BẮT BUỘC:
 
 **I. LUẬN ĐIỂM BÀO CHỮA:**
-1. **Về định tội danh:** (phân tích theo hướng có lợi cho bị cáo)
-2. **Tình tiết giảm nhẹ đề xuất (Điều 51 Bộ luật Hình sự):**
+1. **Phân tích cấu thành tội phạm:** (xem xét có đủ 4 yếu tố không — nếu thiếu → lập luận hành vi không cấu thành tội phạm hoặc cấu thành tội nhẹ hơn)
+2. **Loại trừ TNHS / Giai đoạn phạm tội:** (nếu có dấu hiệu phòng vệ, tình thế cấp thiết, tội chưa đạt → phân tích với đúng số điều luật theo ấn bản BLHS áp dụng)
+3. **Về định tội danh:** (phân tích theo hướng có lợi cho bị cáo)
+4. **Tình tiết giảm nhẹ đề xuất (Điều 46 BLHS 1999 / Điều 51 BLHS 2015):**
    - (liệt kê từng tình tiết + căn cứ pháp lý)
-3. **Phân tích nhân thân bị cáo:**
+5. **Phân tích nhân thân bị cáo:**
 
 **II. ĐỀ NGHỊ CỦA LUẬT SƯ BÀO CHỮA:**
 1. Tội danh đề nghị: ...
 2. Điều khoản áp dụng: ...
-3. HÌNH PHẠT ĐỀ NGHỊ: (ghi rõ mức năm tù cụ thể đề nghị, ví dụ: "12–15 năm tù" hoặc "dưới X năm tù theo Điều 47". KHÔNG chỉ nêu lý luận chung chung.)
-4. Đề nghị án treo / cải tạo không giam giữ (nếu đủ điều kiện)
+3. HÌNH PHẠT ĐỀ NGHỊ: (ghi rõ mức năm tù cụ thể đề nghị, ví dụ: "12–15 năm tù" hoặc "dưới X năm tù theo Điều 47 BLHS 1999 / Điều 54 BLHS 2015". KHÔNG chỉ nêu lý luận chung chung.)
+4. Đề nghị án treo (Điều 60/65) / cải tạo không giam giữ / miễn hình phạt (Điều 25/59) — nếu đủ điều kiện
 5. Khấu trừ thời gian tạm giam: ...
 
 **III. KHUYẾN NGHỊ CHO THÂN CHỦ:**
@@ -1912,33 +2021,47 @@ Nhiệm vụ: Đọc kỹ hồ sơ vụ án và SOẠN LUẬN ĐIỂM BẢO VỆ
 LƯU Ý KHI BẢO VỆ BỊ HẠI:
 0. **CHỈ trích dẫn điều khoản thuộc Bộ luật Hình sự (BLHS).** KHÔNG được nhắc đến bất kỳ điều nào của Bộ luật Tố tụng hình sự (BLTTHS), Bộ luật Dân sự, hay bộ luật khác.
 ⚠️ **CHỐNG HALLUCINATION (BẮT BUỘC):** TUYỆT ĐỐI KHÔNG bịa đặt hoặc giả định tình tiết tăng nặng không có trong hồ sơ. Nếu hồ sơ không nêu rõ "có tổ chức", "tái phạm", "hậu quả đặc biệt nghiêm trọng" — KHÔNG được khẳng định các điều đó. Thay vào đó, chỉ được dùng ngôn ngữ như: "đề nghị điều tra thêm về...", "nếu xác minh được... thì đây là tình tiết tăng nặng", "yêu cầu cơ quan tố tụng làm rõ...".
-1. Tập trung làm rõ tình tiết tăng nặng (Điều 52 Bộ luật Hình sự): có tổ chức, tái phạm, hậu quả nghiêm trọng — nhưng CHỈ khẳng định tình tiết nào đã được xác nhận trong hồ sơ, còn lại chỉ đề xuất chiến lược yêu cầu điều tra.
+1. Tập trung làm rõ tình tiết tăng nặng (Điều 48 BLHS 1999 / Điều 52 BLHS 2015): có tổ chức, tái phạm, hậu quả nghiêm trọng — nhưng CHỈ khẳng định tình tiết nào đã được xác nhận trong hồ sơ, còn lại chỉ đề xuất chiến lược yêu cầu điều tra.
 2. Phân tích mức độ thiệt hại để yêu cầu bồi thường dân sự tối đa.
 3. Phản bác các tình tiết giảm nhẹ mà bị cáo có thể viện dẫn.
 4. Đề nghị mức án cao nhất trong khung có thể lập luận.
 5. Yêu cầu tịch thu công cụ, phương tiện phạm tội.
+6. PHẢN BÁC PHÒNG VỆ CHÍNH ĐÁNG: Nếu bị cáo viện dẫn Điều 15 BLHS 1999 / Điều 22 BLHS 2015 → phân tích rõ tại sao hành vi VƯỢT QUÁ mức cần thiết hoặc KHÔNG có tình huống phòng vệ thực sự → cấu thành tội phạm.
+7. KHẲNG ĐỊNH HOÀN THÀNH TỘI PHẠM: Nếu bị cáo lập luận tội chưa đạt (Điều 18/15) → đưa ra bằng chứng tội đã hoàn thành với hậu quả thực tế đã xảy ra.
+8. ĐỒNG PHẠM — TRÁCH NHIỆM LIÊN ĐỚI: Nếu nhiều bị cáo → yêu cầu xác định chủ mưu (Điều 20 BLHS 1999 / Điều 17 BLHS 2015) và áp dụng mức xử lý nặng hơn; giữ nguyên trách nhiệm liên đới đối với tất cả đồng phạm.
+9. THIỆT HẠI DÂN SỰ ĐẦY ĐỦ: Yêu cầu bồi thường gồm: thiệt hại vật chất (chi phí y tế, thu nhập mất, sửa chữa tài sản), thiệt hại tinh thần, các khoản phát sinh (nếu tử vong: chi phí mai táng + cấp dưỡng cho thân nhân phụ thuộc).
+10. HÌNH PHẠT BỔ SUNG: Yêu cầu tịch thu tang vật, cấm đảm nhiệm chức vụ (nếu lợi dụng chức vụ), phạt tiền bổ sung, quản chế nếu phù hợp.
+11. PHẢN BÁC ÁN TREO: Nếu bị cáo đề nghị án treo → chỉ ra điều kiện nào trong 5 điều kiện (Điều 60 BLHS 1999 / Điều 65 BLHS 2015) KHÔNG thỏa mãn (nhân thân xấu, tái phạm, tính chất nghiêm trọng...).
 
 QUY TRÌNH TƯ DUY (BẮT BUỘC):
-BƯỚC 1: XÁC ĐỊNH tình tiết tăng nặng có thể áp dụng.
+BƯỚC 0: KHẲNG ĐỊNH CẤU THÀNH — Xác nhận cả 4 yếu tố cấu thành tội phạm đều đầy đủ (khách thể, hành vi + nhân quả, lỗi cố ý, chủ thể đủ năng lực). Bác bỏ mọi lập luận thiếu yếu tố.
+BƯỚC 0.5: PHẢN BÁC LOẠI TRỪ TNHS — Nếu bị cáo viện dẫn phòng vệ (Điều 15/22) hay tình thế cấp thiết (Điều 16/23) → phân tích giới hạn và chứng minh sự vượt quá.
+BƯỚC 1: XÁC ĐỊNH tình tiết tăng nặng có thể áp dụng (phân biệt tình tiết định khung và tình tiết tăng nặng chung Điều 48/52).
 BƯỚC 2: ĐỀ XUẤT định tội danh và khung nặng nhất phù hợp.
-BƯỚC 3: TÍNH thiệt hại thực tế để yêu cầu bồi thường.
-BƯỚC 4: Đề nghị mức án cụ thể.
+BƯỚC 3: TÍNH thiệt hại thực tế đầy đủ (vật chất + tinh thần + phát sinh) để yêu cầu bồi thường.
+BƯỚC 4: Đề nghị mức án cụ thể + hình phạt bổ sung.
 
 ---------------------------------------------------------
 CẤU TRÚC OUTPUT BẮT BUỘC:
 
 **I. LUẬN ĐIỂM BẢO VỆ BỊ HẠI:**
-1. **Về định tội danh:** (phân tích theo hướng tội nặng nhất có thể áp dụng)
-2. **Tình tiết tăng nặng đề nghị áp dụng (Điều 52 Bộ luật Hình sự):**
+1. **Khẳng định cấu thành tội phạm:** (xác nhận đủ 4 yếu tố — nếu bị cáo phản bác → chứng minh ngược)
+2. **Phản bác loại trừ TNHS:** (nếu bị cáo viện dẫn phòng vệ/tình thế cấp thiết → chứng minh vượt quá hoặc không có tình huống)
+3. **Về định tội danh:** (phân tích theo hướng tội nặng nhất có thể áp dụng)
+4. **Tình tiết tăng nặng đề nghị áp dụng (Điều 48 BLHS 1999 / Điều 52 BLHS 2015):**
    - (liệt kê từng tình tiết + căn cứ pháp lý)
-3. **Mức độ thiệt hại và yêu cầu bồi thường:**
+5. **Mức độ thiệt hại và yêu cầu bồi thường:**
+   - Thiệt hại vật chất: (chi phí y tế, tài sản mất mát, thu nhập bị giảm sút...)
+   - Thiệt hại tinh thần: (tổn thương tâm lý, danh dự, uy tín...)
+   - Thiệt hại phát sinh: (cấp dưỡng, mai táng nếu có tử vong...)
 
 **II. ĐỀ NGHỊ CỦA LUẬT SƯ BỊ HẠI:**
 1. Tội danh đề nghị: ...
 2. Điều khoản áp dụng: ...
 3. HÌNH PHẠT ĐỀ NGHỊ: (ghi rõ mức năm tù cụ thể đề nghị, ví dụ: "20 năm tù" hoặc "tù chung thân". KHÔNG chỉ nêu lý luận chung chung.)
-4. Không chấp nhận án treo (nếu có căn cứ)
-5. TRÁCH NHIỆM DÂN SỰ: (yêu cầu bồi thường cụ thể)
+4. Không chấp nhận án treo (kèm lý do cụ thể — điều kiện nào của Điều 60/65 không thỏa mãn)
+5. HÌNH PHẠT BỔ SUNG: (tịch thu, cấm chức vụ, phạt tiền bổ sung, quản chế...)
+6. TRÁCH NHIỆM DÂN SỰ: (yêu cầu bồi thường cụ thể — vật chất + tinh thần + phát sinh)
 
 **III. KHUYẾN NGHỊ CHO GIA ĐÌNH BỊ HẠI:**
 (Hướng dẫn thu thập hóa đơn, chứng từ thiệt hại, yêu cầu cấp dưỡng, bảo vệ quyền lợi dài hạn...)
@@ -1977,20 +2100,35 @@ MỘT VÀI LƯU Ý:
 2. Tình tiết giảm nhẹ: Điều 51 Bộ luật Hình sự mới (hoặc Điều 46 cũ).
 3. Tình tiết tăng nặng: Điều 52 Bộ luật Hình sự mới (hoặc Điều 48 cũ).
 4. Tội kinh tế: kiểm tra xem có thể phạt tiền thay phạt tù không.
-5. Phạm tội chưa đạt (Điều 15, 57): áp dụng quy tắc 3/4.
+5. Phạm tội chưa đạt: Điều 18 Khoản 3 BLHS 1999 / Điều 15 + Điều 57 BLHS 2015 — áp dụng quy tắc ¾ mức cao nhất của khung.
 
 QUY TRÌNH TƯ DUY LƯỢNG HÌNH (BẮT BUỘC THEO THỨ TỰ):
 - KHÔNG GIẢ ĐỊNH: chỉ dùng tình tiết có trong case_details.
 - NGUYÊN TẮC CÓ LỢI (Thời gian): tội trước 2018 → áp dụng Luật 2015/2017 nếu nhẹ hơn.
 - NGUYÊN TẮC ĐỘC LẬP XÉT XỬ: đề nghị VKS chỉ là tham khảo.
 
+BƯỚC 0: XÁC NHẬN CẤU THÀNH TỘI PHẠM (BẮT BUỘC TRƯỚC KHI ĐỊNH TỘI)
+  0a. KHÁCH THỂ: Quan hệ xã hội nào bị xâm hại? (quyền sở hữu, tính mạng, sức khỏe, danh dự...)
+  0b. HÀNH VI: Hành vi phạm tội cụ thể (hành động hay không hành động)? Có mối quan hệ nhân quả giữa hành vi và hậu quả?
+  0c. LỖI: Cố ý trực tiếp, cố ý gián tiếp, vô ý quá tự tin, hay vô ý do cẩu thả? Hay sự kiện bất ngờ (Điều 11 BLHS 1999 / Điều 20 BLHS 2015 — loại trừ TNHS)?
+  0d. CHỦ THỂ: Bị cáo có đủ năng lực TNHS (không mắc bệnh tâm thần — Điều 13 BLHS 1999 / Điều 21 BLHS 2015) và đủ tuổi chịu TNHS không?
+  → Nếu BẤT KỲ yếu tố nào thiếu: ghi rõ "Cần xác minh thêm [yếu tố đó]".
+  0e. LOẠI TRỪ TNHS: Có dấu hiệu phòng vệ chính đáng (Điều 15 BLHS 1999 / Điều 22 BLHS 2015), tình thế cấp thiết (Điều 16 BLHS 1999 / Điều 23 BLHS 2015), không có năng lực TNHS (Điều 13/21), hay sự kiện bất ngờ (Điều 11 BLHS 1999 / Điều 20 BLHS 2015) không? Nếu có → phân tích ngưỡng hợp pháp và xác định vượt quá nếu có.
+  0f. GIAI ĐOẠN PHẠM TỘI: Tội đã hoàn thành hay chưa đạt (Điều 18 BLHS 1999 / Điều 15 BLHS 2015)? Hay mới ở giai đoạn chuẩn bị (Điều 17 BLHS 1999 / Điều 14 BLHS 2015)? Hay tự ý chấm dứt (Điều 19 BLHS 1999 / Điều 16 BLHS 2015)? → Tội chưa đạt ảnh hưởng đến hình phạt (Điều 18 BLHS 1999 / Điều 57 BLHS 2015).
+  0g. ĐỒNG PHẠM (nếu nhiều bị cáo): Xác định vai trò từng người — thực hành, chủ mưu, xúi giục, giúp sức (Điều 20 BLHS 1999 / Điều 17 BLHS 2015) → ảnh hưởng đến mức hình phạt cá nhân.
 BƯỚC 1: KIỂM TRA ÁN BẰNG THỜI GIAN TẠM GIAM (sử dụng số liệu đã tính ở trên nếu có).
 BƯỚC 2: KIỂM TRA ĐỘ TUỔI (sử dụng số liệu đã tính ở trên nếu có).
+  → Nếu bị cáo DƯỚI 18 TUỔI lúc phạm tội: BẮT BUỘC áp dụng Chương XII BLHS — mức hình phạt tối đa giảm ½ đến ¾ so với khung người thành niên, KHÔNG áp dụng tù chung thân/tử hình, ưu tiên biện pháp giáo dục tại cộng đồng.
 BƯỚC 3: ĐỊNH TỘI DANH.
 BƯỚC 4: LƯỢNG HÌNH CHO TỪNG TỘI.
-BƯỚC 5: TỔNG HỢP HÌNH PHẠT (Điều 55).
-BƯỚC 5.5: TỔNG HỢP VỚI BẢN ÁN CŨ (nếu có).
-BƯỚC 6: QUYẾT ĐỊNH HÌNH THỨC CHẤP HÀNH (Án treo chỉ khi tổng án ≤ 3 năm).
+  → Phân biệt tình tiết định khung (trong khoản) và tình tiết tăng nặng chung (Điều 48 BLHS 1999 / Điều 52 BLHS 2015). KHÔNG tính trùng.
+BƯỚC 4.5: KIỂM TRA DƯỚI KHUNG (Điều 47 BLHS 1999 / Điều 54 BLHS 2015): Nếu có ≥ 2 tình tiết giảm nhẹ (Điều 46/51) VÀ không có tình tiết tăng nặng (Điều 48/52) → xem xét quyết định dưới mức thấp nhất của khung. Trường hợp đặc biệt → xem xét miễn hình phạt (Điều 25 BLHS 1999 / Điều 59 BLHS 2015).
+BƯỚC 5: TỔNG HỢP HÌNH PHẠT (Điều 50 BLHS 1999 / Điều 55 BLHS 2015).
+BƯỚC 5.5: TỔNG HỢP VỚI BẢN ÁN CŨ (xem điều luật theo ấn bản — nếu bị cáo đang chấp hành bản án trước chưa xong).
+BƯỚC 6: QUYẾT ĐỊNH HÌNH THỨC CHẤP HÀNH:
+  → ÁN TREO (Điều 60 BLHS 1999 / Điều 65 BLHS 2015): CHỈ khi ĐẦY ĐỦ TẤT CẢ 5 điều kiện: (1) tổng án ≤ 3 năm, (2) nhân thân tốt, (3) có nơi cư trú và công việc ổn định, (4) không tái phạm nguy hiểm, (5) xét tính chất mức độ → không cần cách ly.
+  → CẢI TẠO KHÔNG GIAM GIỮ: Xem xét nếu mức án ≤ 3 năm tù (tra số điều theo ấn bản áp dụng).
+  → HÌNH PHẠT BỔ SUNG: Xem xét cấm đảm nhiệm chức vụ, phạt tiền bổ sung, tịch thu tài sản, cấm cư trú, quản chế nếu phù hợp.
 
 ---------------------------------------------------------
 CẤU TRÚC OUTPUT BẮT BUỘC:
@@ -1998,8 +2136,8 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 **I. NHẬN ĐỊNH CỦA TÒA ÁN:**
 1. **Định tội danh:** (liệt kê từng hành vi + điều khoản + khung hình phạt)
 2. **Phân tích tình tiết:**
-   - Tình tiết Tăng nặng (Điều 52):
-   - Tình tiết Giảm nhẹ (Điều 51):
+   - Tình tiết Tăng nặng (Điều 48 BLHS 1999 / Điều 52 BLHS 2015):
+   - Tình tiết Giảm nhẹ (Điều 46 BLHS 1999 / Điều 51 BLHS 2015):
 3. **Nhân thân:**
 
 **II. QUYẾT ĐỊNH:**
@@ -2380,27 +2518,47 @@ QUY TẮC:
 
         role_criteria = {
             "neutral": """
-- Xác định đúng tội danh và điều luật áp dụng (điều luật chính xác, đúng phiên bản BLHS theo ngày phạm tội).
-- Phân tích đầy đủ cả tình tiết giảm nhẹ (Điều 51) VÀ tăng nặng (Điều 52) một cách trung lập.
-- Lượng hình hợp lý trong đúng khung, có tổng hợp hình phạt theo Điều 55 nếu nhiều tội.
+- Xác nhận đủ 4 yếu tố cấu thành tội phạm trước khi định tội.
+- Kiểm tra loại trừ TNHS (phòng vệ chính đáng Điều 15/22, tình thế cấp thiết Điều 16/23, không có năng lực TNHS Điều 13/21, sự kiện bất ngờ Điều 11/20).
+- Xác định đúng giai đoạn phạm tội và áp dụng hình phạt tương ứng (Điều 18 BLHS 1999 / Điều 57 BLHS 2015).
+- Xác định vai trò đồng phạm (Điều 20 BLHS 1999 / Điều 17 BLHS 2015) nếu nhiều bị cáo.
+- Xác định đúng tội danh và điều luật áp dụng (đúng phiên bản BLHS theo ngày phạm tội).
+- Phân biệt tình tiết định khung (trong khoản) và tình tiết tăng nặng chung (Điều 48/52) — KHÔNG tính trùng.
+- Phân tích đầy đủ cả tình tiết giảm nhẹ (Điều 46/51) VÀ tăng nặng (Điều 48/52) một cách trung lập.
+- Lượng hình hợp lý trong đúng khung, có tổng hợp hình phạt (Điều 50/55) nếu nhiều tội.
+- Kiểm tra dưới khung (Điều 47/54) nếu có ≥ 2 tình tiết giảm nhẹ và không tăng nặng.
 - Tính thời gian tạm giam đã khấu trừ vào mức án.
-- Quyết định về trách nhiệm dân sự (bồi thường thiệt hại) nếu có.
+- Áp dụng đúng quy tắc người dưới 18 tuổi (Chương XII) nếu bị cáo chưa thành niên.
+- Xem xét án treo (Điều 60/65 — đủ 5 điều kiện) hoặc cải tạo không giam giữ.
+- Quyết định về trách nhiệm dân sự (vật chất + tinh thần) và hình phạt bổ sung.
 - Tính khách quan, không thiên lệch về phía bị cáo hay bị hại.
 """,
             "defense": """
-- Phát hiện và chứng dẫn đầy đủ tình tiết giảm nhẹ theo Điều 51 BLHS.
-- Đề xuất áp dụng án treo hoặc cải tạo không giam giữ (có đủ điều kiện pháp lý).
+- Kiểm tra cấu thành tội phạm — nếu thiếu yếu tố nào → lập luận hành vi không cấu thành tội hoặc cấu thành tội nhẹ hơn.
+- Kiểm tra loại trừ TNHS (phòng vệ chính đáng Điều 15/22, tình thế cấp thiết Điều 16/23) nếu có dấu hiệu.
+- Xác định giai đoạn phạm tội — nếu chưa đạt/chuẩn bị → viện dẫn điều luật tương ứng (Điều 17-19 BLHS 1999 / Điều 14-16 BLHS 2015).
+- Nếu đồng phạm vai trò phụ (giúp sức) → nhấn mạnh mức độ đóng góp thấp (Điều 20/17).
+- Phát hiện và chứng dẫn đầy đủ tình tiết giảm nhẹ theo Điều 46 (BLHS 1999) / Điều 51 (BLHS 2015).
+- Viện dẫn dưới khung (Điều 47/54) nếu có ≥ 2 tình tiết giảm nhẹ và không tăng nặng.
+- Xem xét miễn hình phạt (Điều 25 BLHS 1999 / Điều 59 BLHS 2015) trong trường hợp đặc biệt.
+- Đề xuất áp dụng án treo (Điều 60/65 — đủ 5 điều kiện) hoặc cải tạo không giam giữ.
 - Phản bác hiệu quả các tình tiết tăng nặng do bên buộc tội đưa ra.
 - Đề nghị khung hình phạt nhẹ nhất có thể, có căn cứ pháp lý rõ ràng.
 - Yêu cầu khấu trừ thời gian tạm giam theo quy định.
-- Xem xét khả năng giảm nhẹ tội danh (nếu hành vi chưa đủ cấu thành tội nặng hơn).
+- Áp dụng quy tắc người dưới 18 tuổi (Chương XII) nếu thân chủ chưa thành niên.
 """,
             "victim": """
-- Xác định và nhấn mạnh đầy đủ các tình tiết tăng nặng theo Điều 52 BLHS.
+- Khẳng định đủ 4 yếu tố cấu thành tội phạm — bác bỏ mọi lập luận thiếu yếu tố từ phía bị cáo.
+- Phản bác loại trừ TNHS (phòng vệ chính đáng, tình thế cấp thiết) nếu bị cáo viện dẫn → chứng minh vượt quá.
+- Khẳng định tội đã hoàn thành (phản bác tội chưa đạt nếu bị cáo lập luận).
+- Xác định vai trò chủ mưu/chính phạm nếu nhiều bị cáo → yêu cầu xử nặng (Điều 20/17).
+- Xác định và nhấn mạnh đầy đủ các tình tiết tăng nặng theo Điều 48 (BLHS 1999) / Điều 52 (BLHS 2015).
+- Phân biệt tình tiết định khung và tình tiết tăng nặng chung — không bỏ sót.
 - Yêu cầu mức hình phạt cao nhất trong khung, có căn cứ từ hậu quả thực tế.
-- Tính toán và yêu cầu bồi thường dân sự cụ thể, đầy đủ (vật chất + tinh thần nếu có).
+- Tính toán và yêu cầu bồi thường dân sự đầy đủ (vật chất + tinh thần + phát sinh).
 - Phản bác các tình tiết giảm nhẹ không có cơ sở hoặc không đáng kể.
-- Yêu cầu tịch thu tang vật, công cụ phạm tội nếu có.
+- Phản bác án treo — chỉ ra điều kiện nào của Điều 60/65 không thỏa mãn.
+- Yêu cầu hình phạt bổ sung (tịch thu, cấm chức vụ, phạt tiền bổ sung).
 - Bảo vệ toàn diện quyền và lợi ích hợp pháp của bị hại.
 """,
         }.get(role, "")
