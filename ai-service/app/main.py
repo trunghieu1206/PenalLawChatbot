@@ -675,7 +675,7 @@ _ROLE_CIRCUMSTANCE_INSTRUCTION = {
     ),
 }
 
-_MAX_SEMANTIC_DOCS = 5
+_MAX_SEMANTIC_DOCS = 8
 
 # ===========================================================
 # ROBUST JSON EXTRACTION — used by every LLM-output parser
@@ -2464,9 +2464,9 @@ QUY TẮC:
                 'Trả lời 2 câu hỏi sau bằng JSON:\n'
                 '{\n'
                 '  "factual_ok": true/false,\n'
-                '  "factual_issue": "mô tả ngắn bằng tiếng Việt thân thiện nếu false, null nếu true",\n'
+                '  "factual_issue": "TỐI ĐA 15 TỪ tiếng Việt nếu false, null nếu true",\n'
                 '  "role_ok": true/false,\n'
-                '  "role_issue": "mô tả ngắn bằng tiếng Việt thân thiện nếu false, null nếu true"\n'
+                '  "role_issue": "TỐI ĐA 15 TỪ tiếng Việt nếu false, null nếu true"\n'
                 '}\n\n'
                 "QUY TẮC:\n"
                 "- factual_ok = false CHỈ KHI AI bịa ra chi tiết cụ thể (số tiền, số bản án, ngày tháng cụ thể) KHÔNG có trong NGUYÊN VĂN VỤ ÁN.\n"
@@ -2474,14 +2474,14 @@ QUY TẮC:
                 "- role_ok = false CHỈ KHI AI rõ ràng lập luận SAI chiều với vai trò được giao.\n"
                 "- Nếu không chắc → true (tránh false positive).\n"
                 "- TUYỆT ĐỐI KHÔNG đề cập tên trường kỹ thuật trong mô tả.\n"
-                "- Viết mô tả bằng tiếng Việt dễ hiểu cho người dùng thông thường.\n"
+                "- Viết mô tả NGẮN GỌN tối đa 15 từ, dễ hiểu cho người dùng thông thường.\n"
                 "OUTPUT: Chỉ JSON hợp lệ, không markdown."
             )
             try:
                 # Use a lightweight judge client — same model but max_tokens capped
                 # to hard-limit output cost. bind() injects generation kwargs for
                 # ChatOpenAI/OpenRouter without touching the global llm object.
-                judge_llm = llm.bind(max_tokens=150)
+                judge_llm = llm.bind(max_tokens=400)  # 400 = safe ceiling: JSON overhead(~50) + 2×issue strings(≤15 words each, ~80 tokens each) = ~210 worst-case, 400 gives 2× buffer
                 judge_resp = judge_llm.invoke(
                     _sanitize_msgs([HumanMessage(content=judge_prompt)])
                 )
@@ -2765,7 +2765,6 @@ OUTPUT: CHỈ JSON hợp lệ."""
           1. Practice Mode bypass  (free)
           2. Expanded keyword fast-paths  (free)
           3. Length heuristics  (free)
-          4. LLM classification with conversation context  (~$0.0003/call)
         """
         # ── Layer 1: Practice Mode bypass ─────────────────────────────────────
         # Practice Mode: bypass ALL heuristics — always go through the full pipeline.
