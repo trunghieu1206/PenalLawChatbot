@@ -1115,7 +1115,7 @@ async def lifespan(app: FastAPI):
                     [p[1] for p in batch],
                     padding=True,
                     truncation=True,
-                    max_length=8192,
+                    max_length=1024,
                     return_tensors="pt",
                 ).to(DEVICE)
                 logits = reranker_model(**enc).logits.view(-1).float()
@@ -1364,8 +1364,8 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
         )
 
         prompt = f"""Bạn là chuyên gia phân tích hồ sơ pháp lý hình sự Việt Nam.
-Dựa vào nội dung vụ án và các sự kiện đã trích xuất, hãy tạo 3 câu mô tả
-theo văn phong bản án tòa án để tìm kiếm điều luật phù hợp.
+Dựa vào nội dung vụ án và các sự kiện đã trích xuất, hãy tạo 3 câu truy vấn
+để tìm kiếm điều luật phù hợp trong cơ sở dữ liệu pháp luật.
 
 NỘI DUNG VỤ ÁN (nguồn dữ liệu duy nhất):
 {case_text}
@@ -1373,20 +1373,30 @@ NỘI DUNG VỤ ÁN (nguồn dữ liệu duy nhất):
 SỰ KIỆN ĐÃ TRÍCH XUẤT:
 {json.dumps(facts, ensure_ascii=False, indent=2)}
 
-QUY TẮc BẮT BUỘC:
+QUY TẮC BẮT BUỘC:
 1. CHỈ sử dụng thông tin có trong "NỘI DUNG VỤ ÁN" hoặc "SỰ KIỆN ĐÃ TRÍCH XUẤT".
 2. TUYỆT ĐỐI KHÔNG thêm thông tin, suy luận, hoặc bịa đặt bất kỳ chi tiết nào.
 3. KHÔNG được viết tên điều luật, số điều khoản (ví dụ "Điều 168", "Điều 51").
 4. KHÔNG dùng ngôn ngữ tòa án như "Tòa án áp dụng", "căn cứ vào", "bị truy tố về tội".
-5. Viết bằng tiếng Việt, văn phong bản án thực tế (ngôi thứ ba, quá khứ, mô tả sự kiện).
-6. Mỗi câu dài 2–5 câu. Nếu không có thông tin cho một trụy vấn → trả về null.
+5. Viết bằng tiếng Việt, văn phong bản án thực tế (ngôi thứ ba, thì quá khứ).
+6. Nếu không có thông tin cho một truy vấn → trả về null.
 
 YÊU CẦU:
-- behavior_query: Mô tả hành vi phạm tội cụ thể — bị cáo đã làm gì, với ai, bằng phương tiện gì, gây hậu quả gì.
-  ⚠️ QUY TẮC QUAN TRỌNG: Tên tội danh chính xác (ví dụ: "trộm cắp", "cướp", "giết người", "công nhiên chiếm đoạt")
-  phải xuất hiện NGUYÊN VĂN trong behavior_query nếu có trong trường "hanh_vi".
-  KHÔNG được thay thế tên tội danh bằng cách mô tả hành động vật lý (ví dụ: không được viết chỉ "lấy", "chiếm đoạt" thay cho "trộm cắp").
+
+- behavior_query (QUAN TRỌNG NHẤT — dùng để tìm điều luật tội danh chính):
+  Tóm tắt toàn bộ sự kiện vụ án bằng văn phong chuyên nghiệp (150–300 từ).
+  Cấu trúc BẮT BUỘC phải bao gồm: ai phạm tội, làm gì cụ thể, với ai/đối tượng nào,
+  bằng phương tiện/công cụ gì, thời điểm/hoàn cảnh, hậu quả thực tế xảy ra.
+  ⚠️ QUY TẮC QUAN TRỌNG: Nếu trường "hanh_vi" chứa tên tội danh chính xác
+  (ví dụ: "chống người thi hành công vụ", "trộm cắp tài sản", "cướp tài sản", "giết người"),
+  phải giữ nguyên cụm từ đó trong tóm tắt. KHÔNG được thay thế bằng mô tả vật lý chung.
+  VÍ DỤ FORMAT ĐÚNG: "Cao Thanh H đã dùng tay đấm vào mặt ông Nguyễn Tiến L
+  (Cảnh sát khu vực) khi ông L đang thi hành công vụ yêu cầu xuất trình giấy tờ.
+  Hành vi này xảy ra vào ngày 27/4/2023 tại TP. Hồ Chí Minh, sau khi bị cáo
+  có biểu hiện say xỉn và chửi bới. Bị hại không bị thương tích nghiêm trọng."
+
 - circumstance_query: {circumstance_instruction}
+
 - evidence_query: Mô tả tang vật, công cụ phạm tội, số lượng, trọng lượng,
   giá trị tài sản cụ thể có trong vụ án. Nếu không có tang vật → null.
 
@@ -2134,11 +2144,12 @@ BƯỚC 6: QUYẾT ĐỊNH HÌNH THỨC CHẤP HÀNH:
 CẤU TRÚC OUTPUT BẮT BUỘC:
 
 **I. NHẬN ĐỊNH CỦA TÒA ÁN:**
-1. **Định tội danh:** (liệt kê từng hành vi + điều khoản + khung hình phạt)
-2. **Phân tích tình tiết:**
+1. **Phân tích cấu thành tội phạm:** (xem xét đủ 4 yếu tố cấu thành — khách thể, mặt khách quan, mặt chủ quan, chủ thể)
+2. **Định tội danh:** (liệt kê từng hành vi + điều khoản + khung hình phạt)
+3. **Phân tích tình tiết:**
    - Tình tiết Tăng nặng (Điều 48 BLHS 1999 / Điều 52 BLHS 2015):
    - Tình tiết Giảm nhẹ (Điều 46 BLHS 1999 / Điều 51 BLHS 2015):
-3. **Nhân thân:**
+4. **Nhân thân:**
 
 **II. QUYẾT ĐỊNH:**
 1. Tuyên bố bị cáo phạm tội...
