@@ -88,15 +88,6 @@ public class ChatService {
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + userEmail));
 
-        // Limit check: 5 sessions per day for regular users
-        if (!"admin".equalsIgnoreCase(user.getRole())) {
-            LocalDateTime startOfToday = LocalDateTime.of(LocalDate.now(), LocalTime.MIDNIGHT);
-            long sessionsToday = sessionRepository.countByUserIdAndCreatedAtAfter(user.getId(), startOfToday);
-            if (sessionsToday >= 5) {
-                throw new RateLimitException("Bạn đã đạt giới hạn 5 vụ án mỗi ngày. Vui lòng quay lại vào ngày mai.");
-            }
-        }
-
         String mode = (request != null && request.mode() != null) ? request.mode() : "neutral";
         LocalDateTime now = LocalDateTime.now();
         ChatSession session = ChatSession.builder()
