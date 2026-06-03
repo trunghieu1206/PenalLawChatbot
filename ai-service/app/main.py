@@ -747,18 +747,11 @@ def _verify_no_hallucinated_articles(
     LLM in map_laws cited an article not in the retrieved context (using parametric
     training knowledge), that should be detected and flagged here.
     """
-    # Extract only the citation table section to avoid false positives
-    # from cross-references inside quoted law body text.
-    table_section = text
-    for marker in ["ĐIỀU KHOẢN ÁP DỤNG", "Điều khoản áp dụng", "ĐIỀU LUẬT ÁP DỤNG"]:
-        idx = text.find(marker)
-        if idx != -1:
-            table_section = text[idx:]
-            break
+    # To ensure maximum safety against hallucination, we now scan the ENTIRE text
+    # instead of just the citation table. Even if the AI forgets to format the table,
+    # any cited article must be grounded in the retrieved context.
+    cited = set(_ARTICLE_CITE_PAT.findall(text))
 
-    cited = set(_ARTICLE_CITE_PAT.findall(table_section))
-
-    # Only allow articles that were physically retrieved from the vector DB
     allowed: set = {str(d.metadata.get("article_number", "")) for d in documents}
     allowed |= {"7"}  # Điều 7 retroactivity — always valid
     allowed.discard("")
@@ -1431,7 +1424,7 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
                     queries.get("behavior_query"),
                     queries.get("circumstance_query"),
                     queries.get("evidence_query"),
-                ] if q
+                ] if q and str(q).strip().lower() != "null"
             ]
             if not q_list:
                 raise ValueError("All queries null")
@@ -1523,7 +1516,7 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
                             d.metadata["_retrieval_source"] = "bm25"
                             all_docs.append(d)
                             added_bm25 += 1
-                            print(f"    [BM25 NEW] score={scores[idx]:.4f}  Điều {art} | {src}")
+                            print(f"    [BM25] score={scores[idx]:.4f}  Điều {art} | {src}")
                         else:
                             skipped += 1
                             print(f"    [BM25 DUP] score={scores[idx]:.4f}  Điều {art} | {src} — already in pool")
@@ -1827,6 +1820,32 @@ OUTPUT: CHỈ JSON array hợp lệ."""
             mapped = _extract_json(response.content)
             if not isinstance(mapped, list) or len(mapped) == 0:
                 raise ValueError("Empty or non-list mapped_laws")
+            
+            # STRICT FILTER: Drop any mapped article that is NOT in retrieved documents
+            retrieved_articles = {str(d.metadata.get("article_number", "")) for d in documents}
+            valid_mapped = []
+            for item in mapped:
+                raw_art = str(item.get("article", ""))
+                match = re.search(r"\d+", raw_art)
+                if match:
+                    art_num = match.group(0)
+                    if art_num in retrieved_articles:
+                        valid_mapped.append(item)
+                    else:
+                        print(f"  [MAP_LAWS] ❌ Dropping hallucinated mapped article: Điều {art_num}")
+                else:
+                    valid_mapped.append(item)
+                    
+            if not valid_mapped:
+                valid_mapped = [{
+                    "article": "N/A", "clause": "N/A",
+                    "offense_name": "Không xác định được",
+                    "applicable_reason": "Tài liệu truy xuất không chứa điều luật phù hợp để ánh xạ tội danh này.",
+                    "edition_applied": "N/A", "edition_reason": "",
+                    "_mapping_error": True,
+                }]
+            mapped = valid_mapped
+
         except Exception as e:
             print(f"⚠️  Law mapping failed: {e}")
             mapped = [{
@@ -1996,6 +2015,7 @@ LƯU Ý KHI BÀO CHỮA:
 10. MIỄN HÌNH PHẠT: Trường hợp đặc biệt (hối cải triệt để, hậu quả nhỏ, bồi thường đầy đủ, cộng đồng bảo lãnh) → đề nghị miễn hình phạt (Điều 25 BLHS 1999 / Điều 59 BLHS 2015).
 11. NGƯỜI DƯỚI 18 TUỔI: Nếu thân chủ dưới 18 tuổi lúc phạm tội → BẮT BUỘC viện dẫn Chương XII BLHS: mức án tối đa giảm ½ đến ¾, KHÔNG tù chung thân/tử hình, ưu tiên biện pháp giáo dục không giam giữ.
 12. CẢI TẠO KHÔNG GIAM GIỮ: Nếu mức án ≤ 3 năm → đề nghị thay thế tù giam bằng cải tạo không giam giữ (tra số điều theo ấn bản BLHS áp dụng).
+13. XƯNG HÔ: Trong toàn bộ phần luận điểm và đề nghị, ưu tiên dùng "thân chủ" hoặc "thân chủ của chúng tôi" thay cho "bị cáo" để thể hiện đúng góc nhìn luật sư bào chữa. CHỈ dùng "bị cáo" trong bảng ĐIỀU KHOẢN ÁP DỤNG (term tố tụng chính thức) và khi xác định tư cách tố tụng lần đầu.
 
 QUY TRÌNH TƯ DUY (BẮT BUỘC):
 BƯỚC 0: KIỂM TRA LOẠI TRỪ TNHS — Phòng vệ chính đáng (Điều 15 BLHS 1999 / Điều 22 BLHS 2015)? Tình thế cấp thiết (Điều 16/23)? Không có năng lực TNHS (Điều 13/21)? → Nếu có dấu hiệu, đây là lập luận ưu tiên số 1.
@@ -2011,10 +2031,10 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 **I. LUẬN ĐIỂM BÀO CHỮA:**
 1. **Phân tích cấu thành tội phạm:** (xem xét có đủ 4 yếu tố không — nếu thiếu → lập luận hành vi không cấu thành tội phạm hoặc cấu thành tội nhẹ hơn)
 2. **Loại trừ TNHS / Giai đoạn phạm tội:** (nếu có dấu hiệu phòng vệ, tình thế cấp thiết, tội chưa đạt → phân tích với đúng số điều luật theo ấn bản BLHS áp dụng)
-3. **Về định tội danh:** (phân tích theo hướng có lợi cho bị cáo)
+3. **Về định tội danh:** (phân tích theo hướng có lợi cho thân chủ)
 4. **Tình tiết giảm nhẹ đề xuất (Điều 46 BLHS 1999 / Điều 51 BLHS 2015):**
    - (liệt kê từng tình tiết + căn cứ pháp lý)
-5. **Phân tích nhân thân bị cáo:**
+5. **Phân tích nhân thân thân chủ:**
 
 **II. ĐỀ NGHỊ CỦA LUẬT SƯ BÀO CHỮA:**
 1. Tội danh đề nghị: ...

@@ -34,7 +34,7 @@ error() { echo -e "${RED}[ERR]${NC}   $*"; exit 1; }
 REPO_URL="https://github.com/trunghieu1206/PenalLawChatbot"
 PROJECT_DIR="/root/PenalLawChatbot"
 LOG_DIR="/var/log/penallaw"
-BRANCH="bm25"
+BRANCH="dev"
 mkdir -p "$LOG_DIR"
 chmod 777 "$LOG_DIR"
 
