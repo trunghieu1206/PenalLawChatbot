@@ -1191,8 +1191,24 @@ async def lifespan(app: FastAPI):
     # -------------------------------------------------------
     # NODE DEFINITIONS
     # -------------------------------------------------------
+    import time
+    from functools import wraps
+
+    def measure_time(name):
+        def decorator(func):
+            @wraps(func)
+            def wrapper(state):
+                start_t = time.time()
+                result = func(state)
+                elapsed = time.time() - start_t
+                print(f"  ⏱️  [NODE: {name}] finished in {elapsed:.2f}s")
+                return result
+            return wrapper
+        return decorator
+
 
     # NODE: EXTRACT FACTS
+    @measure_time('extract_facts')
     def extract_facts_node(state: AgentState) -> dict:
         """Extract structured legal facts from case text."""
         print("[NODE: extract_facts]")
@@ -1219,7 +1235,7 @@ Trả về JSON với các trường sau (dùng null nếu không tìm thấy th
   "ngay_sinh_bi_cao": "dd/mm/yyyy",
   "ngay_tam_giam": "dd/mm/yyyy",
   "ten_bi_cao": "tên bị cáo (nếu có nhiều bị cáo, để dạng 'A, B, C')",
-  "co_tien_an": true/false,
+  "co_tien_an": "true/false (⚠️ LƯU Ý QUAN TRỌNG: Chỉ set true nếu văn bản ghi rõ là CÓ tiền án / chưa xóa án tích. Nếu văn bản ghi 'Tiền án: Không' và các bản án cũ chỉ nằm ở mục 'Nhân thân' hoặc 'đã được xóa án tích', BẮT BUỘC set là false)",
   "da_boi_thuong": true/false,
   "da_thanh_khan_khai_bao": true/false,
   "is_multi_defendant": true/false,
@@ -1287,6 +1303,7 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
         }
 
     # NODE 2.5: CLARIFICATION CHECK
+    @measure_time('clarification_check')
     def clarification_check_node(state: AgentState) -> dict:
         """Validates MUST HAVE fields; writes _missing_fields to state."""
         print("[NODE: clarification_check]")
@@ -1325,6 +1342,7 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
         print(f"  [ROUTER: clarification] → {route}")
         return route
 
+    @measure_time('clarification')
     def clarification_node(state: AgentState) -> dict:
         print("[NODE: clarification]")
         missing = state.get("_missing_fields", [])
@@ -1354,6 +1372,7 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
         return {"messages": [AIMessage(content=reply)]}
 
     # NODE 3: MULTI QUERY REWRITE
+    @measure_time('multi_query_rewrite')
     def multi_query_rewrite(state: AgentState) -> dict:
         print("[NODE: multi_query_rewrite]")
         facts     = state.get("extracted_facts") or {}
@@ -1442,6 +1461,7 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
         return {"retrieval_queries": q_list}
 
     # NODE 4: PARALLEL RETRIEVE
+    @measure_time('parallel_retrieve')
     def parallel_retrieve(state: AgentState) -> dict:
         print("[NODE: parallel_retrieve]")
         queries       = state.get("retrieval_queries") or [state["question"]]
@@ -1581,6 +1601,7 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
 
 
     # NODE 5: TEMPORAL PRIORITY TAGGER
+    @measure_time('temporal_priority_tagger')
     def temporal_priority_tagger(state: AgentState) -> dict:
         print("[NODE: temporal_priority_tagger]")
         docs  = state.get("documents", [])
@@ -1648,6 +1669,7 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
         return {"documents": result, "per_defendant_dates": per_defendant}
 
     # NODE 6: RERANK (replaces grade_documents)
+    @measure_time('rerank')
     def rerank_node(state: AgentState) -> dict:
         print("[NODE: rerank]")
         docs = state.get("documents", [])
@@ -1735,6 +1757,7 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
         return "generate"
 
     # NODE 7: MAP LAWS (fixed — no truncation, retroactivity prompt)
+    @measure_time('map_laws')
     def map_laws_node(state: AgentState) -> dict:
         """Map extracted facts to specific law articles."""
         print("[NODE: map_laws]")
@@ -1825,6 +1848,7 @@ OUTPUT: CHỈ JSON array hợp lệ."""
 
 
     # NODE: GENERATE
+    @measure_time('generate')
     def generate(state: AgentState) -> dict:
         print("[NODE: generate]")
         case_details = state.get("full_case_content", state["question"])
@@ -2157,6 +2181,13 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 3. HÌNH PHẠT: (tù giam HOẶC phạt tiền, chọn 1)
 4. TRÁCH NHIỆM DÂN SỰ & XỬ LÝ VẬT CHỨNG
 5. ÁN PHÍ: 200.000 đồng
+
+**ĐIỀU KHOẢN ÁP DỤNG:**
+(Bảng tổng hợp — CHỈ liệt kê các điều luật đã được trích dẫn CỤ THỂ trong nội dung phân tích ở trên. TUYỆT ĐỐI KHÔNG thêm điều luật chưa được đề cập. BẮT BUỘC trình bày bảng đúng chuẩn Markdown, phải có ĐÚNG 4 cột và hàng phân cách phải đủ 4 cột `|---|---|---|---|`.)
+
+| Điều | Tội danh/Nội dung | Nguồn áp dụng | Lý do chọn nguồn |
+|---|---|---|---|
+| (số điều) | (nội dung) | (tên bộ luật + năm) | (lý do áp dụng) |
 """
 
         prompt = ChatPromptTemplate.from_template(prompt_template)
@@ -2197,6 +2228,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
         return {"messages": [AIMessage(content=cleaned_response)]}
 
     # NODE: REBUTTAL (Chat mode — user counter-argues a prior AI response)
+    @measure_time('rebuttal')
     def rebuttal_node(state: AgentState) -> dict:
         """
         Chat rebuttal: user is challenging a prior AI response in the conversation.
@@ -2293,6 +2325,7 @@ QUY TẮC:
             )]}
 
     # NODE: ANSWER VERIFY (final quality gate for generate + rebuttal)
+    @measure_time('answer_verify')
     def answer_verify(state: AgentState) -> dict:
         """
         Final answer verification — 2-layer hybrid, cost-optimised.
@@ -2400,7 +2433,7 @@ QUY TẮC:
                 fact_lines.append(f"- Ngày phạm tội: {key_facts['ngay_pham_toi']}")
             if key_facts.get("co_tien_an") is not None:
                 tien_an_text = "có tiền án" if key_facts["co_tien_an"] else "không có tiền án"
-                fact_lines.append(f"- Nhân thân bị cáo: {tien_an_text} (hồ sơ không cung cấp chi tiết bản án cụ thể)")
+                fact_lines.append(f"- Nhân thân bị cáo: {tien_an_text}")
             if key_facts.get("tinh_tiet_tang_nang"):
                 fact_lines.append(f"- Tình tiết tăng nặng: {key_facts['tinh_tiet_tang_nang']}")
             if key_facts.get("tinh_tiet_giam_nhe"):
@@ -2453,7 +2486,7 @@ QUY TẮC:
                     )
                 if not verdict.get("role_ok", True) and verdict.get("role_issue"):
                     issues.append(
-                        f"Nhập vai (LLM): {verdict['role_issue']}"
+                        f"Vai trò: {verdict['role_issue']}"
                     )
             except Exception as judge_err:
                 # Fail open — never crash the main response pipeline
@@ -2484,6 +2517,7 @@ QUY TẮC:
         return {"messages": [AIMessage(content=ai_text + warning_block)]}
 
     # NODE: PRACTICE EVALUATE (Practice Mode — grades user's own written analysis)
+    @measure_time('practice_evaluate')
     def practice_evaluate_node(state: AgentState) -> dict:
         """
         Practice Mode final node.
@@ -2826,6 +2860,7 @@ OUTPUT: CHỈ JSON hợp lệ."""
 
 
     # NODE: CASUAL RESPOND
+    @measure_time('casual_respond')
     def casual_respond(state: AgentState) -> dict:
         """Handle greetings, off-topic, and unrelated queries."""
         print("[NODE: casual_respond]")
@@ -2866,6 +2901,7 @@ OUTPUT: CHỈ JSON hợp lệ."""
         return {"messages": [AIMessage(content=reply)]}
 
     # NODE: FOLLOW-UP GENERATE
+    @measure_time('followup_generate')
     def followup_generate(state: AgentState) -> dict:
         """
         Handle follow-up questions about a prior response.
