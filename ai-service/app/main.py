@@ -2432,7 +2432,13 @@ QUY TẮC:
             if key_facts.get("ngay_pham_toi"):
                 fact_lines.append(f"- Ngày phạm tội: {key_facts['ngay_pham_toi']}")
             if key_facts.get("co_tien_an") is not None:
-                tien_an_text = "có tiền án" if key_facts["co_tien_an"] else "không có tiền án"
+                if key_facts["co_tien_an"]:
+                    tien_an_text = "CÓ TIỀN ÁN (bản án còn hiệu lực — có thể là tình tiết tái phạm)"
+                else:
+                    tien_an_text = ("không có tiền án chính thức (Tiền án: Không trong hồ sơ, "
+                                    "tuy nhiên nếu hồ sơ có mục Nhân thân liệt kê bản án cũ đã xóa án tích, "
+                                    "AI được phép đề cập đây là 'nhân thân xấu' — đây là phân tích ĐÚNG, "
+                                    "KHÔNG phải mâu thuẫn với co_tien_an=false)")
                 fact_lines.append(f"- Nhân thân bị cáo: {tien_an_text}")
             if key_facts.get("tinh_tiet_tang_nang"):
                 fact_lines.append(f"- Tình tiết tăng nặng: {key_facts['tinh_tiet_tang_nang']}")
