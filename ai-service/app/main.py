@@ -923,11 +923,20 @@ def sanitize_text(text: str) -> str:
 def _sanitize_msgs(messages: list) -> list:
     """Strip surrogates from ALL LangChain BaseMessage content immediately before
     any llm.invoke() call. Last line of defence — catches anything that slipped through
-    upstream sanitization (history, mapped_context, case descriptions, etc.)."""
+    upstream sanitization (history, mapped_context, case descriptions, etc.).
+    NOTE: Returns NEW message objects — does NOT mutate the originals, preventing
+    silent corruption of shared state like chat_history."""
+    sanitized = []
     for m in messages:
         if isinstance(getattr(m, "content", None), str):
-            m.content = sanitize_text(m.content)
-    return messages
+            clean = sanitize_text(m.content)
+            if clean != m.content:
+                # Only copy if content actually changed to avoid unnecessary overhead
+                new_msg = m.__class__(content=clean)
+                sanitized.append(new_msg)
+                continue
+        sanitized.append(m)
+    return sanitized
 
 
 def cleanup_response(text: str) -> str:
@@ -1024,12 +1033,14 @@ async def lifespan(app: FastAPI):
             self._k = top_k
             self._fields = output_fields
 
-        def invoke(self, query: str):
+
+        def invoke(self, query: str, top_k_override: int | None = None):
             vec = self._emb.embed_query(query)
+            limit = top_k_override if top_k_override is not None else self._k
             results = self._client.search(
                 collection_name=self._col,
                 data=[vec],
-                limit=self._k,
+                limit=limit,
                 output_fields=self._fields,
                 search_params={"metric_type": "COSINE"},
             )[0]
@@ -1047,11 +1058,12 @@ async def lifespan(app: FastAPI):
                 docs.append(Document(
                     page_content=sanitize_text(entity.get("content", "")),
                     metadata={
-                        k: entity.get(k, "")
-                        for k in self._fields if k != "content"
+                        f: entity.get(f, "")
+                        for f in self._fields if f != "content"
                     },
                 ))
             return docs
+
 
     retriever = _MilvusRetriever(
         milvus_client, embedding_model, COLLECTION_NAME, TOP_K, _OUTPUT_FIELDS
@@ -1096,10 +1108,10 @@ async def lifespan(app: FastAPI):
             f"{_mem_used} MB allocated / {_mem_rsvd} MB reserved / {_mem_total} MB total"
         )
 
-    def _rerank_scores(pairs: list[tuple[str, str]], batch_size: int = 8) -> list[float]:
+    def _rerank_scores(pairs: List[tuple], batch_size: int = 8) -> List[float]:
         """Score (query, doc) pairs with the reranker. Returns raw logits (higher=more relevant)."""
         import torch
-        all_scores: list[float] = []
+        all_scores: List[float] = []
         for i in range(0, len(pairs), batch_size):
             batch = pairs[i : i + batch_size]
             with torch.no_grad():
@@ -1127,13 +1139,14 @@ async def lifespan(app: FastAPI):
     #   - If Milvus full-scan fails       → server starts normally, BM25 disabled.
     #   - If BM25 returns no results      → silently skipped, no crash.
     _bm25_index = None
-    _bm25_docs: list[Document] = []
+    _bm25_docs: List[Document] = []
 
     try:
         from rank_bm25 import BM25Okapi
 
         print("📚 Building BM25 keyword index from Milvus corpus...")
-        _all_milvus_docs: list[Document] = []
+        _all_milvus_docs: List[Document] = []
+
 
         # Query ALL documents. offset/limit paging handles large collections.
         _batch_size = 1000
@@ -1419,12 +1432,13 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
         try:
             response = llm.invoke(_sanitize_msgs([HumanMessage(content=prompt)]))
             queries = _extract_json(response.content)
+            raw_q_list = [
+                queries.get("behavior_query"),
+                queries.get("circumstance_query"),
+                queries.get("evidence_query"),
+            ]
             q_list = [
-                q for q in [
-                    queries.get("behavior_query"),
-                    queries.get("circumstance_query"),
-                    queries.get("evidence_query"),
-                ] if q and str(q).strip().lower() != "null"
+                q for q in raw_q_list if q and str(q).strip().lower() != "null"
             ]
             if not q_list:
                 raise ValueError("All queries null")
@@ -1444,13 +1458,16 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
                 or hanh_vi
                 or case_text[:300]
             )
+            raw_q_list = [q1, q2, tang_vat or "null"]
             q_list = [q for q in [q1, q2, tang_vat or None] if q]
 
-        print(f"  [REWRITE] Generated {len(q_list)} queries for role={role!r}")
-        for i, q in enumerate(q_list):
+        print(f"  [REWRITE] Generated {len(raw_q_list)} queries for role={role!r}")
+        for i, q in enumerate(raw_q_list):
+            display_q = str(q).strip() if q else "null"
             print(f"  ┌─ Q{i+1} {'─'*60}")
-            print(f"  │ {q}")
+            print(f"  │ {display_q}")
             print(f"  └{'─'*63}")
+        print(f"  [REWRITE] Optimized to {len(q_list)} valid queries for execution.")
         return {"retrieval_queries": q_list}
 
     # NODE 4: PARALLEL RETRIEVE
@@ -1465,12 +1482,18 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
         all_docs      = []
 
         # Step 1: Semantic search (up to 3 queries)
+        # Asymmetric retrieval strategy:
+        #   Q1 (behavior/primary offence query): k=20 — wide net to survive temporal purge
+        #   Q2 (circumstance query) & Q3 (evidence query): k=10 — narrow, targeted retrieval
+        Q1_SEMANTIC_K    = 20
+        Q2_Q3_SEMANTIC_K = 10
         for q_idx, q in enumerate(queries, start=1):
             if not q:
                 continue
-            print(f"  [SEMANTIC Q{q_idx}] {q[:100]!r}...")
+            sem_k = Q1_SEMANTIC_K if q_idx == 1 else Q2_Q3_SEMANTIC_K
+            print(f"  [SEMANTIC Q{q_idx}] (k={sem_k}) {q[:100]!r}...")
             try:
-                docs = retriever.invoke(q)
+                docs = retriever.invoke(q, top_k_override=sem_k)
                 added_sem = 0
                 for d in docs:
                     key = (d.metadata.get("article_number", ""), d.metadata.get("source", ""))
@@ -1481,6 +1504,7 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
                 print(f"    → {len(docs)} retrieved, {added_sem} new unique")
             except Exception as e:
                 print(f"  [SEMANTIC ERROR Q{q_idx}] {type(e).__name__}: {e}")
+
 
         # Step 1B: BM25 Keyword Search (up to 5 chunks per query)
         # Runs against the in-memory index built at startup — zero Milvus I/O per request.
@@ -1640,9 +1664,23 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
             if src in all_known_editions and src not in relevant_editions:
                 continue
 
+            # Identify if the article belongs to the General Part (Phần Chung).
+            # These articles define sentencing mechanics, not substantive offenses.
+            try:
+                art_num_match = re.search(r"\d+", str(art_no))
+                art_val = int(art_num_match.group(0)) if art_num_match else 9999
+            except Exception:
+                art_val = 9999
+                
+            is_general_part = False
+            if "1999" in src and art_val <= 77:
+                is_general_part = True
+            elif "2015" in src and art_val <= 107:
+                is_general_part = True
+
             always_keep = _ALWAYS_KEEP_BY_EDITION.get(src, set())
 
-            if art_no in always_keep:
+            if art_no in always_keep or is_general_part:
                 d.metadata["_temporal_role"] = "adjustment"
                 always.append(d)
             elif src in crime_editions:
@@ -2016,6 +2054,7 @@ LƯU Ý KHI BÀO CHỮA:
 11. NGƯỜI DƯỚI 18 TUỔI: Nếu thân chủ dưới 18 tuổi lúc phạm tội → BẮT BUỘC viện dẫn Chương XII BLHS: mức án tối đa giảm ½ đến ¾, KHÔNG tù chung thân/tử hình, ưu tiên biện pháp giáo dục không giam giữ.
 12. CẢI TẠO KHÔNG GIAM GIỮ: Nếu mức án ≤ 3 năm → đề nghị thay thế tù giam bằng cải tạo không giam giữ (tra số điều theo ấn bản BLHS áp dụng).
 13. XƯNG HÔ: Trong toàn bộ phần luận điểm và đề nghị, ưu tiên dùng "thân chủ" hoặc "thân chủ của chúng tôi" thay cho "bị cáo" để thể hiện đúng góc nhìn luật sư bào chữa. CHỈ dùng "bị cáo" trong bảng ĐIỀU KHOẢN ÁP DỤNG (term tố tụng chính thức) và khi xác định tư cách tố tụng lần đầu.
+14. KHÔNG CHÀO HỎI HOẶC KÝ TÊN: TUYỆT ĐỐI KHÔNG viết các đoạn mở đầu mang tính thủ tục (như "Kính gửi Hội đồng xét xử...", "Tôi là Luật sư...") và KHÔNG viết phần kết luận, cảm ơn hay ký tên ở cuối bài. Hãy bắt đầu trực tiếp vào cấu trúc Mục I.
 
 QUY TRÌNH TƯ DUY (BẮT BUỘC):
 BƯỚC 0: KIỂM TRA LOẠI TRỪ TNHS — Phòng vệ chính đáng (Điều 15 BLHS 1999 / Điều 22 BLHS 2015)? Tình thế cấp thiết (Điều 16/23)? Không có năng lực TNHS (Điều 13/21)? → Nếu có dấu hiệu, đây là lập luận ưu tiên số 1.
@@ -2086,6 +2125,7 @@ LƯU Ý KHI BẢO VỆ BỊ HẠI:
 9. THIỆT HẠI DÂN SỰ ĐẦY ĐỦ: Yêu cầu bồi thường gồm: thiệt hại vật chất (chi phí y tế, thu nhập mất, sửa chữa tài sản), thiệt hại tinh thần, các khoản phát sinh (nếu tử vong: chi phí mai táng + cấp dưỡng cho thân nhân phụ thuộc).
 10. HÌNH PHẠT BỔ SUNG: Yêu cầu tịch thu tang vật, cấm đảm nhiệm chức vụ (nếu lợi dụng chức vụ), phạt tiền bổ sung, quản chế nếu phù hợp.
 11. PHẢN BÁC ÁN TREO: Nếu bị cáo đề nghị án treo → chỉ ra điều kiện nào trong 5 điều kiện (Điều 60 BLHS 1999 / Điều 65 BLHS 2015) KHÔNG thỏa mãn (nhân thân xấu, tái phạm, tính chất nghiêm trọng...).
+12. KHÔNG CHÀO HỎI HOẶC KÝ TÊN: TUYỆT ĐỐI KHÔNG viết các đoạn mở đầu mang tính thủ tục (như "Kính gửi Hội đồng xét xử...", "Tôi là Luật sư...") và KHÔNG viết phần kết luận, cảm ơn hay ký tên ở cuối bài. Hãy bắt đầu trực tiếp vào cấu trúc Mục I.
 
 QUY TRÌNH TƯ DUY (BẮT BUỘC):
 BƯỚC 0: KHẲNG ĐỊNH CẤU THÀNH — Xác nhận cả 4 yếu tố cấu thành tội phạm đều đầy đủ (khách thể, hành vi + nhân quả, lỗi cố ý, chủ thể đủ năng lực). Bác bỏ mọi lập luận thiếu yếu tố.
@@ -2949,7 +2989,8 @@ OUTPUT: CHỈ JSON hợp lệ."""
         documents = state.get("documents") or []
         if not documents:
             try:
-                documents = retriever.invoke(question[:512])
+                # Follow-up queries are narrow elaboration requests — use Q2-style k=10
+                documents = retriever.invoke(question[:512], top_k_override=10)
                 print(f"  [FOLLOWUP] Retrieved {len(documents)} docs (fresh — pipeline bypassed)")
             except Exception as e:
                 print(f"  [FOLLOWUP] Retrieval failed: {e}")
@@ -2961,8 +3002,9 @@ OUTPUT: CHỈ JSON hợp lệ."""
             for d in documents
         ]))
         history_messages = [
-            HumanMessage(content=m["content"]) if m["role"] == "user"
-            else AIMessage(content=m["content"])
+            HumanMessage(content=sanitize_text(m.get("content", "")))
+            if m.get("role") == "user"
+            else AIMessage(content=sanitize_text(m.get("content", "")))
             for m in chat_history
         ]
         response = llm.invoke(_sanitize_msgs([
