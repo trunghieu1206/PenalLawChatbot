@@ -1696,7 +1696,28 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
 
         ordered = tagged + newer + always
         result  = ordered if ordered else docs
-        print(f"  [TEMPORAL] primary={len(tagged)}, comparison={len(newer)}, adjustment={len(always)}")
+        
+        # Calculate retrieval source breakdown for each temporal role
+        stats = {
+            "primary": {"sem": 0, "bm25": 0, "pin": 0},
+            "comparison": {"sem": 0, "bm25": 0, "pin": 0},
+            "adjustment": {"sem": 0, "bm25": 0, "pin": 0}
+        }
+        
+        def _tally(docs_list, role_key):
+            for d in docs_list:
+                if d.metadata.get("_pinned"): stats[role_key]["pin"] += 1
+                elif d.metadata.get("_retrieval_source") == "bm25": stats[role_key]["bm25"] += 1
+                else: stats[role_key]["sem"] += 1
+                
+        _tally(tagged, "primary")
+        _tally(newer, "comparison")
+        _tally(always, "adjustment")
+
+        print(f"  [TEMPORAL] primary={len(tagged)} (sem:{stats['primary']['sem']} bm25:{stats['primary']['bm25']} pin:{stats['primary']['pin']}), "
+              f"comparison={len(newer)} (sem:{stats['comparison']['sem']} bm25:{stats['comparison']['bm25']} pin:{stats['comparison']['pin']}), "
+              f"adjustment={len(always)} (sem:{stats['adjustment']['sem']} bm25:{stats['adjustment']['bm25']} pin:{stats['adjustment']['pin']})")
+
         return {"documents": result, "per_defendant_dates": per_defendant}
 
     # NODE 6: RERANK (replaces grade_documents)
@@ -1827,8 +1848,9 @@ Nếu tài liệu cung cấp không chứa điều luật phù hợp, chỉ ánh
 QUY TẮC KHOẢN — BẮT BUỘC:
 - Mỗi hành vi phạm tội CHỈ được ánh xạ vào ĐÚNG MỘT khoản duy nhất (khoản áp dụng trực tiếp).
 - KHÔNG được liệt kê cùng một điều luật ở nhiều khoản khác nhau cho cùng một hành vi.
-- Tái phạm nguy hiểm (Điều 52/53) là TÌNH TIẾT TĂNG NẶNG TRÁCH NHIỆM HÌNH SỰ, KHÔNG phải căn cứ để chuyển sang khoản cao hơn trừ khi điều luật tội danh CHÍNH THỨC quy định tái phạm là dấu hiệu định khung khoản đó.
-- Ví dụ: Điều 173 Khoản 1 điểm b ('đã bị kết án về tội này... chưa được xóa án tích') → đây là điểm định khung TRONG Khoản 1, không phải Khoản 2.
+- NẾU sự kiện có chứa các tình tiết tăng nặng (như "tái phạm nguy hiểm", "có tổ chức", "chuyên nghiệp"...), HÃY ĐỌC KỸ từng khoản của điều luật tội danh trong VĂN BẢN LUẬT.
+- Nếu khoản cao hơn (Khoản 2, 3...) có CHÍNH THỨC quy định tình tiết đó (ví dụ: "Tái phạm nguy hiểm"), BẮT BUỘC phải ánh xạ vào khoản cao hơn đó.
+- Nếu điều luật KHÔNG quy định tình tiết đó làm dấu hiệu định khung, thì giữ nguyên ở khoản cơ bản (thường là Khoản 1) và tình tiết đó chỉ là tình tiết tăng nặng chung.
 
 NGUYÊN TẮC THỜI HIỆU (Điều 7 BLHS) — BẮT BUỘC ÁP DỤNG:
 1. QUY TẮC CƠ BẢN: Áp dụng luật có hiệu lực tại THỜI ĐIỂM PHẠM TỘI (tài liệu có role=primary).
@@ -2086,7 +2108,8 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 (Các bước cụ thể: bồi thường, viết đơn xin khoan hồng, xin giấy bãi nại, nộp án phí...)
 
 **ĐIỀU KHOẢN ÁP DỤNG:**
-(Bảng tổng hợp — CHỈ liệt kê các điều luật đã được trích dẫn CỤ THỂ trong nội dung phân tích ở trên. TUYỆT ĐỐI KHÔNG thêm điều luật chưa được đề cập. BẮT BUỘC trình bày bảng đúng chuẩn Markdown, phải có ĐÚNG 4 cột và hàng phân cách phải đủ 4 cột `|---|---|---|---|`.)
+(Bảng tổng hợp — CHỈ liệt kê các điều luật đã được trích dẫn CỤ THỂ trong nội dung phân tích ở trên. TUYỆT ĐỐI KHÔNG thêm điều luật chưa được đề cập. BẮT BUỘC trình bày bảng đúng chuẩn Markdown, phải có ĐÚNG 4 cột và hàng phân cách phải đủ 4 cột `|---|---|---|---|`. QUY TẮC GỘP DÒNG BẮT BUỘC: Mỗi SỐ ĐIỀU chỉ được xuất hiện ĐÚNG MỘT HÀNG duy nhất — nếu một điều được viện dẫn ở nhiều khoản hoặc điểm khác nhau, hãy gộp tất cả vào một hàng, liệt kê các khoản/điểm trong cột Tội danh/Nội dung, ví dụ: "Khoản 1; Khoản 2 điểm g".)
+
 
 | Điều | Tội danh/Nội dung | Nguồn áp dụng | Lý do chọn nguồn |
 |---|---|---|---|
@@ -2161,7 +2184,8 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 (Hướng dẫn thu thập hóa đơn, chứng từ thiệt hại, yêu cầu cấp dưỡng, bảo vệ quyền lợi dài hạn...)
 
 **ĐIỀU KHOẢN ÁP DỤNG:**
-(Bảng tổng hợp — CHỈ liệt kê các điều luật đã được trích dẫn CỤ THỂ trong nội dung phân tích ở trên. TUYỆT ĐỐI KHÔNG thêm điều luật chưa được đề cập. BẮT BUỘC trình bày bảng đúng chuẩn Markdown, phải có ĐÚNG 4 cột và hàng phân cách phải đủ 4 cột `|---|---|---|---|`.)
+(Bảng tổng hợp — CHỈ liệt kê các điều luật đã được trích dẫn CỤ THỂ trong nội dung phân tích ở trên. TUYỆT ĐỐI KHÔNG thêm điều luật chưa được đề cập. BẮT BUỘC trình bày bảng đúng chuẩn Markdown, phải có ĐÚNG 4 cột và hàng phân cách phải đủ 4 cột `|---|---|---|---|`. QUY TẮC GỘP DÒNG BẮT BUỘC: Mỗi SỐ ĐIỀU chỉ được xuất hiện ĐÚNG MỘT HÀNG duy nhất — nếu một điều được viện dẫn ở nhiều khoản hoặc điểm khác nhau, hãy gộp tất cả vào một hàng, liệt kê các khoản/điểm trong cột Tội danh/Nội dung, ví dụ: "Khoản 1; Khoản 2 điểm g".)
+
 
 | Điều | Tội danh/Nội dung | Văn bản bộ luật hình sự | Lý do |
 |---|---|---|---|
@@ -2243,7 +2267,8 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 5. ÁN PHÍ: 200.000 đồng
 
 **ĐIỀU KHOẢN ÁP DỤNG:**
-(Bảng tổng hợp — CHỈ liệt kê các điều luật đã được trích dẫn CỤ THỂ trong nội dung phân tích ở trên. TUYỆT ĐỐI KHÔNG thêm điều luật chưa được đề cập. BẮT BUỘC trình bày bảng đúng chuẩn Markdown, phải có ĐÚNG 4 cột và hàng phân cách phải đủ 4 cột `|---|---|---|---|`.)
+(Bảng tổng hợp — CHỈ liệt kê các điều luật đã được trích dẫn CỤ THỂ trong nội dung phân tích ở trên. TUYỆT ĐỐI KHÔNG thêm điều luật chưa được đề cập. BẮT BUỘC trình bày bảng đúng chuẩn Markdown, phải có ĐÚNG 4 cột và hàng phân cách phải đủ 4 cột `|---|---|---|---|`. QUY TẮC GỘP DÒNG BẮT BUỘC: Mỗi SỐ ĐIỀU chỉ được xuất hiện ĐÚNG MỘT HÀNG duy nhất — nếu một điều được viện dẫn ở nhiều khoản hoặc điểm khác nhau, hãy gộp tất cả vào một hàng, liệt kê các khoản/điểm trong cột Tội danh/Nội dung, ví dụ: "Khoản 1; Khoản 2 điểm g".)
+
 
 | Điều | Tội danh/Nội dung | Nguồn áp dụng | Lý do chọn nguồn |
 |---|---|---|---|
