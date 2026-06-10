@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -130,9 +131,19 @@ public class ChatService {
                 .build();
         messageRepository.save(userMessage);
 
-        // Build conversation history list for AI context
-        List<Map<String, String>> conversationHistory = history.stream()
-                .map(m -> Map.of("role", m.getRole(), "content", m.getContent()))
+        // Build conversation history list for AI context.
+        // For assistant messages, include mapped_laws so the AI service can
+        // restore law context on follow-up turns (avoids re-running the full pipeline).
+        List<Map<String, Object>> conversationHistory = history.stream()
+                .map(m -> {
+                    Map<String, Object> entry = new HashMap<>();
+                    entry.put("role", m.getRole());
+                    entry.put("content", m.getContent());
+                    if ("assistant".equals(m.getRole()) && m.getMappedLaws() != null) {
+                        entry.put("mapped_laws", m.getMappedLaws());
+                    }
+                    return entry;
+                })
                 .collect(Collectors.toList());
 
         // Call AI service with history
@@ -141,7 +152,7 @@ public class ChatService {
 
         AiServiceClient.PredictResponse aiResponse;
         try {
-            aiResponse = aiServiceClient.predict(request.content(), role, request.rebuttalAgainst(), conversationHistory);
+            aiResponse = aiServiceClient.predict(request.content(), role, request.rebuttalAgainst(), conversationHistory, sessionId.toString());
         } catch (Exception e) {
             log.error("AI service error: {}", e.getMessage());
             throw new RuntimeException("Dịch vụ AI không khả dụng. Vui lòng thử lại sau. (" + e.getMessage() + ")");

@@ -115,6 +115,7 @@ import inspect
 import tempfile
 import shutil
 import json
+import uuid
 import numpy as np
 import torch
 from contextlib import asynccontextmanager
@@ -138,6 +139,7 @@ from langchain_core.embeddings import Embeddings
 from pymilvus import MilvusClient
 from langgraph.graph import END, StateGraph, START
 from langgraph.graph.message import add_messages
+from langgraph.checkpoint.memory import MemorySaver
 from langchain_openai import ChatOpenAI
 
 # Load Environment Variables
@@ -448,7 +450,7 @@ class AgentState(TypedDict):
     mapped_laws:         Optional[List[Dict[str, Any]]]
     rebuttal_against:    Optional[str]
     sentencing_data:     Optional[Dict[str, Any]]
-    chat_history:        Optional[List[Dict[str, str]]]
+    chat_history:        Optional[List[Dict[str, Any]]]
     is_relevant:         Optional[bool]
     _missing_fields:     Optional[List[str]]         # set by clarification_check_node
     per_defendant_dates: Optional[List[Dict[str, str]]]  # multi-defendant support
@@ -463,7 +465,8 @@ class RequestBody(BaseModel):
     case_content: str
     role: Literal["defense", "victim", "neutral"] = "neutral"
     rebuttal_against: Optional[str] = None
-    conversation_history: Optional[List[Dict[str, str]]] = Field(default_factory=list)
+    conversation_history: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+    session_id: Optional[str] = None  # thread_id for LangGraph MemorySaver checkpointing
 
 
 class PredictResponse(BaseModel):
@@ -1536,9 +1539,12 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
                                d.metadata.get("source", ""))
                         if key not in seen_ids:
                             seen_ids.add(key)
-                            # Tag so we can log and distinguish from semantic hits
-                            d.metadata["_retrieval_source"] = "bm25"
-                            all_docs.append(d)
+                            # Copy before appending — never mutate the shared
+                            # module-level _bm25_docs list (reused across requests).
+                            all_docs.append(Document(
+                                page_content=d.page_content,
+                                metadata={**d.metadata, "_retrieval_source": "bm25"},
+                            ))
                             added_bm25 += 1
                             print(f"    [BM25] score={scores[idx]:.4f}  Điều {art} | {src}")
                         else:
@@ -2996,30 +3002,114 @@ OUTPUT: CHỈ JSON hợp lệ."""
         """
         Handle follow-up questions about a prior response.
 
-        BUG-3 FIX: When intent='followup', the graph routes START→followup directly,
-        bypassing the full pipeline (extract_facts → retrieve → map_laws).
-        This means state['documents'] is always [] and state['mapped_laws'] is always None.
-        Fix: retrieve fresh law context using the question + any cached mapped_laws
-        article numbers, so the follow-up response has legal grounding.
+        STATE RESTORATION (MemorySaver):
+        With LangGraph checkpointing enabled, this node receives the full
+        AgentState from Turn 1 via the MemorySaver checkpoint:
+        - documents:       Turn 1's reranked + pinned docs (already tagged with
+                           _temporal_role by temporal_priority_tagger)
+        - mapped_laws:     Turn 1's gold-standard law mapping
+        - extracted_facts: Turn 1's extracted case facts
+        - full_case_content: the original case narrative
+
+        Since documents are restored from checkpoint, no retrieval is needed
+        in the normal path.  The retrieval block below is a FALLBACK for the
+        edge case where no checkpoint exists (e.g. direct API call without
+        session_id).
+
+        FALLBACK RETRIEVAL STRATEGY:
+        - Semantic search on the original case narrative (first user message).
+        - BM25 keyword search on the follow-up question.
+        - Temporal role tagging inferred from mapped_laws edition_applied.
         """
         print("[NODE: followup_generate]")
-        mapped_laws  = state.get("mapped_laws") or []
-        chat_history = (state.get("chat_history") or [])[-6:]
-        question     = state["question"]
-        role         = state.get("user_role", "neutral")
-        print(f"  [FOLLOWUP] role={role} | history_turns={len(chat_history)} | query='{question[:60]}'")
+        mapped_laws = state.get("mapped_laws") or []
+        question    = state["question"]
+        role        = state.get("user_role", "neutral")
 
-        # Try to get cached documents first; if empty (followup bypasses pipeline),
-        # do a lightweight retrieval using the user's follow-up question.
+        # Find original case from FULL history (not the truncated [-8:] LLM window).
+        full_history  = state.get("chat_history") or []
+        original_case = next(
+            (m["content"] for m in full_history if m.get("role") == "user"),
+            question,  # fallback: very first message in the session
+        )
+
+        # Truncated window for LLM multi-turn context only (avoids token overflow)
+        chat_history = full_history[-8:]
+
+        print(f"  [FOLLOWUP] role={role} | history_turns={len(chat_history)} | query='{question[:60]}'")
+        print(f"  [FOLLOWUP] restored mapped_laws={len(mapped_laws)} entries")
+
+        # ── Documents: checkpoint or fallback retrieval ───────────────────────
         documents = state.get("documents") or []
-        if not documents:
+        if documents:
+            # Normal path: documents restored from MemorySaver checkpoint.
+            # These are Turn 1's fully reranked + pinned docs with _temporal_role
+            # already set by temporal_priority_tagger — no retrieval needed.
+            print(f"  [FOLLOWUP] {len(documents)} docs restored from checkpoint (skipping retrieval)")
+        else:
+            # Fallback: no checkpoint — retrieve fresh documents.
+            print("  [FOLLOWUP] no docs in state — running fallback retrieval")
+            print(f"  [FOLLOWUP] semantic_query=original_case ({len(original_case)} chars)")
             try:
-                # Follow-up queries are narrow elaboration requests — use Q2-style k=10
-                documents = retriever.invoke(question[:512], top_k_override=10)
-                print(f"  [FOLLOWUP] Retrieved {len(documents)} docs (fresh — pipeline bypassed)")
+                documents = retriever.invoke(original_case[:10000], top_k_override=10)
+                print(f"  [FOLLOWUP] semantic: {len(documents)} docs from original case")
             except Exception as e:
-                print(f"  [FOLLOWUP] Retrieval failed: {e}")
+                print(f"  [FOLLOWUP] Semantic retrieval failed: {e}")
                 documents = []
+
+            # BM25 on the raw follow-up question (keyword-agnostic).
+            if _bm25_index is not None and _bm25_docs:
+                try:
+                    seen_ids = {
+                        (d.metadata.get("article_number", ""), d.metadata.get("source", ""))
+                        for d in documents
+                    }
+                    tokenized_q = question.lower().split()
+                    scores      = _bm25_index.get_scores(tokenized_q)
+                    top_indices = sorted(
+                        range(len(scores)), key=lambda i: scores[i], reverse=True
+                    )[:5]
+                    added_bm25 = 0
+                    for idx in top_indices:
+                        if scores[idx] <= 0:
+                            break
+                        src = _bm25_docs[idx]
+                        key = (src.metadata.get("article_number", ""), src.metadata.get("source", ""))
+                        if key not in seen_ids:
+                            seen_ids.add(key)
+                            documents.append(Document(
+                                page_content=src.page_content,
+                                metadata={**src.metadata, "_retrieval_source": "bm25_followup"},
+                            ))
+                            added_bm25 += 1
+                    print(f"  [FOLLOWUP] bm25: {added_bm25} new unique docs added")
+                except Exception as e:
+                    print(f"  [FOLLOWUP] BM25 retrieval failed: {e}")
+
+            # Temporal role tagging (fallback only — checkpoint docs are already tagged).
+            # Infer primary edition from mapped_laws so the LLM gets edition guidance.
+            primary_edition = None
+            if mapped_laws:
+                first_law = mapped_laws[0]
+                if isinstance(first_law, dict):
+                    edition_val = first_law.get("edition_applied")
+                    if edition_val and edition_val != "N/A":
+                        primary_edition = edition_val
+
+            if primary_edition:
+                print(f"  [FOLLOWUP] tagging fallback docs with primary_edition='{primary_edition}'")
+                tagged_docs = []
+                for d in documents:
+                    meta = dict(d.metadata)
+                    if not meta.get("_temporal_role"):
+                        if meta.get("source") == primary_edition:
+                            meta["_temporal_role"] = "primary"
+                        else:
+                            meta["_temporal_role"] = "comparison"
+                    tagged_docs.append(Document(page_content=d.page_content, metadata=meta))
+                documents = tagged_docs
+
+        print(f"  [FOLLOWUP] total docs for LLM: {len(documents)}")
 
         context_text = sanitize_text("\n\n".join([
             f"[Điều {d.metadata.get('article_number','?')} - {d.metadata.get('source','Unknown')} | "
@@ -3105,7 +3195,14 @@ OUTPUT: CHỈ JSON hợp lệ."""
     workflow.add_edge("followup",          END)
     workflow.add_edge("casual",            END)
 
-    app_compiled = workflow.compile()
+    # ── MemorySaver: in-process checkpointing ────────────────────────────────
+    # With a single uvicorn worker (our deployment), MemorySaver stores AgentState
+    # per thread_id (= session UUID) in a Python dict. On follow-up turns, the
+    # checkpoint restores Turn 1's documents, mapped_laws, extracted_facts, and
+    # full_case_content — so the follow-up path gets the full-quality reranked
+    # documents without re-retrieval.
+    checkpointer = MemorySaver()
+    app_compiled = workflow.compile(checkpointer=checkpointer)
     # BUG-14 FIX: Store llm in app_state so /practice/evaluate can reuse it
     # instead of creating a new ChatOpenAI client on every request.
     app_state["llm"] = llm
@@ -3151,28 +3248,70 @@ async def predict_judgment(req: RequestBody):
     if not graph:
         raise HTTPException(status_code=500, detail="Model not loaded")
 
-    inputs = {
-        "question":            sanitize_text(req.case_content),
-        "full_case_content":   sanitize_text(req.case_content),
-        "messages":            [HumanMessage(content=sanitize_text(req.case_content))],
-        "user_role":           req.role,
-        "retry_count":         0,
-        "documents":           [],
-        "retrieval_queries":   [],
-        "extracted_facts":     None,
-        "mapped_laws":         None,
-        "sentencing_data":     None,
-        "is_relevant":         None,
-        "_missing_fields":     None,
-        "per_defendant_dates": None,
-        "rebuttal_against":    req.rebuttal_against,
-        "chat_history":        req.conversation_history,
-        "is_practice_mode":    False,
-        "user_analysis":       None,
-    }
+    # ── MemorySaver: two input shapes ────────────────────────────────────────
+    # Turn 1 (new case): no conversation_history → full init (all fields set,
+    #   documents=[], mapped_laws=None, etc.).
+    # Turn 2+ (follow-up): conversation_history exists → minimal inputs only.
+    #   Fields NOT included (documents, mapped_laws, extracted_facts,
+    #   full_case_content, sentencing_data, per_defendant_dates) are restored
+    #   from the checkpoint saved after Turn 1.  This gives the follow-up path
+    #   Turn 1's fully reranked + pinned documents without re-retrieval.
+    #
+    # CRITICAL: including a field in inputs OVERWRITES the checkpointed value.
+    # Only pass what genuinely changes between turns.
+    is_new_case = not req.conversation_history
+
+    if is_new_case:
+        # Full initialization — first message in this session
+        inputs = {
+            "question":            sanitize_text(req.case_content),
+            "full_case_content":   sanitize_text(req.case_content),
+            "messages":            [HumanMessage(content=sanitize_text(req.case_content))],
+            "user_role":           req.role,
+            "retry_count":         0,
+            "documents":           [],
+            "retrieval_queries":   [],
+            "extracted_facts":     None,
+            "mapped_laws":         None,
+            "sentencing_data":     None,
+            "is_relevant":         None,
+            "_missing_fields":     None,
+            "per_defendant_dates": None,
+            "rebuttal_against":    req.rebuttal_against,
+            "chat_history":        req.conversation_history,
+            "is_practice_mode":    False,
+            "user_analysis":       None,
+        }
+        print(f"[PREDICT] New case — full init | session_id={req.session_id}")
+    else:
+        # Follow-up — only pass what changes; checkpoint restores the rest.
+        # documents, mapped_laws, extracted_facts,
+        # sentencing_data, per_defendant_dates → all from Turn 1 checkpoint.
+        # full_case_content is included because if classify_intent routes to
+        # new_case (e.g. user re-submits corrected case after clarification),
+        # extract_facts must use the NEW text, not the stale checkpoint value.
+        inputs = {
+            "question":            sanitize_text(req.case_content),
+            "full_case_content":   sanitize_text(req.case_content),
+            "messages":            [HumanMessage(content=sanitize_text(req.case_content))],
+            "user_role":           req.role,
+            "retry_count":         0,
+            "is_relevant":         None,
+            "_missing_fields":     None,
+            "rebuttal_against":    req.rebuttal_against,
+            "chat_history":        req.conversation_history,
+            "is_practice_mode":    False,
+            "user_analysis":       None,
+        }
+        print(f"[PREDICT] Follow-up — minimal inputs (checkpoint restores state) | session_id={req.session_id}")
+
+    # Build LangGraph config with thread_id for checkpointing.
+    # If no session_id provided, generate a unique one (single-turn, no checkpoint reuse).
+    thread_id = req.session_id or str(uuid.uuid4())
+    config = {"configurable": {"thread_id": thread_id}}
 
     try:
-        output = await graph.ainvoke(inputs)
+        output = await graph.ainvoke(inputs, config=config)
         final_answer = output["messages"][-1].content
 
         # Sanitize mapped_laws: replace any None field values with "" to
@@ -3243,7 +3382,11 @@ async def practice_evaluate(req: PracticeEvalRequest):
     }
 
     try:
-        output = await graph.ainvoke(inputs)
+        # Practice Mode: use a unique thread_id so we never restore a stale
+        # checkpoint from a prior chat session.  Each practice evaluation is
+        # a standalone, one-shot analysis.
+        practice_config = {"configurable": {"thread_id": f"practice-{uuid.uuid4()}"}}
+        output = await graph.ainvoke(inputs, practice_config)
         # practice_evaluate_node writes a JSON string as the final AIMessage
         data = _extract_json(output["messages"][-1].content)
 

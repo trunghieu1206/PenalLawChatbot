@@ -37,7 +37,7 @@ tmux new -s deploy
 # Upload deploy scripts (note: no -P flag, EC2 uses port 22 by default)
 scp -i "chatbot-key.pem" \
   scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh \
-  scripts/backup_database.sh scripts/restore_database.sh \
+  scripts/backup_database.sh scripts/restore_database.sh scripts/backup_database.sh \
   ubuntu@ec2-15-135-68-24.ap-southeast-2.compute.amazonaws.com:/home/ubuntu/
 
 # Upload .env (note: home dir is /home/ubuntu/ not /root/)
@@ -80,14 +80,14 @@ sudo bash deploy_nodocker.sh
 
 # ── BACKUP DATABASE: create backup on server and download ─────────────────────
 # On server:
-cd ~/PenalLawChatbot
-mkdir -p ./database/backups
-chmod 777 ./database/backups
-./backup_database.sh
+sudo bash ~/backup_database.sh
 
-# Download backup to local machine (from LOCAL):
+sudo cp /root/PenalLawChatbot/database/backups/penallaw_backup_*.sql ~/
+sudo chown ubuntu:ubuntu ~/penallaw_backup_*.sql
+
+# Download backup to local machine (run this from your LOCAL Mac):
 scp -i "chatbot-key.pem" \
-  'ubuntu@ec2-15-135-68-24.ap-southeast-2.compute.amazonaws.com:~/PenalLawChatbot/database/backups/penallaw_backup_*.sql' \
+  'ubuntu@ec2-15-135-68-24.ap-southeast-2.compute.amazonaws.com:~/penallaw_backup_*.sql' \
   ~/Desktop/Projects/PenalLawChatbot/database/backups/
 
 # ── EVALUATION ────────────────────────────────────────────────────────────────
