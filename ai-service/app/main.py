@@ -2986,12 +2986,12 @@ OUTPUT: CHỈ JSON hợp lệ."""
             )
         else:
             reply = (
-                "Xin lỗi, lĩnh vực này nằm ngoài phạm vi hỗ trợ của tôi. 🙏\n\n"
+                "Xin lỗi, lĩnh vực này nằm ngoài phạm vi hỗ trợ của tôi. \n\n"
                 "Tôi chuyên về **pháp luật hình sự Việt Nam** — nếu bạn có:\n"
                 "- Hồ sơ vụ án cần phân tích tội danh và hình phạt\n"
                 "- Câu hỏi về điều khoản BLHS, tình tiết tăng nặng/giảm nhẹ\n"
                 "- Cần lập luận theo góc độ thẩm phán, luật sư bào chữa hoặc luật sư bị hại\n\n"
-                "Hãy chia sẻ và tôi sẽ hỗ trợ ngay! ⚖️"
+                "Hãy chia sẻ và tôi sẽ hỗ trợ ngay! "
             )
 
         return {"messages": [AIMessage(content=reply)]}
@@ -3122,6 +3122,9 @@ OUTPUT: CHỈ JSON hợp lệ."""
             else AIMessage(content=sanitize_text(m.get("content", "")))
             for m in chat_history
         ]
+        print("  [FOLLOWUP] Invoking LLM for follow-up response...")
+        import time
+        start_llm = time.time()
         response = llm.invoke(_sanitize_msgs([
             SystemMessage(content=(
                 f"Bạn là chuyên gia luật hình sự Việt Nam, góc độ: {role}.\n"
@@ -3135,6 +3138,8 @@ OUTPUT: CHỈ JSON hợp lệ."""
                 f"KẾT QUẢ ÁNH XẠ (nếu có):\n{json.dumps(mapped_laws, ensure_ascii=False)}"
             ))
         ]))
+        elapsed_llm = time.time() - start_llm
+        print(f"  [FOLLOWUP] LLM generation finished in {elapsed_llm:.2f}s")
         return {"messages": [AIMessage(content=cleanup_response(response.content))]}
 
     # -------------------------------------------------------
