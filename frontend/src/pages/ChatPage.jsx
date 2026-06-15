@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import Topbar from '../components/Topbar.jsx';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { chatApi, lawsApi } from '../services/api.js';
 import MessageBubble from '../components/MessageBubble.jsx';
@@ -10,8 +9,7 @@ import Sidebar from '../components/Sidebar.jsx';
 import styles from './ChatPage.module.css';
 
 export default function ChatPage() {
-  const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   const [sessions, setSessions] = useState([]);
   const [currentSession, setCurrentSession] = useState(null);
@@ -37,6 +35,8 @@ export default function ChatPage() {
   const [pendingContent, setPendingContent] = useState('');
   // showRoleLockPopup: brief tooltip shown when user clicks locked role button
   const [showRoleLockPopup, setShowRoleLockPopup] = useState(false);
+  // showDownloadMenu: controls the TXT / CSV dropdown
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
 
   // In-memory message cache per session
   const [sessionMessages, setSessionMessages] = useState({});
@@ -217,6 +217,7 @@ export default function ChatPage() {
   /** Export the current conversation to a .txt file. */
   const handleDownload = () => {
     if (!messages.length) return;
+    setShowDownloadMenu(false);
     const title = currentSession?.title || 'Phiên hội thoại';
     const lines = messages.map(m => {
       const speaker = m.role === 'user' ? 'Người dùng' : `Trợ lý (${roleLabel})`;
@@ -229,6 +230,28 @@ export default function ChatPage() {
     a.download = `${title.replace(/[^a-z0-9\u00C0-\u024F\s]/gi, '').trim() || 'phien-tu-van'}.txt`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  /** Export the current conversation to a .csv file via the backend endpoint. */
+  const handleDownloadCsv = async () => {
+    if (!currentSession || !messages.length) return;
+    setShowDownloadMenu(false);
+    try {
+      const blob = await chatApi.exportCsv(currentSession.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const safeTitle = (currentSession.title || 'phien-tu-van')
+        .replace(/[^a-z0-9\u00C0-\u024F\s]/gi, '')
+        .trim()
+        .replace(/\s+/g, '-')
+        || 'phien-tu-van';
+      a.download = `${safeTitle}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError('Không thể xuất CSV. Vui lòng thử lại.');
+    }
   };
 
   /**
@@ -269,9 +292,6 @@ export default function ChatPage() {
     }
   };
 
-  const userInitials = user?.fullName
-    ? user.fullName.split(' ').slice(0, 2).map(part => part[0]).join('')
-    : user?.email?.[0]?.toUpperCase() || 'G';
 
     return (
       <div className="bg-background text-on-background font-body-md text-body-md h-full min-h-screen flex overflow-hidden">
@@ -347,9 +367,38 @@ export default function ChatPage() {
                         Vai trò đã bị khóa cho phiên này.
                       </div>
                     )}
-                    <button onClick={handleDownload} disabled={!messages.length} className="text-primary hover:bg-surface-container p-2 rounded transition-colors border border-transparent hover:border-surface-variant disabled:opacity-40 disabled:cursor-not-allowed" title="Tải xuống cuộc trò chuyện">
-                      <span className="material-symbols-outlined">download</span>
-                    </button>
+                    {/* Download dropdown */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowDownloadMenu(prev => !prev)}
+                        disabled={!messages.length}
+                        className="text-primary hover:bg-surface-container p-2 rounded transition-colors border border-transparent hover:border-surface-variant disabled:opacity-40 disabled:cursor-not-allowed"
+                        title="Tải xuống cuộc trò chuyện"
+                      >
+                        <span className="material-symbols-outlined">download</span>
+                      </button>
+                      {showDownloadMenu && (
+                        <div
+                          className="absolute right-0 bottom-full mb-1 bg-surface-container-highest border border-surface-variant rounded shadow-lg z-50 overflow-hidden min-w-[140px]"
+                          onMouseLeave={() => setShowDownloadMenu(false)}
+                        >
+                          <button
+                            onClick={handleDownload}
+                            className="w-full text-left flex items-center gap-2 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-high transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">description</span>
+                            Tải file TXT
+                          </button>
+                          <button
+                            onClick={handleDownloadCsv}
+                            className="w-full text-left flex items-center gap-2 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-high transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">table_chart</span>
+                            Tải file CSV
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

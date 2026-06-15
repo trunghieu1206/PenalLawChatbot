@@ -47,6 +47,22 @@ public class AdminService {
     @Transactional(readOnly = true)
     public List<AdminDTOs.FeedbackDetail> getAllFeedback() {
         List<Feedback> feedbacks = feedbackRepository.findAllByOrderByCreatedAtDesc();
+
+        // Batch-load all referenced sessions in a single query to avoid N+1 selects.
+        List<UUID> sessionIds = feedbacks.stream()
+                .map(Feedback::getSessionId)
+                .filter(sid -> sid != null)
+                .distinct()
+                .collect(Collectors.toList());
+
+        Map<UUID, String> sessionModeMap = sessionIds.isEmpty()
+                ? Map.of()
+                : sessionRepository.findAllById(sessionIds).stream()
+                        .collect(Collectors.toMap(
+                                ChatSession::getId,
+                                s -> s.getMode() != null ? s.getMode() : "unknown"
+                        ));
+
         return feedbacks.stream().map(f -> {
             UUID sid = f.getSessionId();
 
@@ -60,9 +76,8 @@ public class AdminService {
                         .collect(Collectors.toList());
             }
 
-            // Session metadata
-            String sessionMode = (sid != null)
-                    ? sessionRepository.findById(sid).map(ChatSession::getMode).orElse("unknown")
+            String sessionMode = sid != null
+                    ? sessionModeMap.getOrDefault(sid, "unknown")
                     : "unknown";
 
             return new AdminDTOs.FeedbackDetail(

@@ -9,13 +9,6 @@ import RegisterPage from './pages/RegisterPage.jsx';
 import AdminPage from './pages/AdminPage.jsx';
 import StatsPage from './pages/StatsPage.jsx';
 
-// ProtectedRoute: Only allow authenticated or guest access
-function ProtectedRoute({ children }) {
-  const { user } = useAuth();
-  // Allow both authenticated users and guests (null user) to access chat
-  return children;
-}
-
 // RedirectIfAuthenticated: Redirect home if already logged in
 function RedirectIfAuthenticated({ children }) {
   const { user } = useAuth();
@@ -40,8 +33,8 @@ function Routes_() {
       <Route path="/" element={<Navigate to="/chat" replace />} />
       <Route path="/login" element={<RedirectIfAuthenticated><LoginPage /></RedirectIfAuthenticated>} />
       <Route path="/register" element={<RedirectIfAuthenticated><RegisterPage /></RedirectIfAuthenticated>} />
-      <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
-      <Route path="/training" element={<ProtectedRoute><TrainingPage /></ProtectedRoute>} />
+      <Route path="/chat" element={<ChatPage />} />
+      <Route path="/training" element={<TrainingPage />} />
       <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
       <Route path="/home" element={<StatsPage />} />
       <Route path="*" element={<Navigate to="/chat" replace />} />

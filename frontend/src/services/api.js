@@ -88,6 +88,13 @@ export const chatApi = {
   // Delete a session
   deleteSession: (sessionId) =>
     apiClient.delete(`/chat/sessions/${sessionId}`).then(r => r.data),
+
+  // Download the full conversation as a CSV file.
+  // Returns a Blob — caller is responsible for creating the download link.
+  exportCsv: (sessionId) =>
+    apiClient.get(`/chat/sessions/${sessionId}/export.csv`, {
+      responseType: 'blob',
+    }).then(r => r.data),
 };
 
 // ---- LAWS API ----

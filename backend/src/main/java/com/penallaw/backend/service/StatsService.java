@@ -2,7 +2,6 @@ package com.penallaw.backend.service;
 
 import com.penallaw.backend.dto.StatsDTOs;
 import com.penallaw.backend.entity.ChatMessage;
-import com.penallaw.backend.entity.ChatSession;
 import com.penallaw.backend.repository.ChatMessageRepository;
 import com.penallaw.backend.repository.ChatSessionRepository;
 import com.penallaw.backend.repository.VisitorLogRepository;
@@ -15,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -58,11 +56,11 @@ public class StatsService {
                 .distinct()
                 .count();
 
-        // -- Sessions by role --
-        Map<String, Long> byRole = sessionRepository.findAll().stream()
-                .collect(Collectors.groupingBy(
-                        s -> Optional.ofNullable(s.getMode()).orElse("neutral"),
-                        Collectors.counting()
+        // -- Sessions by role (DB-aggregated, avoids loading all sessions into memory) --
+        Map<String, Long> byRole = sessionRepository.countByMode().stream()
+                .collect(Collectors.toMap(
+                        row -> (String) row[0],
+                        row -> (Long) row[1]
                 ));
 
         // -- Cases by province (dia_danh from extracted_facts) --

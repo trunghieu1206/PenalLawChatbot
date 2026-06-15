@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import Footer from '../components/Footer.jsx';
 import Topbar from '../components/Topbar.jsx';
-import { Link, useNavigate } from 'react-router-dom';
 import { practiceApi, lawsApi } from '../services/api.js';
 import styles from './TrainingPage.module.css';
 import Sidebar from '../components/Sidebar.jsx';
@@ -32,7 +31,6 @@ const MODES = [
 const LAW_CITATION_REGEX = /Điều\s+(\d+[A-Z]?)(?:\s+(Bộ\s+luật\s+Hình\s+sự(?:\s+\d{4})?(?:\s+\(sửa\s+đổi(?:\s+\d{4})?\))?|BLHS(?:\s+\d{4})?|BLTTHS))?/g;
 
 export default function TrainingPage() {
-  const navigate = useNavigate();
   const [mode, setMode] = useState('neutral');
   const [caseDesc, setCaseDesc] = useState('');
   const [userAnalysis, setUserAnalysis] = useState('');

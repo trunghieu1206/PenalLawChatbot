@@ -3123,7 +3123,6 @@ OUTPUT: CHỈ JSON hợp lệ."""
             for m in chat_history
         ]
         print("  [FOLLOWUP] Invoking LLM for follow-up response...")
-        import time
         start_llm = time.time()
         response = llm.invoke(_sanitize_msgs([
             SystemMessage(content=(

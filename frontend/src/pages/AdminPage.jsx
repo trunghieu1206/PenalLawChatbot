@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
-import { useNavigate } from 'react-router-dom';
+import Topbar from '../components/Topbar.jsx';
 import { adminApi } from '../services/api.js';
 import styles from './AdminPage.module.css';
 
 const ROLE_LABEL = { neutral: 'Thẩm phán', defense: 'Luật sư Bào chữa', victim: 'Luật sư Bị hại' };
 
 export default function AdminPage() {
-  const navigate = useNavigate();
   const [feedback, setFeedback] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
@@ -37,7 +36,9 @@ export default function AdminPage() {
       .catch(e => { setError('Không thể tải phản hồi. ' + (e.message || '')); setLoading(false); });
   }, []);
 
-  // Lazy-load user stats when that tab is first opened
+  // Lazy-load user stats when that tab is first opened.
+  // All three variables are listed in deps; userStats.length and loadingUsers guard
+  // against double-fetch when the tab is re-selected after data is already loaded.
   useEffect(() => {
     if (activeTab === 'users' && userStats.length === 0 && !loadingUsers) {
       setLoadingUsers(true);
@@ -45,7 +46,7 @@ export default function AdminPage() {
         .then(data => { setUserStats(data); setLoadingUsers(false); })
         .catch(() => setLoadingUsers(false));
     }
-  }, [activeTab]);
+  }, [activeTab, userStats.length, loadingUsers]);
 
   useEffect(() => {
     if (!selectedId && feedback.length > 0) {
@@ -90,11 +91,7 @@ export default function AdminPage() {
       <Sidebar activeTab="admin" />
 
       <main className="ml-64 flex-1 flex flex-col h-screen bg-surface overflow-y-auto pt-16">
-        <header className="bg-white/80 backdrop-blur-md fixed top-0 right-0 w-[calc(100%-16rem)] z-40 border-b border-surface-variant flex justify-between items-center h-16 px-8 transition-all duration-300">
-                <div className="flex items-center gap-6">
-                  <span className="text-lg font-black text-slate-900 font-h3">VNPLaw</span>
-                </div>
-              </header>
+        <Topbar />
 
         <div className={styles.content}>
           <div className={styles.pageHeader}>

@@ -1,5 +1,7 @@
 package com.penallaw.backend.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.penallaw.backend.client.AiServiceClient;
 import com.penallaw.backend.dto.ChatDTOs;
 import com.penallaw.backend.entity.ChatMessage;
@@ -15,9 +17,11 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +37,7 @@ public class ChatService {
     private final ChatMessageRepository messageRepository;
     private final UserRepository userRepository;
     private final AiServiceClient aiServiceClient;
+    private final ObjectMapper objectMapper;
 
     // ── SESSION HELPERS ──────────────────────────────────────────
 
@@ -206,5 +211,94 @@ public class ChatService {
             throw new RuntimeException("Session not found: " + sessionId);
         }
         sessionRepository.deleteById(sessionId);
+    }
+
+    // ── CSV EXPORT ───────────────────────────────────────────────
+
+    /**
+     * Export a full session conversation as a UTF-8 BOM CSV byte array.
+     *
+     * Columns: #, timestamp, role, content, session_mode, session_title,
+     *          mapped_laws (JSON), extracted_facts (JSON), sentencing_data (JSON)
+     *
+     * The UTF-8 BOM (0xEF 0xBB 0xBF) is prepended so that Excel on Windows
+     * opens the file with correct Vietnamese character encoding without any
+     * manual import steps. Mac/Linux tools ignore the BOM transparently.
+     *
+     * @param sessionId UUID of the session to export
+     * @return raw CSV bytes ready to stream as a file download
+     */
+    @Transactional(readOnly = true)
+    public byte[] exportSessionAsCsv(UUID sessionId) {
+        ChatSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new RuntimeException("Session not found: " + sessionId));
+        List<ChatMessage> messages = messageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        String sessionMode  = session.getMode()  != null ? session.getMode()  : "";
+        String sessionTitle = session.getTitle() != null ? session.getTitle() : "Phiên mới";
+
+        StringBuilder sb = new StringBuilder();
+
+        // Header row
+        sb.append("#,timestamp,role,content,session_mode,session_title,mapped_laws,extracted_facts,sentencing_data\r\n");
+
+        for (int i = 0; i < messages.size(); i++) {
+            ChatMessage m = messages.get(i);
+
+            String timestamp = m.getCreatedAt() != null
+                    ? fmt.format(m.getCreatedAt()) : "";
+
+            // Structured JSON columns — empty for user rows
+            String mappedLawsJson    = "";
+            String extractedFactsJson = "";
+            String sentencingDataJson = "";
+
+            if ("assistant".equals(m.getRole())) {
+                mappedLawsJson     = toJson(m.getMappedLaws());
+                extractedFactsJson = toJson(m.getExtractedFacts());
+                sentencingDataJson = toJson(m.getSentencingData());
+            }
+
+            sb.append(i + 1).append(',');
+            sb.append(csvQuote(timestamp)).append(',');
+            sb.append(csvQuote(m.getRole())).append(',');
+            sb.append(csvQuote(m.getContent())).append(',');
+            sb.append(csvQuote(sessionMode)).append(',');
+            sb.append(csvQuote(sessionTitle)).append(',');
+            sb.append(csvQuote(mappedLawsJson)).append(',');
+            sb.append(csvQuote(extractedFactsJson)).append(',');
+            sb.append(csvQuote(sentencingDataJson)).append("\r\n");
+        }
+
+        // Prepend UTF-8 BOM for Windows Excel compatibility
+        byte[] bom  = new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
+        byte[] body = sb.toString().getBytes(StandardCharsets.UTF_8);
+        byte[] result = new byte[bom.length + body.length];
+        System.arraycopy(bom, 0, result, 0, bom.length);
+        System.arraycopy(body, 0, result, bom.length, body.length);
+        return result;
+    }
+
+    /**
+     * Wrap a string value in double-quotes for CSV, escaping internal double-quotes
+     * by doubling them (RFC 4180). Null-safe: null → empty quoted cell.
+     * Newlines within the value are preserved inside the quoted cell — RFC 4180 allows
+     * this and spreadsheet apps (Excel, LibreOffice, Numbers) handle it correctly.
+     */
+    private String csvQuote(String value) {
+        if (value == null) return "\"\"";
+        return '"' + value.replace("\"", "\"\"") + '"';
+    }
+
+    /** Safely serialise any object to a compact JSON string. Returns "" on failure. */
+    private String toJson(Object value) {
+        if (value == null) return "";
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to serialise field to JSON for CSV export: {}", e.getMessage());
+            return "";
+        }
     }
 }

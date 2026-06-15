@@ -24,4 +24,8 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
     /** Session count per registered user since a given timestamp (used for \"today\" counts). */
     @Query("SELECT s.user, COUNT(s) FROM ChatSession s WHERE s.user IS NOT NULL AND s.createdAt >= :startOfDay GROUP BY s.user")
     List<Object[]> findUserSessionCountsToday(@Param("startOfDay") LocalDateTime startOfDay);
+
+    /** Session count grouped by mode (role). Returns [mode, count] pairs. */
+    @Query("SELECT COALESCE(s.mode, 'neutral'), COUNT(s) FROM ChatSession s GROUP BY s.mode")
+    List<Object[]> countByMode();
 }
