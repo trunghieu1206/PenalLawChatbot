@@ -9,6 +9,7 @@ import com.penallaw.backend.entity.ChatSession;
 import com.penallaw.backend.entity.User;
 import com.penallaw.backend.repository.ChatMessageRepository;
 import com.penallaw.backend.repository.ChatSessionRepository;
+import com.penallaw.backend.repository.FeedbackRepository;
 import com.penallaw.backend.repository.UserRepository;
 import com.penallaw.backend.exception.RateLimitException;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,7 @@ public class ChatService {
 
     private final ChatSessionRepository sessionRepository;
     private final ChatMessageRepository messageRepository;
+    private final FeedbackRepository feedbackRepository;
     private final UserRepository userRepository;
     private final AiServiceClient aiServiceClient;
     private final ObjectMapper objectMapper;
@@ -210,6 +212,9 @@ public class ChatService {
         if (!sessionRepository.existsById(sessionId)) {
             throw new RuntimeException("Session not found: " + sessionId);
         }
+        // Delete orphan feedback rows first (no FK constraint in DB, must do manually)
+        feedbackRepository.deleteBySessionId(sessionId);
+        // CascadeType.ALL on ChatSession.messages handles chat_messages deletion
         sessionRepository.deleteById(sessionId);
     }
 

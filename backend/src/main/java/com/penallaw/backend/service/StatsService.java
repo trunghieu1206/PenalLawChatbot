@@ -49,15 +49,14 @@ public class StatsService {
         long totalSessions = sessionRepository.count();
         long totalUsers    = userRepository.count();
 
-        // Sessions that ran the new_case pipeline (AI response has extracted_facts)
-        List<ChatMessage> aiMessages = messageRepository.findAssistantMessagesWithFacts();
-        long casesProcessed = aiMessages.stream()
-                .map(m -> m.getSession().getId())
-                .distinct()
-                .count();
+        // Sessions that ran the new_case pipeline — single COUNT DISTINCT query (no N+1)
+        long casesProcessed = sessionRepository.countDistinctSessionsWithFacts();
 
-        // -- Sessions by role (DB-aggregated, avoids loading all sessions into memory) --
-        Map<String, Long> byRole = sessionRepository.countByMode().stream()
+        // Still need the full message list for province/crime-type breakdowns
+        List<ChatMessage> aiMessages = messageRepository.findAssistantMessagesWithFacts();
+
+        // -- Sessions by role (DB-aggregated) --
+        Map<String, Long> byRole = sessionRepository.groupByMode().stream()
                 .collect(Collectors.toMap(
                         row -> (String) row[0],
                         row -> (Long) row[1]
