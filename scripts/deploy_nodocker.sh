@@ -291,15 +291,28 @@ cd "$PROJECT_DIR/ai-service"
 # for Python 3.13+. Ubuntu 26.04 ships python3 → Python 3.14 by default.
 # If the system Python is too new (>= 3.13), auto-install python3.11 which has
 # full wheel coverage for all our dependencies.
+# On Ubuntu 24.04/26.04 python3.11 is NOT in the default apt repos — it must
+# come from the deadsnakes PPA (ppa:deadsnakes/ppa).
 _SYS_PY_MAJOR=$(python3 -c "import sys; print(sys.version_info.major)" 2>/dev/null || echo "3")
 _SYS_PY_MINOR=$(python3 -c "import sys; print(sys.version_info.minor)" 2>/dev/null || echo "0")
 if [ "$_SYS_PY_MAJOR" -ge 3 ] && [ "$_SYS_PY_MINOR" -ge 13 ]; then
     warn "System python3 is Python ${_SYS_PY_MAJOR}.${_SYS_PY_MINOR} — too new for pydantic-core/torch wheels."
     if ! command -v python3.11 &>/dev/null; then
-        info "Auto-installing python3.11 (required for ML package wheel compatibility)..."
+        info "Auto-installing python3.11 via deadsnakes PPA (required for ML wheel compatibility)..."
+        # Add deadsnakes PPA — the only reliable source of old Python versions on Ubuntu 24/26
         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            python3.11 python3.11-venv python3.11-dev python3-pip 2>&1 | tail -3 || \
+            software-properties-common 2>&1 | tail -2 || true
+        add-apt-repository -y ppa:deadsnakes/ppa 2>&1 | tail -3 || true
+        apt-get update -qq 2>&1 | tail -2 || true
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            python3.11 python3.11-venv 2>&1 | tail -3 || \
             warn "python3.11 install failed — will try to continue with system Python."
+        # Bootstrap pip for python3.11 (deadsnakes doesn't include pip directly)
+        if command -v python3.11 &>/dev/null && ! python3.11 -m pip --version &>/dev/null 2>&1; then
+            info "Bootstrapping pip for python3.11..."
+            curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 2>&1 | tail -2 || \
+                warn "pip bootstrap for python3.11 failed."
+        fi
     fi
     if command -v python3.11 &>/dev/null; then
         info "Using python3.11 ($(python3.11 --version)) instead of system python3 ${_SYS_PY_MAJOR}.${_SYS_PY_MINOR}."
