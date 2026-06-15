@@ -43,6 +43,19 @@ export default function ChatPage() {
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+  const downloadMenuRef = useRef(null);
+
+  // Close download menu when clicking outside of it
+  useEffect(() => {
+    if (!showDownloadMenu) return;
+    const handleClickOutside = (e) => {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target)) {
+        setShowDownloadMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showDownloadMenu]);
 
   // Always read role from the active session — never stale
   const activeRole = currentSession?.mode || role;
@@ -345,7 +358,7 @@ export default function ChatPage() {
 
             {/* Main Chat Area */}
             <section className="flex-1 flex flex-col bg-surface relative min-w-0">
-              <div className="px-8 py-3 border-b border-surface-variant bg-surface-container-lowest flex-shrink-0">
+              <div className="px-8 py-3 border-b border-surface-variant bg-surface-container-lowest flex-shrink-0 relative z-10">
                 <div className="max-w-3xl mx-auto flex items-center justify-between">
                   <div className="flex flex-col">
                     <h2 className="text-lg font-bold text-on-surface truncate max-w-sm mb-0.5">
@@ -368,7 +381,7 @@ export default function ChatPage() {
                       </div>
                     )}
                     {/* Download dropdown */}
-                    <div className="relative">
+                    <div className="relative" ref={downloadMenuRef}>
                       <button
                         onClick={() => setShowDownloadMenu(prev => !prev)}
                         disabled={!messages.length}
@@ -379,8 +392,7 @@ export default function ChatPage() {
                       </button>
                       {showDownloadMenu && (
                         <div
-                          className="absolute right-0 bottom-full mb-1 bg-surface-container-highest border border-surface-variant rounded shadow-lg z-50 overflow-hidden min-w-[140px]"
-                          onMouseLeave={() => setShowDownloadMenu(false)}
+                          className="absolute right-0 top-full mt-1 bg-surface-container-highest border border-surface-variant rounded shadow-lg z-50 overflow-hidden min-w-[140px]"
                         >
                           <button
                             onClick={handleDownload}
