@@ -1,12 +1,12 @@
 package com.penallaw.backend.client;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.penallaw.backend.dto.PracticeDTOs;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.util.List;
@@ -40,7 +40,6 @@ public class AiServiceClient {
     public record PredictRequest(
             @JsonProperty("case_content") String caseContent,
             String role,
-            @JsonProperty("rebuttal_against") String rebuttalAgainst,
             // Map<String, Object> allows assistant entries to carry mapped_laws (nested structure)
             // alongside the plain String fields "role" and "content".
             @JsonProperty("conversation_history") List<Map<String, Object>> conversationHistory,
@@ -57,16 +56,14 @@ public class AiServiceClient {
             @JsonProperty("sentencing_data") Map<String, Object> sentencingData
     ) {}
 
-    public record HealthResponse(String status, String device, @JsonProperty("model_loaded") boolean modelLoaded) {}
-
     /**
      * Call Python AI service to get legal analysis.
      * @param conversationHistory prior messages as [{role, content}] for context
      * @param sessionId session UUID used as thread_id for LangGraph checkpointing
      */
-    public PredictResponse predict(String caseContent, String role, String rebuttalAgainst,
+    public PredictResponse predict(String caseContent, String role,
                                    List<Map<String, Object>> conversationHistory, String sessionId) {
-        PredictRequest request = new PredictRequest(caseContent, role, rebuttalAgainst, conversationHistory, sessionId);
+        PredictRequest request = new PredictRequest(caseContent, role, conversationHistory, sessionId);
         return getClient().post()
                 .uri("/predict")
                 .bodyValue(request)
@@ -78,13 +75,17 @@ public class AiServiceClient {
     }
 
     /**
-     * Check AI service health.
+     * Forward a Practice Mode evaluation request to the Python AI service.
+     * Mirrors the shape of PracticeEvalRequest / PracticeEvalResponse in main.py.
      */
-    public Mono<HealthResponse> checkHealth() {
-        return getClient().get()
-                .uri("/health")
+    public PracticeDTOs.EvaluateResponse evaluatePractice(PracticeDTOs.EvaluateRequest request) {
+        return getClient().post()
+                .uri("/practice/evaluate")
+                .bodyValue(request)
                 .retrieve()
-                .bodyToMono(HealthResponse.class)
-                .timeout(Duration.ofSeconds(5));
+                .bodyToMono(PracticeDTOs.EvaluateResponse.class)
+                .timeout(Duration.ofSeconds(timeoutSeconds))
+                .onErrorMap(ex -> new RuntimeException("AI service error (practice): " + ex.getMessage(), ex))
+                .block();
     }
 }

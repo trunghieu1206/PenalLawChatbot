@@ -1,6 +1,5 @@
 package com.penallaw.backend.dto;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 
@@ -23,11 +22,9 @@ public class ChatDTOs {
             LocalDateTime createdAt
     ) {}
 
-    // @JsonAlias allows accepting both "rebuttalAgainst" AND "rebuttal_against" from JSON
     public record SendMessageRequest(
             @NotBlank String content,
-            String role,  // optional override
-            @JsonAlias("rebuttal_against") String rebuttalAgainst
+            String role  // optional override
     ) {}
 
 

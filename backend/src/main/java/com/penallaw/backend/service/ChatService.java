@@ -159,7 +159,7 @@ public class ChatService {
 
         AiServiceClient.PredictResponse aiResponse;
         try {
-            aiResponse = aiServiceClient.predict(request.content(), role, request.rebuttalAgainst(), conversationHistory, sessionId.toString());
+            aiResponse = aiServiceClient.predict(request.content(), role, conversationHistory, sessionId.toString());
         } catch (Exception e) {
             log.error("AI service error: {}", e.getMessage());
             throw new RuntimeException("Dịch vụ AI không khả dụng. Vui lòng thử lại sau. (" + e.getMessage() + ")");

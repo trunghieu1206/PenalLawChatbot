@@ -4,7 +4,7 @@ Enhanced LangGraph pipeline with:
   - Fact extraction node
   - Law mapping node
   - Deterministic sentencing calculation
-  - Rebuttal mode
+  - Follow-up context handling
   - Structured legal argument generation
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -444,14 +444,11 @@ class AgentState(TypedDict):
     full_case_content:   str
     documents:           List[Document]
     retrieval_queries:   List[str]                   # 3 queries from multi_query_rewrite
-    retry_count:         int
     user_role:           Literal["defense", "victim", "neutral"]
     extracted_facts:     Optional[Dict[str, Any]]
     mapped_laws:         Optional[List[Dict[str, Any]]]
-    rebuttal_against:    Optional[str]
     sentencing_data:     Optional[Dict[str, Any]]
     chat_history:        Optional[List[Dict[str, Any]]]
-    is_relevant:         Optional[bool]
     _missing_fields:     Optional[List[str]]         # set by clarification_check_node
     per_defendant_dates: Optional[List[Dict[str, str]]]  # multi-defendant support
     is_practice_mode:    Optional[bool]              # True when invoked from /practice/evaluate
@@ -464,7 +461,7 @@ class AgentState(TypedDict):
 class RequestBody(BaseModel):
     case_content: str
     role: Literal["defense", "victim", "neutral"] = "neutral"
-    rebuttal_against: Optional[str] = None
+
     conversation_history: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
     session_id: Optional[str] = None  # thread_id for LangGraph MemorySaver checkpointing
 
@@ -483,8 +480,6 @@ class HealthResponse(BaseModel):
     model_loaded: bool
 
 
-class GradeDocuments(BaseModel):
-    binary_score: str = Field(description="Relevance score 'yes' or 'no'")
 
 
 class PracticeEvalRequest(BaseModel):
@@ -1734,7 +1729,7 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
 
         # if there is no documents to rerank then exit 
         if not docs:
-            return {"documents": [], "is_relevant": False}
+            return {"documents": []}
 
         retrieval_queries = state.get("retrieval_queries") or []
         query = (
@@ -1774,7 +1769,7 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
         top_docs = top_semantic + adjustment_docs + pinned_docs
 
         if not top_docs:
-            return {"documents": [], "is_relevant": False}
+            return {"documents": []}
 
         print(f"  [RERANK] query[:80]: {query[:80]!r}")
         print(f"  [RERANK] {len(docs)} → {len(top_docs)} docs "
@@ -1795,22 +1790,18 @@ OUTPUT: CHỈ JSON hợp lệ, không markdown, không giải thích."""
             purpose = doc.metadata.get("_purpose", "?")
             print(f"    [pin] Điều {art} | {src} | purpose={purpose}")
 
-        return {"documents": top_docs, "is_relevant": True}
+        return {"documents": top_docs}
 
     def application_mode_router(state: AgentState) -> str:
         """
         Final-layer router after map_laws (Application Mode Router in diagram).
         Decides which generation node to invoke:
           - 'practice_evaluate' : Practice Mode — user submitted their own analysis for grading
-          - 'rebuttal'          : Chat rebuttal — user is countering a prior AI response
           - 'generate'          : Standard Mode — normal legal argument generation
         """
         if state.get("is_practice_mode"):
             print("  [ROUTER: app_mode] → practice_evaluate")
             return "practice_evaluate"
-        if state.get("rebuttal_against"):
-            print("  [ROUTER: app_mode] → rebuttal")
-            return "rebuttal"
         print("  [ROUTER: app_mode] → generate")
         return "generate"
 
@@ -1883,10 +1874,13 @@ OUTPUT: CHỈ JSON array hợp lệ."""
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=f"SỰ KIỆN:\n{facts_str}\n\nVĂN BẢN LUẬT (có nhãn role):\n{context}\n\nVỤ ÁN:\n{case_text}")
             ]))
-            mapped = _extract_json(response.content)
+            raw_output = response.content
+            print(f"  [MAP_LAWS] LLM output:\n{raw_output}")
+
+            mapped = _extract_json(raw_output)
             if not isinstance(mapped, list) or len(mapped) == 0:
                 raise ValueError("Empty or non-list mapped_laws")
-            
+
             # STRICT FILTER: Drop any mapped article that is NOT in retrieved documents
             retrieved_articles = {str(d.metadata.get("article_number", "")) for d in documents}
             valid_mapped = []
@@ -1898,11 +1892,12 @@ OUTPUT: CHỈ JSON array hợp lệ."""
                     if art_num in retrieved_articles:
                         valid_mapped.append(item)
                     else:
-                        print(f"  [MAP_LAWS] ❌ Dropping hallucinated mapped article: Điều {art_num}")
+                        print(f"  [MAP_LAWS] ❌ Dropping hallucinated article: Điều {art_num} (not in retrieved docs)")
                 else:
                     valid_mapped.append(item)
-                    
+
             if not valid_mapped:
+                print("  [MAP_LAWS] ⚠️  All articles dropped by hallucination filter — returning error sentinel")
                 valid_mapped = [{
                     "article": "N/A", "clause": "N/A",
                     "offense_name": "Không xác định được",
@@ -1913,7 +1908,7 @@ OUTPUT: CHỈ JSON array hợp lệ."""
             mapped = valid_mapped
 
         except Exception as e:
-            print(f"⚠️  Law mapping failed: {e}")
+            print(f"⚠️  Law mapping failed: {type(e).__name__}: {e}")
             mapped = [{
                 "article": "N/A", "clause": "N/A",
                 "offense_name": "Không xác định được",
@@ -1924,11 +1919,11 @@ OUTPUT: CHỈ JSON array hợp lệ."""
             }]
 
         if mapped and not mapped[0].get("_mapping_error"):
-            print(f"  [MAP_LAWS] Mapped {len(mapped)} offense(s):")
+            print(f"  [MAP_LAWS] ✅ {len(mapped)} offense(s) mapped:")
             for m in mapped:
                 print(f"    → {m.get('article','?')} {m.get('clause','?')} | {m.get('offense_name','?')} | {m.get('edition_applied','?')}")
         else:
-            print("  [MAP_LAWS] Mapping returned error sentinel — check LLM output")
+            print("  [MAP_LAWS] ❌ Mapping error — check LLM output or retrieval quality")
         return {"mapped_laws": mapped}
 
 
@@ -1982,35 +1977,46 @@ OUTPUT: CHỈ JSON array hợp lệ."""
             if "defendant_age_at_crime" in sentencing_data:
                 lines.append(f"- Tuổi bị cáo tại thời điểm phạm tội: {sentencing_data['defendant_age_at_crime']} tuổi")
             if lines:
-                det_context = "\n\n⚙️  DỮ LIỆU ĐÃ TÍNH TOÁN CHÍNH XÁC (BẮT BUỘC SỬ DỤNG):\n" + "\n".join(lines)
+                det_context = "\n\nDỮ LIỆU ĐÃ TÍNH TOÁN CHÍNH XÁC (BẮT BUỘC SỬ DỤNG):\n" + "\n".join(lines)
 
         mapped_context = ""
         mapped = state.get("mapped_laws") or []
-        if any(m.get("_mapping_error") for m in mapped):
-            preamble = (
-                "\u26a0\ufe0f H\u1ec7 th\u1ed1ng kh\u00f4ng th\u1ec3 \u00e1nh x\u1ea1 \u0111i\u1ec1u lu\u1eadt ch\u00ednh x\u00e1c. "
-                "Ph\u00e2n t\u00edch d\u01b0\u1edbi \u0111\u00e2y d\u1ef1a tr\u00ean v\u0103n b\u1ea3n lu\u1eadt \u0111\u00e3 tr\u00fa xu\u1ea5t.\n\n"
+        has_mapping_error = any(m.get("_mapping_error") for m in mapped)
+
+        if has_mapping_error:
+            # BUG FIX (1): preamble was built but never prepended — warning was silently discarded.
+            # BUG FIX (2): retroactivity block was appended even on error path — now skipped.
+            mapped_context = sanitize_text(
+                "- Hệ thống không thể ánh xạ điều luật chính xác. "
+                "Phân tích dưới đây dựa trên văn bản luật đã trích xuất.\n"
             )
-        else:
-            preamble = ""
-        if mapped:
-            mapped_context = "\n\n\ud83d\udccb \u00c1NH X\u1ea0 \u0110I\u1ec0U LU\u1eacT \u0110\u1ec0 XU\u1ea4T:\n" + "\n".join([
-                f"- {m.get('offense_name', '')} \u2192 {m.get('article', '')} {m.get('clause', '')} "
+            print("  [GENERATE] ⚠️  mapped_laws contains error sentinel — warning injected into prompt")
+        elif mapped:
+            # Normal path: valid mappings exist — inject mapping table + retroactivity rules.
+            law_lines = "\n".join([
+                f"- {m.get('offense_name', '')} → {m.get('article', '')} {m.get('clause', '')} "
                 f"[{m.get('edition_applied', '')}]: {m.get('applicable_reason', '')}"
                 for m in mapped
             ])
-            mapped_context = sanitize_text(mapped_context)
-            mapped_context += (
-                "\n\nNGUY\u00caN T\u1eaec TH\u1edcI HI\u1ec6U B\u1eaeT BU\u1ed8C (\u0110i\u1ec1u 7 BLHS):\n"
-                "- Lu\u1eadt \u00e1p d\u1ee5ng = lu\u1eadt c\u00f3 hi\u1ec7u l\u1ef1c T\u1ea0I TH\u1edcI \u0110I\u1ec2M PH\u1ea0M T\u1ed8I (role=primary).\n"
-                "- N\u1ebfu lu\u1eadt m\u1edbi h\u01a1n (role=comparison) NH\u1eb8 H\u01a0N \u2192 b\u1eaft bu\u1ed9c \u00e1p d\u1ee5ng.\n"
-                "- N\u1ebfu lu\u1eadt m\u1edbi N\u1eb6NG H\u01a0N \u2192 C\u1ea4M \u00e1p d\u1ee5ng h\u1ed3i t\u1ed1.\n"
-                "- M\u1ed7i t\u1ed9i danh so s\u00e1nh \u0111\u1ed9c l\u1eadp.\n"
-                "Cu\u1ed1i ph\u1ea3n h\u1ed3i LU\u00d4N th\u00eam b\u1ea3ng:\n"
-                "**\u0110I\u1ec0U KHO\u1ea2N \u00c1P D\u1ee4NG:**\n"
-                "| \u0110i\u1ec1u | T\u1ed9i danh | Ngu\u1ed3n \u00e1p d\u1ee5ng | L\u00fd do ch\u1ecdn ngu\u1ed3n |\n"
+            mapped_context = sanitize_text(
+                "\n\nÁNH XẠ ĐIỀU LUẬT ĐỀ XUẤT:\n" + law_lines +
+                "\n\nNGUYÊN TẮC THỜI HIỆU BẮT BUỘC (Điều 7 BLHS):\n"
+                "- Luật áp dụng = luật có hiệu lực TẠI THỜI ĐIỂM PHẠM TỘI (role=primary).\n"
+                "- Nếu luật mới hơn (role=comparison) NHẸ HƠN → bắt buộc áp dụng.\n"
+                "- Nếu luật mới NẶNG HƠN → CẤM áp dụng hồi tố.\n"
+                "- Mỗi tội danh so sánh độc lập.\n"
+                "Cuối phản hồi LUÔN thêm bảng:\n"
+                "**ĐIỀU KHOẢN ÁP DỤNG:**\n"
+                "| Điều | Tội danh | Nguồn áp dụng | Lý do chọn nguồn |\n"
                 "|------|----------|---------------|------------------|\n"
             )
+        else:
+            # BUG FIX (3): mapped is empty/None (upstream returned nothing) — treat as error.
+            mapped_context = sanitize_text(
+                "Lưu ý: Hệ thống không nhận được kết quả ánh xạ điều luật. "
+                "Phân tích dưới đây dựa trên văn bản luật đã trích xuất.\n"
+            )
+            print("  [GENERATE] ⚠️  mapped_laws is empty — fallback warning injected into prompt")
 
         # ── Criminal record context — role-aware ────────────────────────────────
         # co_tien_an = True means prior conviction(s) exist (even if record is cleared).
@@ -2021,7 +2027,7 @@ OUTPUT: CHỈ JSON array hợp lệ."""
         if _facts.get("co_tien_an"):
             if role in ("neutral", "victim"):
                 nhan_than_context = (
-                    "\n\n⚠️ NHÂN THÂN BỊ CÁO (BẮT BUỘC CÂN NHẮC KHI LƯỢNG HÌNH):\n"
+                    "\n\nNHÂN THÂN BỊ CÁO (BẮT BUỘC CÂN NHẮC KHI LƯỢNG HÌNH):\n"
                     "- Bị cáo CÓ TIỀN ÁN. Dù án tích đã được xóa theo luật nên KHÔNG áp dụng tình tiết\n"
                     "  tái phạm (Điều 52 BLHS), nhưng NHÂN THÂN XẤU VẪN là yếu tố Tòa án phải cân nhắc\n"
                     "  khi quyết định mức hình phạt cụ thể TRONG KHUNG (Điều 45 BLHS).\n"
@@ -2032,7 +2038,7 @@ OUTPUT: CHỈ JSON array hợp lệ."""
                 )
             else:  # defense
                 nhan_than_context = (
-                    "\n\n📋 VỀ TIỀN ÁN CỦA THÂN CHỦ (LUẬN ĐIỂM CÓ LỢI):\n"
+                    "\n\nVỀ TIỀN ÁN CỦA THÂN CHỦ (LUẬN ĐIỂM CÓ LỢI):\n"
                     "- Thân chủ đã chấp hành xong hình phạt và được XÓA ÁN TÍCH theo điều luật.\n"
                     "- Pháp lý: KHÔNG đủ điều kiện tái phạm (Điều 52 BLHS) → đây là lợi thế\n"
                     "  pháp lý quan trọng nhất cần nhấn mạnh trong luận điểm bào chữa.\n"
@@ -2318,104 +2324,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
         cleaned_response = cleanup_response(response)
         return {"messages": [AIMessage(content=cleaned_response)]}
 
-    # NODE: REBUTTAL (Chat mode — user counter-argues a prior AI response)
-    @measure_time('rebuttal')
-    def rebuttal_node(state: AgentState) -> dict:
-        """
-        Chat rebuttal: user is challenging a prior AI response in the conversation.
-        Responds to the user's counter-argument with grounded legal citations,
-        either conceding if the user is correct or refuting with legal evidence.
-        """
-        print("[NODE: rebuttal]")
-        role          = state.get("user_role", "neutral")
-        mapped_laws   = state.get("mapped_laws") or []
-        documents     = state.get("documents") or []
-        user_argument = state.get("rebuttal_against", "").strip()
-        chat_history  = state.get("chat_history") or []
-
-        if not user_argument:
-            return {"messages": [AIMessage(content="Vui lòng cung cấp nội dung phản biện của bạn.")]}
-
-        # Build legal context (primary laws first for relevance)
-        primary_docs    = [d for d in documents if d.metadata.get("_temporal_role") == "primary"]
-        comparison_docs = [d for d in documents if d.metadata.get("_temporal_role") == "comparison"]
-        adjustment_docs = [d for d in documents if d.metadata.get("_temporal_role") == "adjustment"]
-        ordered_docs    = primary_docs + comparison_docs + adjustment_docs
-
-        context_text = sanitize_text("\n\n".join([
-            f"[Điều {d.metadata.get('article_number','?')} - {d.metadata.get('source','Unknown')} | "
-            f"vai_trò={d.metadata.get('_temporal_role','unknown')}]\n{d.page_content}"
-            for d in ordered_docs
-        ]))
-
-        # Role-specific guidance for how the rebuttal should be framed
-        role_rebuttal_guidance = {
-            "neutral": (
-                "Bạn đang đóng vai Thẩm phán trung lập. "
-                "Hãy đánh giá phản biện một cách khách quan, "
-                "căn cứ vào cả hai chiều tăng nặng và giảm nhẹ."
-            ),
-            "defense": (
-                "Bạn đang đóng vai Luật sư bào chữa. "
-                "Hãy phân tích phản biện theo hướng bảo vệ quyền lợi bị cáo, "
-                "tìm kiếm cơ sở pháp lý giảm nhẹ hoặc bác bỏ tình tiết tăng nặng."
-            ),
-            "victim": (
-                "Bạn đang đóng vai Luật sư bảo vệ quyền lợi bị hại. "
-                "Hãy phân tích phản biện theo hướng nhấn mạnh hậu quả nghiêm trọng, "
-                "tình tiết tăng nặng và yêu cầu mức án/bồi thường tương xứng."
-            ),
-        }.get(role, "Bạn là chuyên gia luật hình sự Việt Nam.")
-
-        # Build prior conversation context (last 8 turns max)
-        history_text = ""
-        if chat_history:
-            recent = chat_history[-8:]
-            history_text = "\n".join(
-                f"{msg.get('role','').upper()}: {msg.get('content','')[:500]}"
-                for msg in recent
-            )
-
-        system_prompt = f"""Bạn là chuyên gia luật hình sự Việt Nam.
-{role_rebuttal_guidance}
-
-NHIỆM VỤ:
-1. Đọc kỹ lập luận phản biện của người dùng.
-2. Đối chiếu với văn bản luật và kết quả ánh xạ điều luật đã được phân tích.
-3. Nếu phản biện CÓ CĂN CỨ PHÁP LÝ: thừa nhận rõ ràng, bổ sung và điều chỉnh phân tích.
-4. Nếu phản biện SAI hoặc THIẾU CĂN CỨ: giải thích lý do cụ thể với trích dẫn điều khoản.
-5. Kết thúc bằng kết luận pháp lý rõ ràng, nhất quán với vai trò.
-
-QUY TẮC:
-- Chỉ trích dẫn điều luật có trong "VĂN BẢN LUẬT" được cung cấp.
-- Không bịa đặt thêm tình tiết hoặc điều khoản không có trong hồ sơ.
-- Văn phong chuyên nghiệp, rõ ràng, có cấu trúc."""
-
-        human_content_parts = []
-        if history_text:
-            human_content_parts.append(f"LỊCH SỬ HỘI THOẠI GẦN NHẤT:\n{history_text}")
-        human_content_parts.append(f"PHẢN BIỆN CỦA NGƯỜI DÙNG:\n{user_argument}")
-        human_content_parts.append(
-            f"KẾT QUẢ ÁNH XẠ ĐIỀU LUẬT (đã phân tích):\n"
-            f"{json.dumps(mapped_laws, ensure_ascii=False, indent=2)}"
-        )
-        human_content_parts.append(f"VĂN BẢN LUẬT (để đối chiếu):\n{context_text}")
-        human_content = "\n\n".join(human_content_parts)
-
-        try:
-            response = (llm.invoke(_sanitize_msgs([
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=human_content),
-            ]))).content
-            cleaned = cleanup_response(response)
-            return {"messages": [AIMessage(content=cleaned)]}
-        except Exception as e:
-            print(f"  [REBUTTAL ERROR] {type(e).__name__}: {e}")
-            return {"messages": [AIMessage(
-                content="Xin lỗi, hệ thống gặp lỗi khi xử lý phản biện của bạn. Vui lòng thử lại."
-            )]}
-
-    # NODE: ANSWER VERIFY (final quality gate for generate + rebuttal)
+    # NODE: ANSWER VERIFY (final quality gate for generate)
     @measure_time('answer_verify')
     def answer_verify(state: AgentState) -> dict:
         """
@@ -2608,7 +2517,7 @@ QUY TẮC:
             "\n\n---\n"
             "**Ghi chú hệ thống (Kiểm chứng câu trả lời):**\n"
             + "\n".join(f"- {i}" for i in issues)
-            + "\n\n*(Vui lòng đối chiếu với văn bản luật gốc để xác nhận.)*"
+            + "\n\n*Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*"
         )
         print(f"  ⚠️ Answer verification: {len(issues)} issue(s) detected.")
         return {"messages": [AIMessage(content=ai_text + warning_block)]}
@@ -3026,12 +2935,61 @@ OUTPUT: CHỈ JSON hợp lệ."""
         question    = state["question"]
         role        = state.get("user_role", "neutral")
 
-        # Find original case from FULL history (not the truncated [-8:] LLM window).
-        full_history  = state.get("chat_history") or []
+        # ── Identify the original case message from history ───────────────────
+        # Uses the same deterministic heuristics as classify_intent to find the
+        # first user message that looks like a real legal case submission, rather
+        # than naively picking the first user message (which could be "hi" or
+        # another short casual greeting that would make fallback retrieval useless).
+        full_history = state.get("chat_history") or []
+
+        _CASUAL_PHRASES = [
+            "xin chào", "chào bạn", "hi", "hello", "hey", "helo", "ola",
+            "bạn là ai", "bạn là gì", "chatbot là gì", "cảm ơn", "thank",
+            "ok bạn", "được rồi", "bye", "tạm biệt", "hẹn gặp",
+        ]
+        _LEGAL_KEYWORDS = [
+            "điều", "khoản", "bộ luật", "tội", "hình phạt", "hành vi", "án",
+            "phạt", "tù", "phạm tội", "ngày", "năm", "tháng",
+            "bị cáo", "bị hại", "nạn nhân", "bị can", "nghi phạm", "thủ phạm",
+            "luật sư", "viện kiểm sát", "tòa án", "công an", "cảnh sát", "thẩm phán",
+            "giết", "đánh", "chém", "bắn", "cướp", "trộm", "lừa đảo", "hiếp",
+            "tống tiền", "bắt cóc", "đốt", "buôn bán", "ma túy", "mua bán",
+            "tàng trữ", "sản xuất", "vận chuyển", "chiếm đoạt", "xâm phạm",
+            "gây thương tích", "tham nhũng", "hối lộ", "trốn thuế", "gian lận",
+            "tạm giam", "xét xử", "khởi tố", "điều tra", "truy tố", "kết án",
+            "bắt giữ", "khám xét", "thu giữ", "tang vật", "biên bản",
+            "tình tiết", "giảm nhẹ", "tăng nặng", "án treo", "cải tạo",
+            "chung thân", "tử hình", "bồi thường", "tịch thu",
+            "law", "penal", "crime", "criminal", "offense", "sentence",
+        ]
+
+        def _looks_like_case(text: str) -> bool:
+            """Mirror of classify_intent heuristics — True if text is a legal case."""
+            q = text.strip()
+            q_lower = q.lower()
+            # Reject obvious casual greetings (short + phrase match)
+            if any(p in q_lower for p in _CASUAL_PHRASES) and len(q) < 80:
+                return False
+            # Long text with legal keywords is almost certainly a case
+            has_legal = any(kw in q_lower for kw in _LEGAL_KEYWORDS)
+            if len(q) > 400 and has_legal:
+                return True
+            # Very long input regardless of keywords — treat as case
+            if len(q) > 600:
+                return True
+            # Short with no legal keywords — not a case
+            if len(q) < 120 and not has_legal:
+                return False
+            return has_legal
+
         original_case = next(
-            (m["content"] for m in full_history if m.get("role") == "user"),
-            question,  # fallback: very first message in the session
+            (m["content"] for m in full_history
+             if m.get("role") == "user" and _looks_like_case(m.get("content", ""))),
+            question,  # fallback: current follow-up question if no case found in history
         )
+        print(f"  [FOLLOWUP] original_case source: '{original_case[:60]}...' ({len(original_case)} chars)")
+
+
 
         # Truncated window for LLM multi-turn context only (avoids token overflow)
         chat_history = full_history[-8:]
@@ -3155,7 +3113,6 @@ OUTPUT: CHỈ JSON hợp lệ."""
     workflow.add_node("rerank",                   rerank_node)
     workflow.add_node("map_laws",                 map_laws_node)
     workflow.add_node("generate",                 generate)
-    workflow.add_node("rebuttal",                 rebuttal_node)
     workflow.add_node("answer_verify",            answer_verify)
     workflow.add_node("practice_evaluate",        practice_evaluate_node)
     workflow.add_node("followup",                 followup_generate)
@@ -3180,19 +3137,17 @@ OUTPUT: CHỈ JSON hợp lệ."""
     workflow.add_edge("parallel_retrieve",         "temporal_priority_tagger")
     workflow.add_edge("temporal_priority_tagger",  "rerank")
     workflow.add_edge("rerank",                    "map_laws")
-    # Application Mode Router: decides generate / rebuttal / practice_evaluate
+    # Application Mode Router: decides generate / practice_evaluate
     workflow.add_conditional_edges(
         "map_laws",
         application_mode_router,
         {
             "practice_evaluate": "practice_evaluate",
-            "rebuttal":          "rebuttal",
             "generate":          "generate",
         }
     )
-    # generate + rebuttal both pass through the answer_verify quality gate
+    # generate passes through the answer_verify quality gate
     workflow.add_edge("generate",      "answer_verify")
-    workflow.add_edge("rebuttal",      "answer_verify")
     workflow.add_edge("answer_verify", END)
     # practice_evaluate bypasses verification (has its own grading logic)
     workflow.add_edge("practice_evaluate", END)
@@ -3272,16 +3227,13 @@ async def predict_judgment(req: RequestBody):
             "full_case_content":   sanitize_text(req.case_content),
             "messages":            [HumanMessage(content=sanitize_text(req.case_content))],
             "user_role":           req.role,
-            "retry_count":         0,
             "documents":           [],
             "retrieval_queries":   [],
             "extracted_facts":     None,
             "mapped_laws":         None,
             "sentencing_data":     None,
-            "is_relevant":         None,
             "_missing_fields":     None,
             "per_defendant_dates": None,
-            "rebuttal_against":    req.rebuttal_against,
             "chat_history":        req.conversation_history,
             "is_practice_mode":    False,
             "user_analysis":       None,
@@ -3299,10 +3251,7 @@ async def predict_judgment(req: RequestBody):
             "full_case_content":   sanitize_text(req.case_content),
             "messages":            [HumanMessage(content=sanitize_text(req.case_content))],
             "user_role":           req.role,
-            "retry_count":         0,
-            "is_relevant":         None,
             "_missing_fields":     None,
-            "rebuttal_against":    req.rebuttal_against,
             "chat_history":        req.conversation_history,
             "is_practice_mode":    False,
             "user_analysis":       None,
@@ -3372,16 +3321,13 @@ async def practice_evaluate(req: PracticeEvalRequest):
         "user_role":           req.user_mode,
         "user_analysis":       sanitize_text(req.user_analysis),
         "is_practice_mode":    True,
-        "retry_count":         0,
         "documents":           [],
         "retrieval_queries":   [],
         "extracted_facts":     None,
         "mapped_laws":         None,
         "sentencing_data":     None,
-        "is_relevant":         None,
         "_missing_fields":     None,
         "per_defendant_dates": None,
-        "rebuttal_against":    None,
         "chat_history":        [],
     }
 

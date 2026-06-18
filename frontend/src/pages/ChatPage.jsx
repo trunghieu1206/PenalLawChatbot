@@ -450,7 +450,8 @@ export default function ChatPage() {
 
               <div className="p-3 bg-surface-container-lowest border-t border-surface-variant flex-shrink-0">
                 <div className="max-w-3xl mx-auto relative flex items-center bg-surface border border-surface-variant rounded-full pr-12 pl-4 focus-within:ring-1 focus-within:border-primary-container shadow-sm">
-                  <button className="text-outline hover:text-primary-container transition-colors mr-2">
+                  {/* TODO: file attachment not yet implemented */}
+                  <button className="text-outline transition-colors mr-2 opacity-40 cursor-not-allowed" disabled title="Đính kèm tài liệu (chưa hỗ trợ)">
                     <span className="material-symbols-outlined text-[20px]">attach_file</span>
                   </button>
                   <textarea

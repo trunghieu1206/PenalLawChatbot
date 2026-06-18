@@ -58,6 +58,7 @@ public class SecurityConfig {
                         // Users (incl. guests) may POST feedback; admin reads all feedback
                         .requestMatchers(HttpMethod.POST, "/api/admin/feedback").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        // /api/training/** (Practice Mode) — requires JWT; falls through to anyRequest().authenticated()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

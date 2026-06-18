@@ -203,10 +203,11 @@ export default function TrainingPage() {
               <div className={styles.cardHeader}>
                 <h2>Nội dung Vụ án</h2>
                 <div className={styles.cardActions}>
-                  <button type="button" title="Nhập tài liệu">
+                  {/* TODO: Upload and template features not yet implemented */}
+                  <button type="button" title="Nhập tài liệu (chưa hỗ trợ)" disabled className="opacity-40 cursor-not-allowed">
                     <span className="material-symbols-outlined">upload_file</span>
                   </button>
-                  <button type="button" title="Tải mẫu">
+                  <button type="button" title="Tải mẫu (chưa hỗ trợ)" disabled className="opacity-40 cursor-not-allowed">
                     <span className="material-symbols-outlined">description</span>
                   </button>
                 </div>
