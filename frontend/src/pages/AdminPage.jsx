@@ -103,7 +103,7 @@ export default function AdminPage() {
             ) : (
               <>
                 <h1>Thống kê người dùng</h1>
-                <p>Theo dõi số lượng vụ án được tạo bởi từng người dùng và mức độ sử dụng hệ thống trong ngày.</p>
+                <p>Quản lý và theo dõi thông tin tài khoản người dùng tham gia trên hệ thống VNPLaw.</p>
               </>
             )}
           </div>
@@ -298,8 +298,7 @@ export default function AdminPage() {
           {activeTab === 'users' && (
             <div className={styles.userStatsPanel}>
               <div className={styles.userStatsHeader}>
-                <h2>Thống kê vụ án theo người dùng</h2>
-                <p>Giới hạn: Khách <strong>3 vụ/ngày</strong> • Đăng nhập <strong>5 vụ/ngày</strong> • Admin <strong>không giới hạn</strong></p>
+                <h2>Danh sách người dùng</h2>
               </div>
               {loadingUsers ? (
                 <div className={styles.loadingState}><span className="loader" /> Đang tải...</div>
@@ -313,15 +312,11 @@ export default function AdminPage() {
                         <th>Người dùng</th>
                         <th>Email</th>
                         <th>Vai trò</th>
-                        <th>Hôm nay</th>
                         <th>Tổng vụ án</th>
                       </tr>
                     </thead>
                     <tbody>
                       {userStats.map(u => {
-                        const limit = u.role === 'admin' ? null : 5;
-                        const pct   = limit ? Math.min((u.cases_today / limit) * 100, 100) : 0;
-                        const atLimit = limit && u.cases_today >= limit;
                         return (
                           <tr key={u.user_id}>
                             <td>
@@ -335,23 +330,6 @@ export default function AdminPage() {
                               <span className={`${styles.rolePill} ${u.role === 'admin' ? styles.rolePillAdmin : styles.rolePillUser}`}>
                                 {u.role === 'admin' ? 'Quản trị viên' : 'Người dùng'}
                               </span>
-                            </td>
-                            <td>
-                              {limit ? (
-                                <div className={styles.usageWrap}>
-                                  <div className={styles.usageBar}>
-                                    <div
-                                      className={`${styles.usageFill} ${atLimit ? styles.usageFillFull : ''}`}
-                                      style={{ width: `${pct}%` }}
-                                    />
-                                  </div>
-                                  <span className={atLimit ? styles.usageLimitReached : ''}>
-                                    {u.cases_today}&nbsp;/&nbsp;{limit}
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className={styles.unlimitedBadge}>{u.cases_today} ∞</span>
-                              )}
                             </td>
                             <td className={styles.totalCell}>{u.total_cases}</td>
                           </tr>
