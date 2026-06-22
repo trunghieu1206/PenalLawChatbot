@@ -111,12 +111,8 @@ except ModuleNotFoundError:
 
 
 import re
-import inspect
-import tempfile
-import shutil
 import json
 import uuid
-import numpy as np
 import torch
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone, timedelta
@@ -127,8 +123,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from huggingface_hub import login
-from transformers import AutoModel, AutoTokenizer
-from peft import PeftModel
 
 # LangChain & AI Imports
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
@@ -226,155 +220,6 @@ DEVICE = _detect_device()
 # --- GLOBAL STATE ---
 app_state: Dict[str, Any] = {}
 
-
-# ===========================================================
-# CUSTOM EMBEDDING CLASS — uses PEFT to load LoRA adapter
-# ===========================================================
-def _load_peft_with_compat(base_model, adapter_name: str):
-    """
-    Load a PEFT LoRA adapter, automatically patching the adapter_config.json
-    when the installed PEFT version doesn't recognise one or more config keys
-    (e.g. `corda_config` introduced in PEFT 0.15 / CorDA).
-
-    Strategy
-    --------
-    1. Try normal PeftModel.from_pretrained().
-    2. On a TypeError caused by unknown kwargs, download adapter_config.json
-       from HuggingFace, strip all keys that LoraConfig.__init__ doesn't
-       accept, write a patched copy to a temp directory alongside all other
-       adapter files, and retry from that temp directory.
-    3. Only fall back to the base model if the retry itself fails.
-    """
-    from peft import LoraConfig  # local import to avoid circular ref
-
-    def _known_lora_keys() -> set:
-        """Return the set of parameter names accepted by LoraConfig.__init__."""
-        sig = inspect.signature(LoraConfig.__init__)
-        return set(sig.parameters.keys()) - {"self"}
-
-    # ── Pass 1: straightforward load ───────────────────────────────────────
-    try:
-        peft_model = PeftModel.from_pretrained(base_model, adapter_name)
-        peft_model = peft_model.merge_and_unload()
-        print("✅ LoRA adapter merged successfully.")
-        return peft_model
-    except TypeError as e:
-        if "unexpected keyword argument" not in str(e):
-            raise  # unrelated TypeError — propagate
-        print(f"⚠️  PEFT config has unknown key(s): {e}")
-        print("   Attempting self-healing: patching adapter_config.json …")
-
-    # ── Pass 2: patch adapter_config.json and retry ─────────────────────────
-    import json as _json
-    from huggingface_hub import hf_hub_download, list_repo_files
-
-    tmp_dir = tempfile.mkdtemp(prefix="peft_patched_")
-    try:
-        # Download every file in the adapter repo into tmp_dir
-        try:
-            repo_files = list(list_repo_files(adapter_name))
-        except Exception:
-            repo_files = ["adapter_config.json", "adapter_model.safetensors"]
-
-        for fname in repo_files:
-            try:
-                src = hf_hub_download(repo_id=adapter_name, filename=fname)
-                dst = os.path.join(tmp_dir, fname)
-                os.makedirs(os.path.dirname(dst), exist_ok=True)
-                shutil.copy2(src, dst)
-            except Exception:
-                pass  # skip files that can't be fetched (e.g. .gitattributes)
-
-        # Patch adapter_config.json — remove keys unknown to this PEFT version
-        cfg_path = os.path.join(tmp_dir, "adapter_config.json")
-        if not os.path.exists(cfg_path):
-            raise FileNotFoundError("adapter_config.json not found in downloaded repo")
-
-        with open(cfg_path, "r", encoding="utf-8") as f:
-            cfg = _json.load(f)
-
-        known = _known_lora_keys()
-        removed = {k: v for k, v in cfg.items() if k not in known and k != "peft_type"}
-        if removed:
-            print(f"   Stripping unknown config keys: {list(removed.keys())}")
-            for k in removed:
-                del cfg[k]
-            with open(cfg_path, "w", encoding="utf-8") as f:
-                _json.dump(cfg, f, indent=2, ensure_ascii=False)
-
-        # Retry load from patched local directory
-        peft_model = PeftModel.from_pretrained(base_model, tmp_dir)
-        peft_model = peft_model.merge_and_unload()
-        print("✅ LoRA adapter merged successfully (via patched config).")
-        return peft_model
-
-    except Exception as retry_err:
-        print(f"⚠️  Patched load also failed: {type(retry_err).__name__}: {retry_err}")
-        print("   Falling back to base model (embeddings will be less accurate).")
-        return base_model
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-
-
-# No longer used: Switched to Jina embeddings
-# class LoRABGEM3Embeddings(Embeddings):
-#     def __init__(self, base_model_name: str, adapter_name: str, device: str = "cuda"):
-#         print(f"🔄 Loading BGE-M3 base model on {device}...")
-#         self.device = device
-
-#         # Load tokenizer
-#         self.tokenizer = AutoTokenizer.from_pretrained(
-#             base_model_name, trust_remote_code=True
-#         )
-
-#         # Load base transformer model.
-#         # use_safetensors=True bypasses torch.load and the CVE-2025-32434 security
-#         # check added in transformers>=4.57 that blocks torch<2.6.
-#         # BAAI/bge-m3 ships model.safetensors so this is always safe.
-#         base_model = AutoModel.from_pretrained(
-#             base_model_name, trust_remote_code=True, use_safetensors=True
-#         )
-
-#         # Apply LoRA via PEFT — with automatic config-patching for version skew
-#         print(f"⬇️  Applying LoRA adapter via PEFT: {adapter_name}")
-#         self.model = _load_peft_with_compat(base_model, adapter_name)
-
-#         self.model = self.model.to(device)
-#         self.model.eval()
-
-#     def _mean_pooling(self, model_output, attention_mask):
-#         """Mean pool token embeddings, weighted by attention mask."""
-#         token_embeddings = model_output[0]  # (batch, seq, hidden)
-#         mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
-#         return torch.sum(token_embeddings * mask_expanded, 1) / torch.clamp(
-#             mask_expanded.sum(1), min=1e-9
-#         )
-
-#     def _encode_batch(self, texts: List[str]) -> np.ndarray:
-#         encoded = self.tokenizer(
-#             texts,
-#             padding=True,
-#             truncation=True,
-#             max_length=512,
-#             return_tensors="pt",
-#         )
-#         encoded = {k: v.to(self.device) for k, v in encoded.items()}
-#         with torch.no_grad():
-#             output = self.model(**encoded)
-#         embeddings = self._mean_pooling(output, encoded["attention_mask"])
-#         embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
-#         return embeddings.cpu().numpy()
-
-#     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-#         all_embeddings: List[List[float]] = []
-#         batch_size = 32
-#         for i in range(0, len(texts), batch_size):
-#             batch = texts[i : i + batch_size]
-#             all_embeddings.extend(self._encode_batch(batch).tolist())
-#         return all_embeddings
-
-#     def embed_query(self, text: str) -> List[float]:
-#         return self._encode_batch([text])[0].tolist()
 
 
 # ===========================================================

@@ -47,17 +47,22 @@ echo ""
 if [ ! -d "$BACKUP_DIR" ]; then
     error "Backup directory not found: $BACKUP_DIR
     Upload your backup with:
-      scp ./database/backups/penallaw_combined_backup.sql root@SERVER:$BACKUP_DIR/"
+      scp -i 'chatbot-key.pem' ./database/backups/penallaw_backup_*.sql ubuntu@<EC2_HOST>:~/PenalLawChatbot/database/backups/"
 fi
 
 info "Looking for backups in: $BACKUP_DIR"
 
-# Prefer combined backup (laws + users/sessions), fall back to timestamped backup
-if [ -f "$BACKUP_DIR/penallaw_combined_backup.sql" ]; then
-    BACKUP_FILE="$BACKUP_DIR/penallaw_combined_backup.sql"
-    info "Found combined backup (laws + chat data): penallaw_combined_backup.sql"
+# Prefer the latest timestamped backup (most up-to-date, includes visitor_logs).
+# Fall back to penallaw_combined_backup.sql only if no timestamped backup exists.
+BACKUP_FILE=$(ls -t "$BACKUP_DIR"/penallaw_backup_*.sql 2>/dev/null | head -n 1 || echo "")
+
+if [ -z "$BACKUP_FILE" ] || [ ! -f "$BACKUP_FILE" ]; then
+    if [ -f "$BACKUP_DIR/penallaw_combined_backup.sql" ]; then
+        BACKUP_FILE="$BACKUP_DIR/penallaw_combined_backup.sql"
+        info "No timestamped backup found — using combined backup: penallaw_combined_backup.sql"
+    fi
 else
-    BACKUP_FILE=$(ls -t "$BACKUP_DIR"/penallaw_backup_*.sql 2>/dev/null | head -n 1 || echo "")
+    info "Found latest timestamped backup: $(basename "$BACKUP_FILE")"
 fi
 
 if [ -z "$BACKUP_FILE" ] || [ ! -f "$BACKUP_FILE" ]; then
@@ -152,6 +157,8 @@ if su - postgres -c "psql $DB_NAME < \"$TEMP_BACKUP\" 2>&1" > "$RESTORE_LOG" 2>&
 
     RESTORED_TABLES=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM information_schema.tables WHERE table_schema='public';\"" postgres 2>/dev/null || echo "?")
     LAWS_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM laws;\"" postgres 2>/dev/null || echo "0")
+    VISITOR_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM visitor_logs;\"" postgres 2>/dev/null || echo "0")
+    SESSION_COUNT=$(su -c "cd /tmp && psql -d $DB_NAME -tAc \"SELECT count(*) FROM chat_sessions;\"" postgres 2>/dev/null || echo "0")
 
     info "✅ Restore completed in ${DURATION}s"
     echo ""
@@ -160,6 +167,8 @@ if su - postgres -c "psql $DB_NAME < \"$TEMP_BACKUP\" 2>&1" > "$RESTORE_LOG" 2>&
     echo "  Size     : $BACKUP_SIZE"
     echo "  Tables   : ${RESTORED_TABLES:-?}"
     echo "  Laws     : ${LAWS_COUNT:-?} articles"
+    echo "  Visitors : ${VISITOR_COUNT:-?} rows"
+    echo "  Sessions : ${SESSION_COUNT:-?} rows"
 else
     RESTORE_ERR=$(grep -i "error" "$RESTORE_LOG" 2>/dev/null | head -3 || echo "See $RESTORE_LOG")
     rm -f "$TEMP_BACKUP" "$RESTORE_LOG"
