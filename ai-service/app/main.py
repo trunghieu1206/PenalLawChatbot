@@ -1177,28 +1177,46 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
 
     def clarification_router(state: AgentState) -> str:
         """
-        Router: reads _missing_fields, returns route key.
-        Practice Mode always bypasses clarification — the user is practicing
-        with a given case and should always get a graded evaluation regardless
-        of incomplete fields. Asking for clarification in practice mode would
-        cause the /practice/evaluate endpoint to receive a text message instead
-        of the expected JSON, resulting in a parse error.
+        Router: reads _missing_fields and routes accordingly.
+        Both consultation mode and practice mode go through this gate.
+        - 'clarify'  → clarification_node (returns plain text for consultation,
+                        structured JSON for practice mode so /practice/evaluate
+                        can parse it cleanly without crashing).
+        - 'continue' → multi_query_rewrite (all required fields are present).
         """
-        if state.get("is_practice_mode"):
-            print("  [ROUTER: clarification] practice_mode=True → continue")
-            return "continue"
         route = "clarify" if state.get("_missing_fields") else "continue"
-        print(f"  [ROUTER: clarification] → {route}")
+        mode = "practice" if state.get("is_practice_mode") else "consultation"
+        print(f"  [ROUTER: clarification] mode={mode} → {route}")
         return route
 
     @measure_time('clarification')
     def clarification_node(state: AgentState) -> dict:
         print("[NODE: clarification]")
-        missing = state.get("_missing_fields", [])
+        is_practice = state.get("is_practice_mode", False)
+        missing     = state.get("_missing_fields", [])
+
+        # ── Build human-readable labels for missing fields ────────────────────
         if "_date_out_of_range" in missing:
             facts = state.get("extracted_facts") or {}
+            date_str = facts.get("ngay_pham_toi", "?")
+            if is_practice:
+                payload = json.dumps({
+                    "score": 0,
+                    "feedback": {
+                        "strengths": [],
+                        "improvements": [
+                            f"Ngày phạm tội không hợp lệ: {date_str}. "
+                            "Hệ thống chỉ hỗ trợ các vụ án từ ngày 01/07/2000 trở đi "
+                            "(ngày BLHS 1999 có hiệu lực). Vui lòng kiểm tra lại."
+                        ],
+                        "suggestion": "Vui lòng cung cấp lại mô tả vụ án với ngày phạm tội hợp lệ.",
+                        "suggested_laws": [],
+                    },
+                }, ensure_ascii=False)
+                return {"messages": [AIMessage(content=payload)]}
+            # Consultation mode: plain text for the chat UI
             reply = (
-                f"**Ngày phạm tội không hợp lệ:** `{facts.get('ngay_pham_toi', '?')}`\n\n"
+                f"**Ngày phạm tội không hợp lệ:** `{date_str}`\n\n"
                 "Hệ thống chỉ hỗ trợ các vụ án có ngày phạm tội từ **01/07/2000** trở đi "
                 "(ngày BLHS 1999 có hiệu lực).\n\n"
                 "Vui lòng kiểm tra lại ngày phạm tội và gửi lại."
@@ -1206,6 +1224,28 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
             return {"messages": [AIMessage(content=reply)]}
 
         needed_labels = [REQUIRED_FIELDS[f] for f in missing if f in REQUIRED_FIELDS]
+
+        if is_practice:
+            # Practice mode: return a JSON payload so /practice/evaluate parses cleanly
+            missing_str = ", ".join(needed_labels)
+            payload = json.dumps({
+                "score": 0,
+                "feedback": {
+                    "strengths": [],
+                    "improvements": [
+                        f"Mô tả vụ án còn thiếu thông tin bắt buộc: {missing_str}. "
+                        "Vui lòng bổ sung và gửi lại để hệ thống có thể chấm điểm chính xác."
+                    ],
+                    "suggestion": (
+                        "Hãy đảm bảo mô tả vụ án bao gồm đầy đủ: "
+                        "hành vi phạm tội cụ thể và ngày phạm tội."
+                    ),
+                    "suggested_laws": [],
+                },
+            }, ensure_ascii=False)
+            return {"messages": [AIMessage(content=payload)]}
+
+        # Consultation mode: plain text for the chat UI
         reply = (
             "Để phân tích chính xác, hệ thống cần thêm thông tin sau:\n\n"
             + "\n".join(f"{i+1}. **{label}**" for i, label in enumerate(needed_labels))
@@ -3142,22 +3182,26 @@ async def practice_evaluate(req: PracticeEvalRequest):
     """
     Practice Mode: evaluate user's legal analysis via the full LangGraph pipeline.
 
-    The request is routed through the complete graph:
+    Full graph path when required fields are present:
       classify_intent → extract_facts → clarification_check → multi_query_rewrite
       → parallel_retrieve → temporal_priority_tagger → rerank → map_laws
       → application_mode_router → practice_evaluate_node → END
 
-    This ensures the grading is done against actual RAG-retrieved laws and the
+    If required fields (hanh_vi, ngay_pham_toi) are missing after fact extraction,
+    clarification_node returns a structured JSON error payload (score=0 + feedback)
+    directly to END — the endpoint parses it cleanly as a PracticeEvalResponse.
+
+    This ensures grading is done against actual RAG-retrieved laws and the
     deterministic mapped_laws table — not just the LLM's internalized knowledge.
     """
     graph = app_state.get("graph")
     if not graph:
         raise HTTPException(status_code=503, detail="Model not loaded — service is still starting up")
 
-    # Build the initial state for the graph.
-    # The case description is both `question` and `full_case_content` so the
-    # intent router, retrieval, and mapping nodes all receive the case text.
-    # is_practice_mode=True signals application_mode_router to send to practice_evaluate_node.
+    # The case description is set as both `question` and `full_case_content` so all
+    # retrieval, mapping, and grading nodes receive the full case text.
+    # is_practice_mode=True signals clarification_node to return JSON (not plain text)
+    # and application_mode_router to route to practice_evaluate_node instead of generate.
     case_text = sanitize_text(req.case_description)
     inputs = {
         "question":            case_text,
