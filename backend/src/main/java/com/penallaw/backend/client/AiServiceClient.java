@@ -2,6 +2,7 @@ package com.penallaw.backend.client;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.penallaw.backend.dto.PracticeDTOs;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -24,14 +25,22 @@ public class AiServiceClient {
 
     private final WebClient.Builder webClientBuilder;
 
-    private WebClient getClient() {
+    /**
+     * Single shared WebClient instance built once at startup.
+     * WebClient is thread-safe and designed to be reused across requests.
+     * Building it on every call (as before) was wasteful.
+     */
+    private WebClient client;
+
+    @PostConstruct
+    private void init() {
         // Default WebClient buffer is 256KB — too small for /predict responses
         // (full Vietnamese legal analysis + mapped_laws + extracted_facts can exceed 1MB).
         // Increase to 10MB to safely handle all response sizes.
         ExchangeStrategies strategies = ExchangeStrategies.builder()
                 .codecs(config -> config.defaultCodecs().maxInMemorySize(10 * 1024 * 1024))
                 .build();
-        return webClientBuilder
+        this.client = webClientBuilder
                 .baseUrl(aiServiceBaseUrl)
                 .exchangeStrategies(strategies)
                 .build();
@@ -64,7 +73,7 @@ public class AiServiceClient {
     public PredictResponse predict(String caseContent, String role,
                                    List<Map<String, Object>> conversationHistory, String sessionId) {
         PredictRequest request = new PredictRequest(caseContent, role, conversationHistory, sessionId);
-        return getClient().post()
+        return client.post()
                 .uri("/predict")
                 .bodyValue(request)
                 .retrieve()
@@ -79,7 +88,7 @@ public class AiServiceClient {
      * Mirrors the shape of PracticeEvalRequest / PracticeEvalResponse in main.py.
      */
     public PracticeDTOs.EvaluateResponse evaluatePractice(PracticeDTOs.EvaluateRequest request) {
-        return getClient().post()
+        return client.post()
                 .uri("/practice/evaluate")
                 .bodyValue(request)
                 .retrieve()

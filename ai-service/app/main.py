@@ -1206,7 +1206,7 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
                         "strengths": [],
                         "improvements": [
                             f"Ngày phạm tội không hợp lệ: {date_str}. "
-                            "Hệ thống chỉ hỗ trợ các vụ án từ ngày 01/07/2000 trở đi "
+                            "Chỉ hỗ trợ các vụ án từ ngày 01/07/2000 trở đi "
                             "(ngày BLHS 1999 có hiệu lực). Vui lòng kiểm tra lại."
                         ],
                         "suggestion": "Vui lòng cung cấp lại mô tả vụ án với ngày phạm tội hợp lệ.",
@@ -1217,7 +1217,7 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
             # Consultation mode: plain text for the chat UI
             reply = (
                 f"**Ngày phạm tội không hợp lệ:** `{date_str}`\n\n"
-                "Hệ thống chỉ hỗ trợ các vụ án có ngày phạm tội từ **01/07/2000** trở đi "
+                "Chỉ hỗ trợ các vụ án có ngày phạm tội từ **01/07/2000** trở đi "
                 "(ngày BLHS 1999 có hiệu lực).\n\n"
                 "Vui lòng kiểm tra lại ngày phạm tội và gửi lại."
             )
@@ -1247,7 +1247,7 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
 
         # Consultation mode: plain text for the chat UI
         reply = (
-            "Để phân tích chính xác, hệ thống cần thêm thông tin sau:\n\n"
+            "Để phân tích chính xác, Cần thêm thông tin sau:\n\n"
             + "\n".join(f"{i+1}. **{label}**" for i, label in enumerate(needed_labels))
             + "\n\nVui lòng bổ sung và gửi lại mô tả vụ án."
         )

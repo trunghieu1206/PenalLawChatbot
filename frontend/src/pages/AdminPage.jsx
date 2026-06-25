@@ -98,12 +98,12 @@ export default function AdminPage() {
             {activeTab === 'feedback' ? (
               <>
                 <h1>Quản lý phản hồi</h1>
-                <p>Xem xét và quản lý phản hồi của người dùng về tính chính xác của câu trả lời AI để cải thiện độ chính xác của hệ thống.</p>
+                <p>Xem xét và quản lý phản hồi của người dùng về tính chính xác của câu trả lời AI để cải thiện độ chính xác của Chatbot.</p>
               </>
             ) : (
               <>
                 <h1>Thống kê người dùng</h1>
-                <p>Quản lý và theo dõi thông tin tài khoản người dùng tham gia trên hệ thống VNPLaw.</p>
+                <p>Quản lý và theo dõi thông tin tài khoản người dùng tham gia trên hệ thống.</p>
               </>
             )}
           </div>

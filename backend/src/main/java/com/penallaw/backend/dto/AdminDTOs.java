@@ -51,13 +51,11 @@ public class AdminDTOs {
     /** Request body for PATCH /admin/feedback/{id}/status */
     public record StatusUpdateRequest(String status) {}
 
-    /** Per-user case (session) statistics for the admin user-stats tab. */
     public record UserCaseStat(
             @JsonProperty("user_id")     UUID   userId,
             String                              email,
             @JsonProperty("full_name")   String fullName,
             String                              role,
-            @JsonProperty("total_cases") long   totalCases,
-            @JsonProperty("cases_today") long   casesToday
+            @JsonProperty("total_cases") long   totalCases
     ) {}
 }

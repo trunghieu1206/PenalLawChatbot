@@ -3,7 +3,6 @@ com/penallaw/backend/repository/UserRepository.class
 com/penallaw/backend/repository/LawRepository.class
 com/penallaw/backend/dto/ChatDTOs$SessionResponse.class
 com/penallaw/backend/client/AiServiceClient$PredictResponse.class
-com/penallaw/backend/config/DatabaseSeedConfig.class
 com/penallaw/backend/converter/JsonListConverter$1.class
 com/penallaw/backend/repository/FeedbackRepository.class
 com/penallaw/backend/service/AuthService.class
@@ -46,7 +45,6 @@ com/penallaw/backend/entity/User.class
 com/penallaw/backend/entity/ChatSession$ChatSessionBuilder.class
 com/penallaw/backend/controller/LawController.class
 com/penallaw/backend/dto/AdminDTOs$FeedbackDetail.class
-com/penallaw/backend/client/AiServiceClient$HealthResponse.class
 com/penallaw/backend/exception/RateLimitException.class
 com/penallaw/backend/dto/ChatDTOs$CreateSessionRequest.class
 com/penallaw/backend/controller/AdminController.class

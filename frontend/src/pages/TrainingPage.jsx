@@ -26,9 +26,7 @@ const MODES = [
   },
 ];
 
-// Regex to extract article number and source from law citation text
-// Properly matches: "Điều 249", "Điều 51 Bộ luật Hình sự 2025", "Điều 51 Bộ luật Hình sự 2015 (sửa đổi 2017)"
-const LAW_CITATION_REGEX = /Điều\s+(\d+[A-Z]?)(?:\s+(Bộ\s+luật\s+Hình\s+sự(?:\s+\d{4})?(?:\s+\(sửa\s+đổi(?:\s+\d{4})?\))?|BLHS(?:\s+\d{4})?|BLTTHS))?/g;
+
 
 export default function TrainingPage() {
   const [mode, setMode] = useState('neutral');
@@ -113,45 +111,6 @@ export default function TrainingPage() {
       data: null,
       error: null,
     });
-  };
-
-  // Parse law citations and make them clickable
-  const renderLawCitations = (text) => {
-    if (!text) return text;
-    
-    const parts = [];
-    let lastIndex = 0;
-    const matches = [...text.matchAll(LAW_CITATION_REGEX)];
-    
-    matches.forEach((match) => {
-      const fullMatch = match[0];
-      const articleNum = match[1];
-      const sourceStr = match[2]?.trim() || '';
-      
-      // Add text before this match
-      parts.push(text.substring(lastIndex, match.index));
-      
-      // Add clickable law citation
-      parts.push(
-        <button
-          key={`law-${match.index}`}
-          className="law-citation"
-          style={{ cursor: 'pointer', textDecoration: 'underline', background: 'none', border: 'none', padding: 0 }}
-          onClick={() => handleLawClick(articleNum, sourceStr)}
-          title={`Xem Điều ${articleNum}`}
-        >
-          {fullMatch}
-        </button>
-      );
-      
-      lastIndex = match.index + fullMatch.length;
-    });
-    
-    if (lastIndex < text.length) {
-      parts.push(text.substring(lastIndex));
-    }
-    
-    return parts.length > 0 ? parts : text;
   };
 
   const getScoreClass = (score) => {
@@ -260,7 +219,7 @@ export default function TrainingPage() {
                 </div>
                 <div className={styles.emptyBody}>
                   <h3>Chưa có dữ liệu đánh giá</h3>
-                  <p>Nhập "Nội dung Vụ án" và "Phân tích của bạn", sau đó nhấn "Bắt đầu đánh giá" để hệ thống AI phân tích lập luận pháp lý của bạn.</p>
+                  <p>Nhập "Nội dung Vụ án" và "Phân tích của bạn", sau đó nhấn "Bắt đầu đánh giá" để phân tích lập luận pháp lý của bạn.</p>
                 </div>
               </section>
             ) : (

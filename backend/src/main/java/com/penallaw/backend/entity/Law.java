@@ -48,9 +48,6 @@ public class Law {
     @Builder.Default
     private Boolean isActive = true;
 
-    @Column
-    @Builder.Default
-    private Integer version = 1;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

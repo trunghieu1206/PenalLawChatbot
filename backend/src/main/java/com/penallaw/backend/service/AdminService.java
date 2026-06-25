@@ -13,9 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -94,26 +91,14 @@ public class AdminService {
 
     @Transactional(readOnly = true)
     public List<AdminDTOs.UserCaseStat> getUserCaseStats() {
-        LocalDateTime startOfToday = LocalDateTime.of(LocalDate.now(), LocalTime.MIDNIGHT);
-
-        // All-time totals per user
         List<Object[]> totals = sessionRepository.findUserSessionCounts();
-
-        // Today's totals per user
-        Map<UUID, Long> todayMap = sessionRepository.findUserSessionCountsToday(startOfToday)
-                .stream()
-                .collect(Collectors.toMap(
-                        row -> ((User) row[0]).getId(),
-                        row -> (Long) row[1]
-                ));
 
         return totals.stream()
                 .map(row -> {
                     User u = (User) row[0];
                     long total = (Long) row[1];
-                    long today = todayMap.getOrDefault(u.getId(), 0L);
                     return new AdminDTOs.UserCaseStat(
-                            u.getId(), u.getEmail(), u.getFullName(), u.getRole(), total, today);
+                            u.getId(), u.getEmail(), u.getFullName(), u.getRole(), total);
                 })
                 .sorted(Comparator.comparingLong(AdminDTOs.UserCaseStat::totalCases).reversed())
                 .collect(Collectors.toList());
