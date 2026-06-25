@@ -184,7 +184,7 @@ export default function StatsPage() {
             </button>
           </div>
         </div>
-        <Footer />
+        {/* <Footer /> */}
       </main>
     </div>
   );
