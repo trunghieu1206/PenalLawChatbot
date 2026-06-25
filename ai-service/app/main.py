@@ -1730,9 +1730,22 @@ Nếu tài liệu cung cấp không chứa điều luật phù hợp, chỉ ánh
 QUY TẮC KHOẢN — BẮT BUỘC:
 - Mỗi hành vi phạm tội CHỈ được ánh xạ vào ĐÚNG MỘT khoản duy nhất (khoản áp dụng trực tiếp).
 - KHÔNG được liệt kê cùng một điều luật ở nhiều khoản khác nhau cho cùng một hành vi.
-- NẾU sự kiện có chứa các tình tiết tăng nặng (như "tái phạm nguy hiểm", "có tổ chức", "chuyên nghiệp"...), HÃY ĐỌC KỸ từng khoản của điều luật tội danh trong VĂN BẢN LUẬT.
-- Nếu khoản cao hơn (Khoản 2, 3...) có CHÍNH THỨC quy định tình tiết đó (ví dụ: "Tái phạm nguy hiểm"), BẮT BUỘC phải ánh xạ vào khoản cao hơn đó.
+
+🚫 KIỂM TRA "TIÊU HAO TIỀN ÁN" — BẮT BUỘC TRƯỚC KHI XEM XÉT KHOẢN CAO HƠN:
+  Bước 0: Xét giá trị tài sản / hậu quả của hành vi hiện tại.
+  - Nếu giá trị ĐÓ DƯỚI NGƯỠNG cơ bản (ví dụ: trộm cắp < 2.000.000đ): hành vi chỉ cấu thành tội phạm nhờ tiền án
+    "đã bị kết án, chưa được xóa án tích mà còn vi phạm" (Khoản 1). Tiền án đó bị TIÊU HAO tại Khoản 1.
+    → KHÔNG CÓ CON ĐƯỜNG NÀO ĐI THẲNG LÊN KHOẢN 2, DÙ tiền án đó có đặc điểm "tái phạm nguy hiểm" hay không.
+    → BẮT BUỘC ánh xạ vào Khoản 1. KHÔNG ánh xạ vào Khoản 2.
+  - Chỉ được xét Khoản 2 khi giá trị tài sản ĐÃ ĐỦ cấu thành tội phạm độc lập (≥ 2.000.000đ). Khi đó tiền án
+    còn "tự do" và được phép kích hoạt tình tiết định khung tại Khoản 2.
+  ★ Ví dụ: trộm cắp 476.000đ + có tiền án 05/2022 chưa xóa → tiền án tiêu hao ở Khoản 1 → ánh xạ Khoản 1, KHÔNG Khoản 2.
+
+- SAU KHI đã xác nhận giá trị ≥ ngưỡng (tiền án còn tự do): NẾU sự kiện có chứa các tình tiết tăng nặng
+  (như "tái phạm nguy hiểm", "có tổ chức", "chuyên nghiệp"...), HÃY ĐỌC KỸ từng khoản của điều luật tội danh.
+- Nếu khoản cao hơn (Khoản 2, 3...) có CHÍNH THỨC quy định tình tiết đó, BẮT BUỘC phải ánh xạ vào khoản cao hơn đó.
 - Nếu điều luật KHÔNG quy định tình tiết đó làm dấu hiệu định khung, thì giữ nguyên ở khoản cơ bản (thường là Khoản 1) và tình tiết đó chỉ là tình tiết tăng nặng chung.
+
 
 NGUYÊN TẮC THỜI HIỆU (Điều 7 BLHS) — BẮT BUỘC ÁP DỤNG:
 1. QUY TẮC CƠ BẢN: Áp dụng luật có hiệu lực tại THỜI ĐIỂM PHẠM TỘI (tài liệu có role=primary).
@@ -1884,8 +1897,13 @@ OUTPUT: CHỈ JSON array hợp lệ."""
                 for m in mapped
             ])
             mapped_context = sanitize_text(
-                "\n\nÁNH XẠ ĐIỀU LUẬT ĐỀ XUẤT:\n" + law_lines +
-                "\n\nNGUYÊN TẮC THỜI HIỆU BẮT BUỘC (Điều 7 BLHS):\n"
+                "\n\nÁNH XẠ ĐIỀU LUẬT ĐỀ XUẤT (chỉ mang tính tham khảo — BẮT BUỘC kiểm tra lại):\n" + law_lines +
+                "\n\n⚠️  XÁC MINH BẮT BUỘC TRƯỚC KHI CHẤP NHẬN KHOẢN ĐỀ XUẤT:\n"
+                "  Bước 0 — TIÊU HAO TIỀN ÁN: Nếu giá trị tài sản DƯỚI NGƯỠNG cơ bản (ví dụ: trộm cắp < 2.000.000đ),\n"
+                "  thì tiền án đã bị TIÊU HAO để định tội ở Khoản 1. KHÔNG CÓ CON ĐƯỜNG NÀO đến Khoản 2,\n"
+                "  DÙ tiền án đó có đặc điểm 'tái phạm nguy hiểm'. Nếu ánh xạ đề xuất ở trên chỉ Khoản 2\n"
+                "  trong trường hợp này, hãy TỰ ĐIỀU CHỈNH xuống Khoản 1 và giải thích lý do.\n"
+                "\nNGUYÊN TẮC THỜI HIỆU BẮT BUỘC (Điều 7 BLHS):\n"
                 "- Luật áp dụng = luật có hiệu lực TẠI THỜI ĐIỂM PHẠM TỘI (role=primary).\n"
                 "- Nếu luật mới hơn (role=comparison) NHẸ HƠN → bắt buộc áp dụng.\n"
                 "- Nếu luật mới NẶNG HƠN → CẤM áp dụng hồi tố.\n"
@@ -1895,6 +1913,7 @@ OUTPUT: CHỈ JSON array hợp lệ."""
                 "| Điều | Tội danh | Nguồn áp dụng | Lý do chọn nguồn |\n"
                 "|------|----------|---------------|------------------|\n"
             )
+
         else:
             # BUG FIX (3): mapped is empty/None (upstream returned nothing) — treat as error.
             mapped_context = sanitize_text(
