@@ -50,7 +50,7 @@ ssh -i "chatbot-key.pem" ubuntu@ec2-3-91-91-104.compute-1.amazonaws.com \
   "mkdir -p ~/PenalLawChatbot/database/backups"
 
 scp -i "chatbot-key.pem" \
-  ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260622_031410.sql \
+  ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260625_014125.sql \
   ubuntu@ec2-3-91-91-104.compute-1.amazonaws.com:~/PenalLawChatbot/database/backups/
 
 # Upload eval dataset (create directory on server first)
