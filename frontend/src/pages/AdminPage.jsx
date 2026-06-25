@@ -139,7 +139,6 @@ export default function AdminPage() {
                   <select>
                     <option>Mới nhất</option>
                     <option>Cũ nhất</option>
-                    <option>Trạng thái</option>
                   </select>
                 </div>
                 <div className={styles.toolbarActions}>
