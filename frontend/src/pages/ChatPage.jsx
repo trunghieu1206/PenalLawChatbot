@@ -340,7 +340,7 @@ export default function ChatPage() {
                     >
                       <div className="flex justify-between items-start mb-1">
                         <span className={`font-label-sm text-[12px] ${isActive ? 'text-primary' : 'text-on-surface-variant'}`}>
-                          {new Date(s.createdAt).toLocaleDateString('vi-VN')}
+                          {new Date(s.createdAt).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
                         </span>
                         <span 
                           onClick={(e) => handleDeleteSession(e, s.id)}
@@ -366,7 +366,7 @@ export default function ChatPage() {
                     </h2>
                     <div className="flex items-center gap-1 text-xs text-on-surface-variant">
                       <span className="material-symbols-outlined text-[14px]">calendar_today</span>
-                      <span>Ngày: {(currentSession?.createdAt ? new Date(currentSession.createdAt) : new Date()).toLocaleDateString('vi-VN')}</span>
+                      <span>Ngày: {(currentSession?.createdAt ? new Date(currentSession.createdAt) : new Date()).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 relative">
