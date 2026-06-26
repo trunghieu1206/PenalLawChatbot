@@ -74,12 +74,36 @@ Bước 0.1 — XÁC ĐỊNH Ý ĐỊNH (Intent):
   Nếu ý định KHÔNG được nêu rõ trong hồ sơ → chuyển sang Bước 0.2.
 
 Bước 0.2 — SUY LUẬN Ý ĐỊNH TỪ HÀNH VI KHÁCH QUAN (khi ý định không nêu rõ):
-  Đặt câu hỏi: "Người bình thường thực hiện hành vi này CÓ BIẾT có thể gây hậu quả đó không?"
-  Áp dụng các suy luận sau:
+  Đặt câu hỏi: "Tại THỜI ĐIỂM THỰC HIỆN HÀNH VI, bị cáo có BIẾT hành vi này có thể gây chết người không?"
+  Nếu CÓ → ý định là giết người (dù cố ý trực tiếp hay gián tiếp).
+
+  ⚠️ QUY TẮC CỐ Ý GIÁN TIẾP (CRITICAL):
+  Điều 123 bao gồm cả lỗi CỐ Ý GIÁN TIẾP: Bị cáo không nhất thiết MUỐN nạn nhân chết,
+  nhưng đã thực hiện hành vi mà bản thân BIẾT CÓ THỂ GÂY CHẾT NGƯỜI và đã CHẤP NHẬN hậu quả đó.
+  → Ví dụ: dùng búa bổ củi đánh vào thái dương (vùng trọng yếu) = biết có thể gây chết = cố ý gián tiếp = Điều 123.
+
+  🚫 HAI SAI LẦM PHẢI TRÁNH TUYỆT ĐỐI:
+
+  SAI LẦM 1 — DÙNG HÀNH VI SAU PHẠM TỘI ĐỂ XÁC ĐỊNH Ý ĐỊNH:
+  Hành vi SAU KHI phạm tội (tự gây thương tích, bỏ trốn, gọi cấp cứu, tự thú, hối hận...)
+  TUYỆT ĐỐI KHÔNG được dùng để suy luận về ý định TẠI THỜI ĐIỂM THỰC HIỆN HÀNH VI.
+  Ý định phải được xác định hoàn toàn dựa trên: vũ khí + vị trí tấn công + cách thức hành động TẠI THỜI ĐIỂM PHẠM TỘI.
+  ★ Ví dụ sai: "Bị cáo tự đâm bụng sau khi đánh nạn nhân → chứng tỏ không muốn nạn nhân chết → Điều 134"
+    → ĐÂY LÀ SUY LUẬN SAI. Hành vi tự đâm bụng sau đó là biểu hiện hối hận, KHÔNG phủ nhận ý định tại thời điểm tấn công.
+
+  SAI LẦM 2 — COI KẾT LUẬN GIÁM ĐỊNH PHÁP Y TÂM THẦN LÀ XÁC ĐỊNH TỘI DANH:
+  Kết luận giám định pháp y tâm thần chỉ xác định NĂNG LỰC TRÁCH NHIỆM HÌNH SỰ
+  (bị cáo có đủ khả năng nhận thức và điều khiển hành vi không).
+  Khi kết luận giám định dùng từ ngữ như "cố ý gây thương tích" — đây là MÔ TẢ HÀNH VI ĐƯỢC CÁO BUỘC tại thời điểm giám định,
+  KHÔNG PHẢI xác định tội danh pháp lý. Tội danh do Tòa án xác định, không phải giám định viên.
+  ★ Ví dụ sai: "Kết luận giám định nói 'cố ý gây thương tích' → nên ánh xạ Điều 134"
+    → ĐÂY LÀ SUY LUẬN SAI. Giám định viên không có thẩm quyền định tội.
+
+  Áp dụng các suy luận ý định từ hành vi khách quan:
   - Công cụ/vũ khí sát thương cao (dao nhọn, búa, rìu, gậy sắt, súng...) + nhắm vào
     VÙNG TRỌNG YẾU (đầu, thái dương, cổ, ngực, bụng)
-    → SUY LUẬN: Cố ý giết người. Nạn nhân sống sót chỉ là tội chưa đạt, KHÔNG thay đổi tội danh.
-  - Đánh/đấm tay không hoặc vật thô vào vùng không trọng yếu (tay, chân, vai, lưng)
+    → SUY LUẬN: Cố ý giết người (cố ý gián tiếp tối thiểu). Nạn nhân sống chỉ là tội chưa đạt, KHÔNG thay đổi tội danh.
+  - Đánh/đấm tay không hoặc vật thô vào vùng KHÔNG trọng yếu (tay, chân, vai, lưng)
     → SUY LUẬN: Cố ý gây thương tích.
   - Lái xe không tuân thủ luật, không có ý định đâm người
     → SUY LUẬN: Vô ý (vi phạm quy định giao thông, Điều 260).
@@ -94,10 +118,11 @@ Bước 0.3 — XÁC ĐỊNH GIAI ĐOẠN PHẠM TỘI (tách biệt hoàn toàn
   - Ý định: giết người → nạn nhân SỐNG
     → Tội GIẾT NGƯỜI chưa đạt. Áp dụng Điều 123 + Điều 15 + Điều 57 khoản 3.
     ★ TUYỆT ĐỐI KHÔNG hạ xuống Điều 134 chỉ vì nạn nhân sống sót.
+    ★ TUYỆT ĐỐI KHÔNG dùng hành vi hối hận sau đó để hạ tội danh xuống Điều 134.
   - Ý định: cướp tài sản → chưa lấy được tài sản
     → Tội CƯỚP chưa đạt. Áp dụng Điều 168 + Điều 15 + Điều 57.
   - Ý định: gây thương tích → nạn nhân bị thương thực tế
-    → Hoàn thành. Chọn khoản theo % thương tích trong điều 134.
+    → Hoàn thành. Chọn khoản theo % thương tích trong Điều 134.
 
 Bước 0.4 — CHỈ SAU KHI ĐÃ XÁC ĐỊNH Ý ĐỊNH VÀ GIAI ĐOẠN, mới đọc % thương tích / số
   tiền thiệt hại để chọn khoản trong điều luật đã xác định.
