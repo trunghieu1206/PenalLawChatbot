@@ -372,6 +372,14 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 3. HÌNH PHẠT ĐỀ NGHỊ: (mức thấp nhất trong khung / dưới khung / án treo nếu đủ điều kiện)
 4. TRÁCH NHIỆM DÂN SỰ: (yêu cầu giảm bồi thường hoặc không áp dụng nếu có lý do)
 
+**⚖️ PHÁN QUYẾT ĐỀ NGHỊ (TÓM TẮT):**
+Viết một đoạn văn duy nhất, súc tích, theo thể thức văn bản tư pháp chính thức, bắt đầu bằng "Đề nghị Hội đồng xét xử:", nêu rõ:
+- Tên bị cáo, tội danh đề nghị, điều khoản cụ thể (Điều X Khoản Y điểm Z)
+- Mức hình phạt đề nghị (số năm/tháng tù cụ thể, hoặc cải tạo không giam giữ)
+- Đề nghị cho hưởng án treo (nếu có) kèm thời gian thử thách
+- Trách nhiệm dân sự đề nghị (giảm/miễn bồi thường nếu có lý do)
+Ví dụ: "Đề nghị Hội đồng xét xử tuyên bố bị cáo Nguyễn Văn A phạm tội [tên tội] theo Điều X Khoản Y BLHS [năm], xử phạt [N] năm tù nhưng cho hưởng án treo với thời gian thử thách [2N] năm; ghi nhận bị cáo đã tự nguyện bồi thường và gia đình bị hại không có yêu cầu thêm."
+
 **III. KHUYẾN NGHỊ CHO BỊ CÁO:**
 (Hướng dẫn bổ sung chứng cứ giảm nhẹ, thủ tục bồi thường, quyền kháng cáo...)
 
@@ -451,6 +459,15 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 3. HÌNH PHẠT ĐỀ NGHỊ: (mức cao nhất trong khung)
 4. TRÁCH NHIỆM DÂN SỰ: (yêu cầu bồi thường đầy đủ — liệt kê từng khoản)
 5. HÌNH PHẠT BỔ SUNG: (nếu áp dụng được)
+
+**⚖️ PHÁN QUYẾT ĐỀ NGHỊ (TÓM TẮT):**
+Viết một đoạn văn duy nhất, súc tích, theo thể thức văn bản tư pháp chính thức, bắt đầu bằng "Đề nghị Hội đồng xét xử:", nêu rõ:
+- Tên bị cáo, tội danh đề nghị, điều khoản cụ thể (Điều X Khoản Y điểm Z)
+- Mức hình phạt đề nghị (số năm tù cụ thể ở mức cao nhất trong khung)
+- Không cho hưởng án treo (nêu lý do nếu phản bác)
+- Tổng số tiền bồi thường dân sự yêu cầu (liệt kê từng khoản nếu có)
+- Hình phạt bổ sung (nếu áp dụng)
+Ví dụ: "Đề nghị Hội đồng xét xử tuyên bố bị cáo Nguyễn Văn A phạm tội [tên tội] theo Điều X Khoản Y điểm Z BLHS [năm], xử phạt [N] năm tù giam, không cho hưởng án treo; buộc bồi thường cho gia đình bị hại tổng cộng [số tiền] đồng gồm [chi tiết từng khoản]; áp dụng hình phạt bổ sung [nếu có]."
 
 **III. KHUYẾN NGHỊ CHO GIA ĐÌNH BỊ HẠI:**
 (Hướng dẫn thu thập hóa đơn, chứng từ thiệt hại, yêu cầu cấp dưỡng, bảo vệ quyền lợi dài hạn...)
