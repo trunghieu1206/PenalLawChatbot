@@ -653,7 +653,7 @@ _TORCH_CUDA_BEFORE=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_availabl
 # already satisfies the requirement spec — no redundant downloads.
 if "$AI_PYTHON" -c "
 import fastapi, transformers, langchain, langchain_openai, langgraph
-import sentence_transformers, peft, uvicorn, FlagEmbedding
+import peft, uvicorn
 " 2>/dev/null; then
     skip "AI service requirements already installed — skipping pip install."
 else
@@ -677,8 +677,6 @@ else
     # Fix Numpy 2.0 ABI incompatibilities with scipy
     "$AI_PYTHON" -m pip install "numpy>=2.0.0" "scipy>=1.13.0" --upgrade --quiet 2>&1 | tail -2 || true
 
-    # Install FlagEmbedding (required by bge-reranker-v2-m3)
-    "$AI_PYTHON" -m pip install "FlagEmbedding>=1.2.0" --quiet 2>&1 | tail -2 || true
 fi
 
 # ── Torchvision: uninstall only if actually present ──────────────────────────────────────
@@ -737,8 +735,7 @@ info "AI service requirements installed."
 info "Verifying critical imports..."
 "$AI_PYTHON" -c "
 import torch
-from transformers import AutoModel, AutoTokenizer
-from sentence_transformers import CrossEncoder
+from transformers import AutoModel, AutoTokenizer, AutoModelForSequenceClassification
 import peft, transformers, uvicorn, fastapi, langchain_openai, langgraph
 from peft import PeftModel
 print(f'✅ All imports OK | torch={torch.__version__} | peft={peft.__version__} | transformers={transformers.__version__}')
