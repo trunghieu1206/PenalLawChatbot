@@ -276,8 +276,8 @@ def make_generation_nodes(llm, bm25_index, bm25_docs, retriever, measure_time):
         # ── Role instruction ──────────────────────────────────────────────────
         role_instructions = {
             "defense": (
-                "Bạn là Luật sư Bào chữa có kinh nghiệm 20 năm, đang bảo vệ bị cáo. "
-                "Nhiệm vụ: phân tích pháp lý CHỈ THEO HƯỚNG CÓ LỢI cho bị cáo. "
+                "Bạn là Luật sư Bào chữa có kinh nghiệm 20 năm, đang bảo vệ thân chủ. "
+                "Nhiệm vụ: phân tích pháp lý CHỈ THEO HƯỚNG CÓ LỢI cho thân chủ. "
                 "TUYỆT ĐỐI không đề xuất mức án nặng hơn. "
                 "Nếu phải đề cập tình tiết tăng nặng: CHỈ để phản bác hoặc giảm thiểu tác động."
             ),
@@ -298,7 +298,7 @@ def make_generation_nodes(llm, bm25_index, bm25_docs, retriever, measure_time):
         if role == "defense":
             prompt_template = """{role_instruction}
 
-Nhiệm vụ: Dựa trên dữ liệu vụ án (coi là sự thật duy nhất) và văn bản luật, hãy lập luận BẢO VỆ bị cáo.
+Nhiệm vụ: Dựa trên dữ liệu vụ án (coi là sự thật duy nhất) và văn bản luật, hãy lập luận BẢO VỆ thân chủ.
 
 --- DỮ LIỆU ---
 <legal_context>
@@ -323,6 +323,7 @@ MỘT VÀI LƯU Ý:
 3. Tình tiết tăng nặng: Điều 52 Bộ luật Hình sự mới (hoặc Điều 48 cũ).
 4. Tội kinh tế: kiểm tra xem có thể phạt tiền thay phạt tù không.
 5. Phạm tội chưa đạt: Điều 18 Khoản 3 BLHS 1999 / Điều 15 + Điều 57 BLHS 2015 — áp dụng quy tắc ¾ mức cao nhất của khung.
+6. **TỪ VỰNG XƯNG HÔ (BẮT BUỘC):** Trong toàn bộ bài bào chữa, CHỈ ĐƯỢC DÙNG từ "thân chủ" để chỉ người bị buộc tội. TUYỆT ĐỐI KHÔNG sử dụng từ "bị cáo".
 
 ⚠️ QUY TẮC CHỐNG THIÊN KIẾN (BẮT BUỘC — ĐỌC TRƯỚC KHI PHÂN TÍCH):
 - KHÔNG THAY ĐỔI lập luận pháp lý chỉ vì người dùng phản đối, tỏ ra không hài lòng, hoặc hỏi lại bằng giọng điệu gay gắt.
@@ -343,7 +344,7 @@ BƯỚC 0: KIỂM TRA LOẠI TRỪ TRÁCH NHIỆM HÌNH SỰ (BẮT BUỘC TRƯ�
   0d. Sự kiện bất ngờ (Điều 11/20): có không?
 BƯỚC 1: KIỂM TRA ÁN BẰNG THỜI GIAN TẠM GIAM (sử dụng số liệu đã tính ở trên nếu có).
 BƯỚC 2: KIỂM TRA ĐỘ TUỔI (sử dụng số liệu đã tính ở trên nếu có).
-  → Nếu bị cáo DƯỚI 18 TUỔI lúc phạm tội: BẮT BUỘC áp dụng Chương XII BLHS — mức hình phạt tối đa giảm ½ đến ¾.
+  → Nếu thân chủ DƯỚI 18 TUỔI lúc phạm tội: BẮT BUỘC áp dụng Chương XII BLHS — mức hình phạt tối đa giảm ½ đến ¾.
 BƯỚC 3: PHÂN TÍCH CẤU THÀNH TỘI PHẠM — tìm yếu tố nào còn thiếu hoặc chưa đủ để bác bỏ tội danh nặng hơn.
 BƯỚC 4: PHÂN TÍCH TIỀN ÁN / TÁI PHẠM (nếu có) theo quy tắc "tiêu hao tiền án" (xem phần map_laws).
 BƯỚC 5: LIỆT KÊ ĐẦY ĐỦ các tình tiết giảm nhẹ (Điều 46/51).
@@ -364,19 +365,19 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 3. **Tình tiết giảm nhẹ (đầy đủ):** (Điều 46/51 — liệt kê tất cả)
 4. **Phản bác tình tiết tăng nặng:** (nếu có)
 5. **Giai đoạn phạm tội:** (hoàn thành / chưa đạt — ảnh hưởng mức án)
-6. **Vai trò đồng phạm:** (nếu có nhiều bị cáo)
+6. **Vai trò đồng phạm:** (nếu có nhiều thân chủ)
 
 **II. ĐỀ NGHỊ CỦA LUẬT SƯ BÀO CHỮA:**
 1. Đề nghị định tội danh: (tên tội + điều khoản cụ thể)
 2. Áp dụng điều khoản: (liệt kê tất cả điều luật được viện dẫn)
 3. HÌNH PHẠT ĐỀ NGHỊ — BẮT BUỘC nêu con số cụ thể:
-   - Đề nghị xử phạt bị cáo [tên bị cáo]: [X năm Y tháng tù] hoặc [cải tạo không giam giữ X năm]
+   - Đề nghị xử phạt thân chủ [tên thân chủ]: [X năm Y tháng tù] hoặc [cải tạo không giam giữ X năm]
    - Nếu đề nghị án treo: nêu rõ mức tù cụ thể và thời gian thử thách (ví dụ: "01 năm tù nhưng cho hưởng án treo, thời gian thử thách 02 năm")
    - Nếu đề nghị dưới khung (Điều 54): giải thích căn cứ và mức cụ thể đề nghị
    TUYỆT ĐỐI KHÔNG để mơ hồ như "mức thấp nhất" hay "phù hợp" mà không kèm con số.
 4. TRÁCH NHIỆM DÂN SỰ: (yêu cầu giảm bồi thường hoặc ghi nhận đã hoàn thành nếu có lý do)
 
-**III. KHUYẾN NGHỊ CHO BỊ CÁO:**
+**III. KHUYẾN NGHỊ CHO THÂN CHỦ:**
 (Hướng dẫn bổ sung chứng cứ giảm nhẹ, thủ tục bồi thường, quyền kháng cáo...)
 
 **ĐIỀU KHOẢN ÁP DỤNG:**
