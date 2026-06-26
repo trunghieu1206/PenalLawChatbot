@@ -367,18 +367,14 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 6. **Vai trò đồng phạm:** (nếu có nhiều bị cáo)
 
 **II. ĐỀ NGHỊ CỦA LUẬT SƯ BÀO CHỮA:**
-1. Đề nghị định tội danh...
-2. Áp dụng điều khoản...
-3. HÌNH PHẠT ĐỀ NGHỊ: (mức thấp nhất trong khung / dưới khung / án treo nếu đủ điều kiện)
-4. TRÁCH NHIỆM DÂN SỰ: (yêu cầu giảm bồi thường hoặc không áp dụng nếu có lý do)
-
-**⚖️ PHÁN QUYẾT ĐỀ NGHỊ (TÓM TẮT):**
-Viết một đoạn văn duy nhất, súc tích, theo thể thức văn bản tư pháp chính thức, bắt đầu bằng "Đề nghị Hội đồng xét xử:", nêu rõ:
-- Tên bị cáo, tội danh đề nghị, điều khoản cụ thể (Điều X Khoản Y điểm Z)
-- Mức hình phạt đề nghị (số năm/tháng tù cụ thể, hoặc cải tạo không giam giữ)
-- Đề nghị cho hưởng án treo (nếu có) kèm thời gian thử thách
-- Trách nhiệm dân sự đề nghị (giảm/miễn bồi thường nếu có lý do)
-Ví dụ: "Đề nghị Hội đồng xét xử tuyên bố bị cáo Nguyễn Văn A phạm tội [tên tội] theo Điều X Khoản Y BLHS [năm], xử phạt [N] năm tù nhưng cho hưởng án treo với thời gian thử thách [2N] năm; ghi nhận bị cáo đã tự nguyện bồi thường và gia đình bị hại không có yêu cầu thêm."
+1. Đề nghị định tội danh: (tên tội + điều khoản cụ thể)
+2. Áp dụng điều khoản: (liệt kê tất cả điều luật được viện dẫn)
+3. HÌNH PHẠT ĐỀ NGHỊ — BẮT BUỘC nêu con số cụ thể:
+   - Đề nghị xử phạt bị cáo [tên bị cáo]: [X năm Y tháng tù] hoặc [cải tạo không giam giữ X năm]
+   - Nếu đề nghị án treo: nêu rõ mức tù cụ thể và thời gian thử thách (ví dụ: "01 năm tù nhưng cho hưởng án treo, thời gian thử thách 02 năm")
+   - Nếu đề nghị dưới khung (Điều 54): giải thích căn cứ và mức cụ thể đề nghị
+   TUYỆT ĐỐI KHÔNG để mơ hồ như "mức thấp nhất" hay "phù hợp" mà không kèm con số.
+4. TRÁCH NHIỆM DÂN SỰ: (yêu cầu giảm bồi thường hoặc ghi nhận đã hoàn thành nếu có lý do)
 
 **III. KHUYẾN NGHỊ CHO BỊ CÁO:**
 (Hướng dẫn bổ sung chứng cứ giảm nhẹ, thủ tục bồi thường, quyền kháng cáo...)
@@ -454,20 +450,14 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 4. **Phản bác án treo:** (chỉ ra điều kiện không thỏa mãn)
 
 **II. ĐỀ NGHỊ CỦA LUẬT SƯ BẢO VỆ BỊ HẠI:**
-1. Đề nghị tuyên bố bị cáo phạm tội...
-2. Áp dụng điều khoản...
-3. HÌNH PHẠT ĐỀ NGHỊ: (mức cao nhất trong khung)
-4. TRÁCH NHIỆM DÂN SỰ: (yêu cầu bồi thường đầy đủ — liệt kê từng khoản)
+1. Đề nghị tuyên bố bị cáo phạm tội: (tên tội + điều khoản cụ thể)
+2. Áp dụng điều khoản: (liệt kê tất cả điều luật được viện dẫn)
+3. HÌNH PHẠT ĐỀ NGHỊ — BẮT BUỘC nêu con số cụ thể:
+   - Đề nghị xử phạt bị cáo [tên bị cáo]: [X năm tù giam] (mức cao nhất trong khung)
+   - Không cho hưởng án treo: (nêu rõ lý do phản bác án treo nếu có đề nghị từ phía bào chữa)
+   TUYỆT ĐỐI KHÔNG để mơ hồ như "mức cao nhất" hay "xử phạt nhiều năm" mà không kèm con số.
+4. TRÁCH NHIỆM DÂN SỰ: (yêu cầu bồi thường đầy đủ — liệt kê từng khoản và tổng số tiền cụ thể)
 5. HÌNH PHẠT BỔ SUNG: (nếu áp dụng được)
-
-**⚖️ PHÁN QUYẾT ĐỀ NGHỊ (TÓM TẮT):**
-Viết một đoạn văn duy nhất, súc tích, theo thể thức văn bản tư pháp chính thức, bắt đầu bằng "Đề nghị Hội đồng xét xử:", nêu rõ:
-- Tên bị cáo, tội danh đề nghị, điều khoản cụ thể (Điều X Khoản Y điểm Z)
-- Mức hình phạt đề nghị (số năm tù cụ thể ở mức cao nhất trong khung)
-- Không cho hưởng án treo (nêu lý do nếu phản bác)
-- Tổng số tiền bồi thường dân sự yêu cầu (liệt kê từng khoản nếu có)
-- Hình phạt bổ sung (nếu áp dụng)
-Ví dụ: "Đề nghị Hội đồng xét xử tuyên bố bị cáo Nguyễn Văn A phạm tội [tên tội] theo Điều X Khoản Y điểm Z BLHS [năm], xử phạt [N] năm tù giam, không cho hưởng án treo; buộc bồi thường cho gia đình bị hại tổng cộng [số tiền] đồng gồm [chi tiết từng khoản]; áp dụng hình phạt bổ sung [nếu có]."
 
 **III. KHUYẾN NGHỊ CHO GIA ĐÌNH BỊ HẠI:**
 (Hướng dẫn thu thập hóa đơn, chứng từ thiệt hại, yêu cầu cấp dưỡng, bảo vệ quyền lợi dài hạn...)
