@@ -192,6 +192,17 @@ def make_generation_nodes(llm, bm25_index, bm25_docs, retriever, measure_time):
             for d in ordered_docs
         ]))
 
+        # ── DEBUG: show exactly what chunks go into the LLM ──────────────────
+        print(f"  [GENERATE INPUT] {len(ordered_docs)} docs → LLM (role={role}):")
+        for _d in ordered_docs:
+            _art  = _d.metadata.get("article_number", "?")
+            _src  = _d.metadata.get("source", "?")
+            _rtag = _d.metadata.get("_temporal_role", "?")
+            _pin  = "📌 " if _d.metadata.get("_pinned") else "   "
+            _prev = _d.page_content[:100].replace("\n", " ")
+            print(f"  {_pin}Điều {str(_art):>4} | {str(_src):<30} | {str(_rtag):<12} | {_prev}...")
+        # ─────────────────────────────────────────────────────────────────────
+
         # ── Build mapped_laws context ─────────────────────────────────────────
         mapped_context = ""
         if mapped_laws and not (len(mapped_laws) == 1 and mapped_laws[0].get("_mapping_error")):
@@ -724,12 +735,13 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
                 '  "role_issue": "TỐI ĐA 15 TỪ tiếng Việt nếu false, null nếu true"\n'
                 '}\n\n'
                 "QUY TẮC:\n"
-                "- factual_ok = false CHỈ KHI AI bịa ra chi tiết cụ thể (số tiền, số bản án, ngày tháng cụ thể) KHÔNG có trong NGUYÊN VĂN VỤ ÁN.\n"
+                "- factual_ok = false CHỈ KHI AI tự tạo ra chi tiết cụ thể (số tiền, số bản án, ngày tháng cụ thể) KHÔNG có trong NGUYÊN VĂN VỤ ÁN.\n"
                 "- Nếu thông tin có trong NGUYÊN VĂN VỤ ÁN nhưng không có trong Bản tóm tắt thì VẪN HỢP LỆ (factual_ok = true).\n"
                 "- role_ok = false CHỈ KHI AI rõ ràng lập luận SAI chiều với vai trò được giao.\n"
                 "- Nếu không chắc → true (tránh false positive).\n"
                 "- TUYỆT ĐỐI KHÔNG đề cập tên trường kỹ thuật trong mô tả.\n"
-                "- Viết mô tả NGẮN GỌN tối đa 15 từ, dễ hiểu cho người dùng thông thường.\n"
+                "- TUYỆT ĐỐI KHÔNG dùng từ \"bịa\" hoặc \"bịa đặt\" trong factual_issue. Hãy dùng cụm \"có thể đã không chính xác trong [chi tiết]\".\n"
+                "- Viết mô tả NGẮN GỌN tối đa 15 từ, lịch sự và dễ hiểu cho người dùng thông thường.\n"
                 "OUTPUT: Chỉ JSON hợp lệ, không markdown."
             )
             try:
