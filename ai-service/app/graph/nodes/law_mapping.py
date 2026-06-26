@@ -139,11 +139,6 @@ BẢNG CÁC CẶP ĐIỀU LUẬT THƯỜNG BỊ NHẦM — ĐỌC TRƯỚC KHI �
   → Tình tiết "có tính chất côn đồ" (điểm n khoản 1 Điều 123): hành vi hung hãn, bột phát, coi
     thường tính mạng người khác dù không có thù oán từ trước.
 
-• Điều 123 vs Điều 128 vs Điều 260:
-  → Điều 123: CỐ Ý muốn nạn nhân chết hoặc chấp nhận hậu quả chết xảy ra.
-  → Điều 128: VÔ Ý — không muốn, không thấy trước hoặc tin hậu quả sẽ không xảy ra.
-  → Điều 260: Vi phạm quy tắc giao thông + vô ý gây chết người — ưu tiên khi tai nạn giao thông.
-
 [NHÓM 2 — TỘI XÂM PHẠM TÀI SẢN]
 • Điều 168 vs Điều 170 vs Điều 171 vs Điều 173:
   → Điều 168 (Cướp): Vũ lực TRỰC TIẾP hoặc đe dọa dùng vũ lực NGAY TỨC KHẮC → làm tê liệt ý chí.
