@@ -11,7 +11,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from app.core.config import REQUIRED_FIELDS, _MIN_SUPPORTED_DATE, _VN_TZ
 from app.core.schemas import AgentState
-from app.utils.legal import _extract_json
+from app.utils.clean_json import _extract_json
 from app.utils.text import _sanitize_msgs
 from app.utils.sentencing import extract_sentencing_data
 

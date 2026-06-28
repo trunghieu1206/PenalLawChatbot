@@ -20,7 +20,7 @@ from app.graph.nodes.verify import (
     _verify_role_signal,
 )
 from app.utils.dates import _edition_for_date
-from app.utils.legal import _extract_json
+from app.utils.clean_json import _extract_json
 from app.utils.text import sanitize_text, _sanitize_msgs, cleanup_response
 
 

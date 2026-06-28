@@ -8,7 +8,7 @@ import json
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.core.schemas import AgentState
-from app.utils.legal import _extract_json
+from app.utils.clean_json import _extract_json
 from app.utils.text import _sanitize_msgs
 
 

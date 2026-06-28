@@ -133,7 +133,7 @@ from app.core.config import (
     _DEFAULT_EMBEDDING,
 )
 from app.utils.text import sanitize_text
-from app.utils.legal import _extract_json
+from app.utils.clean_json import _extract_json
 from app.services.embeddings import JinaEmbeddings, MilvusRetriever
 from app.services.reranker import load_reranker, make_rerank_scorer
 from app.services.container import Services

@@ -15,7 +15,7 @@ from app.core.config import (
 )
 from app.core.schemas import AgentState
 from app.utils.dates import _edition_for_date
-from app.utils.legal import _extract_json
+from app.utils.clean_json import _extract_json
 from app.utils.text import _sanitize_msgs, sanitize_text
 
 
