@@ -397,6 +397,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
    - Nếu đề nghị án treo: nêu rõ mức tù cụ thể và thời gian thử thách (ví dụ: "01 năm tù nhưng cho hưởng án treo, thời gian thử thách 02 năm")
    - Nếu đề nghị dưới khung (Điều 54): giải thích căn cứ và mức cụ thể đề nghị
    TUYỆT ĐỐI KHÔNG để mơ hồ như "mức thấp nhất" hay "phù hợp" mà không kèm con số.
+4. HÌNH PHẠT BỔ SUNG: (nếu có áp dụng)
 
 **III. KHUYẾN NGHỊ CHO THÂN CHỦ:**
 (Hướng dẫn bổ sung chứng cứ giảm nhẹ, thủ tục bồi thường, quyền kháng cáo...)
@@ -474,7 +475,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 
 **I. PHÂN TÍCH PHÁP LÝ (GÓC ĐỘ BẢO VỆ BỊ HẠI):**
 1. **Xác nhận cấu thành tội phạm:** (khẳng định đủ 4 yếu tố)
-2. **Tình tiết tăng nặng (đầy đủ):** (Điều 48/52 — liệt kê tất cả)
+2. **Tình tiết tăng nặng:** (Liệt kê CHỈ những tình tiết ĐÁP ỨNG ĐẦY ĐỦ điều kiện pháp lý theo LUẬT Ý 6 và 7 ở trên. Nếu tình tiết không đủ căn cứ thì GHI RÕ không áp dụng và lý do.)
 3. **Tình tiết giảm nhẹ:** (phản bác nếu có)
 4. **Phản bác án treo:** (chỉ ra điều kiện không thỏa mãn)
 
@@ -485,11 +486,10 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
    - Đề nghị xử phạt bị cáo [tên bị cáo]: [X năm tù giam] (mức cao nhất trong khung)
    - Không cho hưởng án treo: (nêu rõ lý do phản bác án treo nếu có đề nghị từ phía bào chữa)
    TUYỆT ĐỐI KHÔNG để mơ hồ như "mức cao nhất" hay "xử phạt nhiều năm" mà không kèm con số.
-4. TRÁCH NHIỆM DÂN SỰ: (yêu cầu bồi thường đầy đủ — liệt kê từng khoản và tổng số tiền cụ thể)
-5. HÌNH PHẠT BỔ SUNG: (nếu áp dụng được)
+4. HÌNH PHẠT BỔ SUNG: (nếu áp dụng được)
 
 **III. KHUYẾN NGHỊ CHO GIA ĐÌNH BỊ HẠI:**
-(Hướng dẫn thu thập hóa đơn, chứng từ thiệt hại, yêu cầu cấp dưỡng, bảo vệ quyền lợi dài hạn...)
+(Hướng dẫn bảo vệ quyền lợi trong quá trình tố tụng, quyền kháng cáo bản án nếu chưa thỏa đáng, liên hệ cơ quan tiến hành tố tụng để được cập nhật tiến độ vụ án và bảo đảm quyền lợi của bị hại...)
 
 **ĐIỀU KHOẢN ÁP DỤNG:**
 (Bảng tổng hợp — CHỈ liệt kê các điều luật đã được trích dẫn CỤ THỂ trong nội dung phân tích ở trên. TUYỆT ĐỐI KHÔNG thêm điều luật chưa được đề cập. BẮT BUỘC trình bày bảng đúng chuẩn Markdown, phải có ĐÚNG 4 cột và hàng phân cách phải đủ 4 cột `|---|---|---|---|`. QUY TẮC GỘP DÒNG BẮT BUỘC: Mỗi SỐ ĐIỀU chỉ được xuất hiện ĐÚNG MỘT HÀNG duy nhất — nếu một điều được viện dẫn ở nhiều khoản hoặc điểm khác nhau, hãy gộp tất cả vào một hàng, liệt kê các khoản/điểm trong cột Tội danh/Nội dung, ví dụ: "Khoản 1; Khoản 2 điểm g".)
