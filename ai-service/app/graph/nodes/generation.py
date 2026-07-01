@@ -326,6 +326,21 @@ MỘT VÀI LƯU Ý:
 4. Tội kinh tế: kiểm tra xem có thể phạt tiền thay phạt tù không.
 5. Phạm tội chưa đạt: Điều 18 Khoản 3 BLHS 1999 / Điều 15 + Điều 57 BLHS 2015 — áp dụng quy tắc ¾ mức cao nhất của khung.
 6. **TỪ VỰNG XƯNG HÔ (BẮT BUỘC):** Trong toàn bộ bài bào chữa, CHỈ ĐƯỢC DÙNG từ "thân chủ" để chỉ người bị buộc tội. TUYỆT ĐỐI KHÔNG sử dụng từ "bị cáo".
+7. **PHÂN LOẠI TỘI PHẠM (BẮT BUỘC kiểm tra trước khi viết tình tiết giảm nhẹ):**
+   - Tội ít nghiêm trọng: mức cao nhất của khung ≤ 03 năm tù.
+   - Tội nghiêm trọng: mức cao nhất > 03 năm đến ≤ 07 năm tù.
+   - Tội rất nghiêm trọng: mức cao nhất > 07 năm đến ≤ 15 năm tù.
+   - Tội đặc biệt nghiêm trọng: mức cao nhất > 15 năm, chung thân hoặc tử hình.
+   TUYỆT ĐỐI KHÔNG viết cụm "phạm tội lần đầu và thuộc trường hợp ít nghiêm trọng" nếu thân chủ bị truy tố theo khoản có mức cao nhất > 03 năm.
+   Tình tiết giảm nhẹ "điểm i khoản 1 Điều 51" (phạm tội lần đầu) vẫn áp dụng được độc lập — chỉ cần xóa cụm "ít nghiêm trọng".
+8. **ĐIỀU KIỆN BẮT BUỘC để áp dụng Điểm e Khoản 1 Điều 51 (Bị kích động do hành vi trái pháp luật của nạn nhân):**
+   Hành vi của nạn nhân phải đủ NGHIÊM TRỌNG, ví dụ: tấn công trước, đe dọa tính mạng, xúc phạm danh dự trầm trọng, vi phạm pháp luật hình sự trực tiếp.
+   TUYỆT ĐỐI KHÔNG áp dụng điểm e nếu nạn nhân chỉ: chửi thề thông thường, từ chối trả tiền, cự cãi bằng lời, dọa đánh mà chưa thực hiện hành vi tấn công.
+   Tòa án sẽ bác lập luận này nếu không có căn cứ pháp lý vững. CHỈ viện dẫn điểm e khi đủ căn cứ.
+9. **PHÚC TRÌNH TẠI ĐIỀU KHOẢN BỘ LUẬT ĐƯỢC TRÍCH DẪN:**
+   - Tội danh chính (ví dụ: Điều 134): luôn trích dẫn phiên bản có hiệu lực tại THỜI ĐIỂM PHẠM TỘI (thường là BLHS 2015 sửa đổi 2017).
+   - Tình tiết giảm nhẹ/tăng nặng (Điều 51, 52, 54, 65...): nếu phiên bản mới hơn có lợi hơn, áp dụng hồi tố và GHI RÕ "theo Nguyên tắc hồi tố có lợi — Điều 7 BLHS".
+   - Nếu không rõ phiên bản nào có lợi hơn: mặc định dùng phiên bản tại thời điểm phạm tội.
 
 ⚠️ QUY TẮC CHỐNG THIÊN KIẾN (BẮT BUỘC — ĐỌC TRƯỚC KHI PHÂN TÍCH):
 - KHÔNG THAY ĐỔI lập luận pháp lý chỉ vì người dùng phản đối, tỏ ra không hài lòng, hoặc hỏi lại bằng giọng điệu gay gắt.
@@ -348,7 +363,12 @@ BƯỚC 1: KIỂM TRA ÁN BẰNG THỜI GIAN TẠM GIAM (sử dụng số liệu
 BƯỚC 2: KIỂM TRA ĐỘ TUỔI (sử dụng số liệu đã tính ở trên nếu có).
   → Nếu thân chủ DƯỚI 18 TUỔI lúc phạm tội: BẮT BUỘC áp dụng Chương XII BLHS — mức hình phạt tối đa giảm ½ đến ¾.
 BƯỚC 3: PHÂN TÍCH CẤU THÀNH TỘI PHẠM — tìm yếu tố nào còn thiếu hoặc chưa đủ để bác bỏ tội danh nặng hơn.
-BƯỚC 4: PHÂN TÍCH TIỀN ÁN / TÁI PHẠM (nếu có) theo quy tắc "tiêu hao tiền án" (xem phần map_laws).
+BƯỚC 4: PHÂN TÍCH TIỀN ÁN / TÁI PHẠM VÀ NHÂN THÂN (bắt buộc xử lý trung thực):
+  - Tiền án (bản án hình sự): ảnh hưởng tái phạm nguy hiểm. Áp dụng quy tắc "tiêu hao tiền án" (xem phần map_laws).
+  - Tiền sự (xử phạt hành chính): KHÔNG phải tiền án, nhưng vẫn là NHÂN THÂN XẤU mà Tòa án xét khi đánh giá khả năng cải tạo.
+  BUỘC: Thừa nhận tiền sự trung thực, sau đó lập luận rằng tiền sự chỉ là vi phạm hành chính, không cấu thành tiền án hình sự và không dẫn đến tái phạm nguy hiểm.
+  TUYỆT ĐỐI KHÔNG lờ đi hoặc cố tình xém nhẹ tiền sự, đặc biệt nếu tiền sự liên quan đến hành vi tương tự xảy ra sát thời điểm phạm tội.
+  TUYỆT ĐỐI KHÔNG dùng lập luận "để xin giảm án sâu" dựa vào lý do "đây là lần đầu phạm tội" khi hồ sơ thể hiện nhiều tiền sự liên quan.
 BƯỚC 5: LIỆT KÊ ĐẦY ĐỦ các tình tiết giảm nhẹ (Điều 46/51).
 BƯỚC 6: PHẢN BÁC từng tình tiết tăng nặng nếu có (Điều 48/52).
 BƯỚC 7: LƯỢNG HÌNH — đề xuất mức hình phạt thấp nhất có thể biện hộ được.
@@ -377,7 +397,6 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
    - Nếu đề nghị án treo: nêu rõ mức tù cụ thể và thời gian thử thách (ví dụ: "01 năm tù nhưng cho hưởng án treo, thời gian thử thách 02 năm")
    - Nếu đề nghị dưới khung (Điều 54): giải thích căn cứ và mức cụ thể đề nghị
    TUYỆT ĐỐI KHÔNG để mơ hồ như "mức thấp nhất" hay "phù hợp" mà không kèm con số.
-4. TRÁCH NHIỆM DÂN SỰ: (yêu cầu giảm bồi thường hoặc ghi nhận đã hoàn thành nếu có lý do)
 
 **III. KHUYẾN NGHỊ CHO THÂN CHỦ:**
 (Hướng dẫn bổ sung chứng cứ giảm nhẹ, thủ tục bồi thường, quyền kháng cáo...)
@@ -420,6 +439,12 @@ MỘT VÀI LƯU Ý:
 3. Tình tiết tăng nặng: Điều 52 Bộ luật Hình sự mới (hoặc Điều 48 cũ).
 4. Tội kinh tế: kiểm tra xem có thể phạt tiền thay phạt tù không.
 5. Phạm tội chưa đạt: Điều 18 Khoản 3 BLHS 1999 / Điều 15 + Điều 57 BLHS 2015 — áp dụng quy tắc ¾ mức cao nhất của khung.
+6. **ĐIỀU KIỆN BẮt BUỘC của tình tiết tăng nặng “phạm tội đối với người ở trong tình trạng không thể tự vệ được” (Khoản 1 Điều 52):**
+   Nạn nhân phải ở trạng thái hoàn toàn mất khả năng tự bảo vệ, ví dụ: đang ngủ say, bị trói, bị tê liệt, bất tỉnh, trẻ em nhỏ, người già yếu hoàn toàn không có khả năng chống cự.
+   TUYỆT ĐỐI KHÔNG áp dụng tình tiết này chỉ vì nạn nhân đang ở tư thế yếu thế nhất thời (ngã, khom người, đang đứng dậy) trong một cuộc xô xát — đó là diễn biến thông thường của nhậu loạn, không đạt ngưỡng “không thể tự vệ” theo án lệ. Tòa án sẽ bác nếu áp dụng sai.
+7. **ĐIỀU KIỆN BẮt BUỘC của tình tiết tăng nặng “dùng thủ đoạn hoặc phương tiện có khả năng gây nguy hại cho nhiều người” (Khoản 1 Điều 52):**
+   Chỉ áp dụng khi bị cáo sử dụng công cụ có tính sát thương hàng loạt (mìn, thuốc độc bỏ vào thực phẩm, lái xe đâm đám đông, chất nổ...) với khả năng thực tế gây hại cho nhiều người cùng lúc.
+   TUYỆT ĐỐI KHÔNG áp dụng nếu bị cáo chỉ dùng tay chân, vật thô thông thường đạnh một người duy nhất — dù nhắm vào vùng trọng yếu. Tòa án sẽ bác ngay lập luận này.
 
 ⚠️ QUY TẮC CHỐNG THIÊN KIẾN (BẮT BUỘC — ĐỌC TRƯỚC KHI PHÂN TÍCH):
 - KHÔNG THAY ĐỔI lập luận pháp lý chỉ vì người dùng phản đối, tỏ ra không hài lòng, hoặc hỏi lại bằng giọng điệu gay gắt.
@@ -438,12 +463,11 @@ BƯỚC 1: KIỂM TRA ÁN BẰNG THỜI GIAN TẠM GIAM (sử dụng số liệu
 BƯỚC 2: KIỂM TRA ĐỘ TUỔI (sử dụng số liệu đã tính ở trên nếu có).
 BƯỚC 3: XÁC NHẬN CẤU THÀNH TỘI PHẠM ĐẦY ĐỦ (khẳng định đủ 4 yếu tố — bác bỏ lập luận thiếu yếu tố của bị cáo).
 BƯỚC 3a: PHÂN TÍCH TIỀN ÁN / TÁI PHẠM theo quy tắc "tiêu hao tiền án".
-BƯỚC 4: LIỆT KÊ ĐẦY ĐỦ tình tiết tăng nặng (Điều 48/52).
+BƯỚC 4: LIỆT KÊ ĐẦY ĐỦ tình tiết tăng nặng (Điều 48/52) — CHỈ những tình tiết đáp ứng đầy đủ điều kiện pháp lý theo LƯ U Ý 6 và 7 ở trên.
 BƯỚC 5: PHẢN BÁC từng tình tiết giảm nhẹ (chứng minh không đủ điều kiện hoặc không đáng kể).
 BƯỚC 6: PHẢN BÁC ÁN TREO — chỉ ra điều kiện nào của Điều 60/65 không thỏa mãn.
 BƯỚC 7: LƯỢNG HÌNH — đề nghị mức hình phạt cao nhất trong khung có căn cứ pháp lý.
-BƯỚC 8: TÍNH TOÁN BỒI THƯỜNG DÂN SỰ đầy đủ (vật chất + tinh thần + phát sinh).
-BƯỚC 9: YÊU CẦU HÌNH PHẠT BỔ SUNG (tịch thu, cấm chức vụ, phạt tiền bổ sung nếu phù hợp).
+BƯỚC 8: YÊU CẦU HÌNH PHẠT BỔ SUNG (tịch thu, cấm chức vụ, phạt tiền bổ sung nếu phù hợp).
 
 ---------------------------------------------------------
 CẤU TRÚC OUTPUT BẮT BUỘC:
@@ -567,8 +591,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 1. Tuyên bố bị cáo phạm tội...
 2. Áp dụng điều khoản...
 3. HÌNH PHẠT: (tù giam HOẶC phạt tiền, chọn 1)
-4. TRÁCH NHIỆM DÂN SỰ & XỬ LÝ VẬT CHỨNG
-5. ÁN PHÍ: 200.000 đồng
+4. ÁN PHÍ: 200.000 đồng
 
 **ĐIỀU KHOẢN ÁP DỤNG:**
 (Bảng tổng hợp — CHỈ liệt kê các điều luật đã được trích dẫn CỤ THỂ trong nội dung phân tích ở trên. TUYỆT ĐỐI KHÔNG thêm điều luật chưa được đề cập. BẮT BUỘC trình bày bảng đúng chuẩn Markdown, phải có ĐÚNG 4 cột và hàng phân cách phải đủ 4 cột `|---|---|---|---|`. QUY TẮC GỘP DÒNG BẮT BUỘC: Mỗi SỐ ĐIỀU chỉ được xuất hiện ĐÚNG MỘT HÀNG duy nhất — nếu một điều được viện dẫn ở nhiều khoản hoặc điểm khác nhau, hãy gộp tất cả vào một hàng, liệt kê các khoản/điểm trong cột Tội danh/Nội dung, ví dụ: "Khoản 1; Khoản 2 điểm g".)
