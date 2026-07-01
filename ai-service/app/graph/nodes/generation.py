@@ -365,7 +365,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 1. **Kiểm tra loại trừ TNHS:** (phòng vệ chính đáng, tình thế cấp thiết, sự kiện bất ngờ...)
 2. **Phân tích cấu thành tội phạm:** (có yếu tố nào còn thiếu không?)
 3. **Tình tiết giảm nhẹ (đầy đủ):** (Điều 46/51 — liệt kê tất cả)
-4. **Phản bác tình tiết tăng nặng:** (nếu có)
+4. **Tình tiết tăng nặng:** (phản bác nếu có)
 5. **Giai đoạn phạm tội:** (hoàn thành / chưa đạt — ảnh hưởng mức án)
 6. **Vai trò đồng phạm:** (nếu có nhiều thân chủ)
 
@@ -451,7 +451,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 **I. PHÂN TÍCH PHÁP LÝ (GÓC ĐỘ BẢO VỆ BỊ HẠI):**
 1. **Xác nhận cấu thành tội phạm:** (khẳng định đủ 4 yếu tố)
 2. **Tình tiết tăng nặng (đầy đủ):** (Điều 48/52 — liệt kê tất cả)
-3. **Phản bác tình tiết giảm nhẹ:** (nếu có)
+3. **Tình tiết giảm nhẹ:** (phản bác nếu có)
 4. **Phản bác án treo:** (chỉ ra điều kiện không thỏa mãn)
 
 **II. ĐỀ NGHỊ CỦA LUẬT SƯ BẢO VỆ BỊ HẠI:**
