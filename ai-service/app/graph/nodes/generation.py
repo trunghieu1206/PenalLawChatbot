@@ -276,19 +276,19 @@ def make_generation_nodes(llm, bm25_index, bm25_docs, retriever, measure_time):
         # ── Role instruction ──────────────────────────────────────────────────
         role_instructions = {
             "defense": (
-                "Bạn là Luật sư Bào chữa có kinh nghiệm 20 năm, đang bảo vệ thân chủ. "
+                "Bạn là Luật sư Bào chữa, đang bảo vệ thân chủ. "
                 "Nhiệm vụ: phân tích pháp lý CHỈ THEO HƯỚNG CÓ LỢI cho thân chủ. "
                 "TUYỆT ĐỐI không đề xuất mức án nặng hơn. "
                 "Nếu phải đề cập tình tiết tăng nặng: CHỈ để phản bác hoặc giảm thiểu tác động."
             ),
             "victim": (
-                "Bạn là Luật sư Bảo vệ Bị hại có kinh nghiệm 20 năm. "
+                "Bạn là Luật sư Bảo vệ Bị hại. "
                 "Nhiệm vụ: phân tích pháp lý CHỈ THEO HƯỚNG BẢO VỆ QUYỀN LỢI BỊ HẠI TỐI ĐA. "
                 "TUYỆT ĐỐI không đề xuất án nhẹ hơn cho bị cáo. "
                 "Nếu phải đề cập tình tiết giảm nhẹ: CHỈ để phản bác hoặc chứng minh không đủ điều kiện."
             ),
             "neutral": (
-                "Bạn là Thẩm phán Hội đồng xét xử có kinh nghiệm 20 năm, "
+                "Bạn là Thẩm phán Hội đồng xét xử, "
                 "đang ra phán quyết trung lập, khách quan, hai chiều dựa trên pháp luật."
             ),
         }
@@ -297,6 +297,8 @@ def make_generation_nodes(llm, bm25_index, bm25_docs, retriever, measure_time):
         # ── Select prompt template based on role ──────────────────────────────
         if role == "defense":
             prompt_template = """{role_instruction}
+
+⛔ TUYỆT ĐỐI KHÔNG viết lời chào mở đầu như "Kính thưa Hội đồng xét xử", "Với kinh nghiệm X năm", hay bất kỳ phần giới thiệu bản thân nào. Bắt đầu NGAY VÀO NỘI DUNG phân tích pháp lý.
 
 Nhiệm vụ: Dựa trên dữ liệu vụ án (coi là sự thật duy nhất) và văn bản luật, hãy lập luận BẢO VỆ thân chủ.
 
@@ -390,6 +392,8 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 """
         elif role == "victim":
             prompt_template = """{role_instruction}
+
+⛔ TUYỆT ĐỐI KHÔNG viết lời chào mở đầu như "Kính thưa Hội đồng xét xử", "Với kinh nghiệm X năm", hay bất kỳ phần giới thiệu bản thân nào. Bắt đầu NGAY VÀO NỘI DUNG phân tích pháp lý.
 
 Nhiệm vụ: Dựa trên dữ liệu vụ án (coi là sự thật duy nhất) và văn bản luật, hãy lập luận BẢO VỆ QUYỀN LỢI BỊ HẠI.
 
