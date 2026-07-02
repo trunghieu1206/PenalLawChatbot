@@ -370,13 +370,12 @@ BƯỚC 4: PHÂN TÍCH TIỀN ÁN / TÁI PHẠM VÀ NHÂN THÂN (bắt buộc x�
   TUYỆT ĐỐI KHÔNG lờ đi hoặc cố tình xém nhẹ tiền sự, đặc biệt nếu tiền sự liên quan đến hành vi tương tự xảy ra sát thời điểm phạm tội.
   TUYỆT ĐỐI KHÔNG dùng lập luận "để xin giảm án sâu" dựa vào lý do "đây là lần đầu phạm tội" khi hồ sơ thể hiện nhiều tiền sự liên quan.
 BƯỚC 5: LIỆT KÊ ĐẦY ĐỦ các tình tiết giảm nhẹ (Điều 46/51).
-BƯỚC 6: PHẢN BÁC từng tình tiết tăng nặng nếu có (Điều 48/52).
-BƯỚC 7: LƯỢNG HÌNH — đề xuất mức hình phạt thấp nhất có thể biện hộ được.
+BƯỚC 6: LƯỢNG HÌNH — đề xuất mức hình phạt thấp nhất có thể biện hộ được.
   → Xem xét dưới khung (Điều 47/54) nếu ≥ 2 tình tiết giảm nhẹ và không tăng nặng.
   → Xem xét miễn hình phạt (Điều 25/59) nếu trường hợp đặc biệt.
   → Đề xuất án treo (Điều 60/65) nếu đủ 5 điều kiện.
-BƯỚC 8: TỔNG HỢP HÌNH PHẠT (Điều 50/55) nếu nhiều tội.
-BƯỚC 9: KHẤU TRỪ THỜI GIAN TẠM GIAM (sử dụng số liệu đã tính ở trên nếu có).
+BƯỚC 7: TỔNG HỢP HÌNH PHẠT (Điều 50/55) nếu nhiều tội.
+BƯỚC 8: KHẤU TRỪ THỜI GIAN TẠM GIAM (sử dụng số liệu đã tính ở trên nếu có).
 
 ---------------------------------------------------------
 CẤU TRÚC OUTPUT BẮT BUỘC:
@@ -384,10 +383,9 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 **I. PHÂN TÍCH PHÁP LÝ (GÓC ĐỘ BÀO CHỮA):**
 1. **Kiểm tra loại trừ TNHS:** (phòng vệ chính đáng, tình thế cấp thiết, sự kiện bất ngờ...)
 2. **Phân tích cấu thành tội phạm:** (có yếu tố nào còn thiếu không?)
-3. **Tình tiết giảm nhẹ (đầy đủ):** (Điều 46/51 — liệt kê tất cả)
-4. **Tình tiết tăng nặng:** (phản bác nếu có)
-5. **Giai đoạn phạm tội:** (hoàn thành / chưa đạt — ảnh hưởng mức án)
-6. **Vai trò đồng phạm:** (nếu có nhiều thân chủ)
+3. **Tình tiết giảm nhẹ đề xuất:** (Điều 46/51 — liệt kê tất cả)
+4. **Giai đoạn phạm tội:** (hoàn thành / chưa đạt — ảnh hưởng mức án)
+5. **Vai trò đồng phạm:** (nếu có nhiều thân chủ)
 
 **II. ĐỀ NGHỊ CỦA LUẬT SƯ BÀO CHỮA:**
 1. Đề nghị định tội danh: (tên tội + điều khoản cụ thể)
@@ -436,8 +434,7 @@ MỘT VÀI LƯU Ý:
 1. Đối với tội liên quan tới sử dụng ma túy:
    - Phân biệt "tàng trữ" (Điều 249) và "tổ chức sử dụng" (Điều 255).
    - Kiểm tra nhân thân nạn nhân với Khoản 2 Điều 255.
-2. Tình tiết giảm nhẹ: Điều 51 Bộ luật Hình sự mới (hoặc Điều 46 cũ).
-3. Tình tiết tăng nặng: Điều 52 Bộ luật Hình sự mới (hoặc Điều 48 cũ).
+2. Tình tiết tăng nặng: Điều 52 Bộ luật Hình sự mới (hoặc Điều 48 cũ).
 4. Tội kinh tế: kiểm tra xem có thể phạt tiền thay phạt tù không.
 5. Phạm tội chưa đạt: Điều 18 Khoản 3 BLHS 1999 / Điều 15 + Điều 57 BLHS 2015 — áp dụng quy tắc ¾ mức cao nhất của khung.
 6. **ĐIỀU KIỆN BẮt BUỘC của tình tiết tăng nặng “phạm tội đối với người ở trong tình trạng không thể tự vệ được” (Khoản 1 Điều 52):**
@@ -465,10 +462,9 @@ BƯỚC 2: KIỂM TRA ĐỘ TUỔI (sử dụng số liệu đã tính ở trên
 BƯỚC 3: XÁC NHẬN CẤU THÀNH TỘI PHẠM ĐẦY ĐỦ (khẳng định đủ 4 yếu tố — bác bỏ lập luận thiếu yếu tố của bị cáo).
 BƯỚC 3a: PHÂN TÍCH TIỀN ÁN / TÁI PHẠM theo quy tắc "tiêu hao tiền án".
 BƯỚC 4: LIỆT KÊ ĐẦY ĐỦ tình tiết tăng nặng (Điều 48/52) — CHỈ những tình tiết đáp ứng đầy đủ điều kiện pháp lý theo LƯ U Ý 6 và 7 ở trên.
-BƯỚC 5: PHẢN BÁC từng tình tiết giảm nhẹ (chứng minh không đủ điều kiện hoặc không đáng kể).
-BƯỚC 6: PHẢN BÁC ÁN TREO — chỉ ra điều kiện nào của Điều 60/65 không thỏa mãn.
-BƯỚC 7: LƯỢNG HÌNH — đề nghị mức hình phạt cao nhất trong khung có căn cứ pháp lý.
-BƯỚC 8: YÊU CẦU HÌNH PHẠT BỔ SUNG (tịch thu, cấm chức vụ, phạt tiền bổ sung nếu phù hợp).
+BƯỚC 5: ÁN TREO — chỉ ra điều kiện nào của Điều 60/65 không thỏa mãn (nêu lý do không áp dụng án treo nếu có). 
+BƯỚC 6: LƯỢNG HÌNH — đề nghị mức hình phạt cao nhất trong khung có căn cứ pháp lý.
+BƯỚC 7: YÊU CẦU HÌNH PHẠT BỔ SUNG (tịch thu, cấm chức vụ, phạt tiền bổ sung nếu phù hợp).
 
 ---------------------------------------------------------
 CẤU TRÚC OUTPUT BẮT BUỘC:
@@ -476,8 +472,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 **I. PHÂN TÍCH PHÁP LÝ (GÓC ĐỘ BẢO VỆ BỊ HẠI):**
 1. **Xác nhận cấu thành tội phạm:** (khẳng định đủ 4 yếu tố)
 2. **Tình tiết tăng nặng:** (Liệt kê CHỈ những tình tiết ĐÁP ỨNG ĐẦY ĐỦ điều kiện pháp lý theo LUẬT Ý 6 và 7 ở trên. Nếu tình tiết không đủ căn cứ thì GHI RÕ không áp dụng và lý do.)
-3. **Tình tiết giảm nhẹ:** (phản bác nếu có)
-4. **Phản bác án treo:** (chỉ ra điều kiện không thỏa mãn)
+3. **Phản bác án treo:** (chỉ ra điều kiện không thỏa mãn)
 
 **II. ĐỀ NGHỊ CỦA LUẬT SƯ BẢO VỆ BỊ HẠI:**
 1. Đề nghị tuyên bố bị cáo phạm tội: (tên tội + điều khoản cụ thể)
