@@ -481,7 +481,11 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
    - Đề nghị xử phạt bị cáo [tên bị cáo]: [X năm tù giam] (mức cao nhất trong khung)
    - Không cho hưởng án treo: (nêu rõ lý do phản bác án treo nếu có đề nghị từ phía bào chữa)
    TUYỆT ĐỐI KHÔNG để mơ hồ như "mức cao nhất" hay "xử phạt nhiều năm" mà không kèm con số.
-4. HÌNH PHẠT BỔ SUNG: (nếu áp dụng được)
+4. YÊU CẦU BỒI THƯỜNG THIỆT HẠI:
+   - Căn cứ pháp lý: viện dẫn điều khoản BLHS quy định nghĩa vụ bồi thường (ví dụ: Điều 42 BLHS 1999 hoặc Điều 48 BLHS 2015 tùy theo thời điểm phạm tội).
+   - Đề nghị Hội đồng xét xử buộc bị cáo bồi thường toàn bộ thiệt hại thực tế đã gây ra cho bị hại theo các hóa đơn, chứng từ hợp pháp mà gia đình bị hại sẽ cung cấp cho Tòa án.
+   - TUYỆT ĐỐI KHÔNG tự đặt ra bất kỳ con số tiền bồi thường cụ thể nào. KHÔNG được viết "X triệu đồng", "Y tỷ đồng", hay bất kỳ số tiền ước tính nào — Tòa án sẽ định lượng dựa trên hồ sơ thực tế.
+5. HÌNH PHẠT BỔ SUNG: (nếu áp dụng được)
 
 **III. KHUYẾN NGHỊ CHO GIA ĐÌNH BỊ HẠI:**
 (Hướng dẫn bảo vệ quyền lợi trong quá trình tố tụng, quyền kháng cáo bản án nếu chưa thỏa đáng, liên hệ cơ quan tiến hành tố tụng để được cập nhật tiến độ vụ án và bảo đảm quyền lợi của bị hại...)
