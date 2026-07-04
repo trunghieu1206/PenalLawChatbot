@@ -942,27 +942,65 @@ info "nginx started."
 echo ""
 info "Waiting for AI service to be ready (up to 300s)..."
 info "  (First run: model loading takes 60-120s on GPU, 180-300s on CPU)"
+info "  PID $AI_PID — watching log: $LOG_DIR/ai-service.log"
 _ai_ready=false
 _ai_elapsed=0
-_ai_last_log=0
+
 while [ $_ai_elapsed -lt 300 ]; do
     if curl -sf --max-time 2 "http://localhost:8000/health" > /dev/null 2>&1; then
         info "  ✅ AI Service is up! (after ${_ai_elapsed}s)"
         _ai_ready=true
         break
     fi
-    # Print last 2 lines of AI log every 10 seconds so user can see progress
+
+    # Every 10s: print last 5 log lines + process alive check
     if [ $((_ai_elapsed % 10)) -eq 0 ] && [ $_ai_elapsed -gt 0 ]; then
-        _last_lines=$(tail -2 "$LOG_DIR/ai-service.log" 2>/dev/null | tr '\n' ' ')
-        printf "\r  ⏳ [%3ds] %s\n" "$_ai_elapsed" "$_last_lines"
+        echo ""
+        echo "  ── [${_ai_elapsed}s] AI service log (last 5 lines) ──────────────────"
+        tail -5 "$LOG_DIR/ai-service.log" 2>/dev/null | while IFS= read -r line; do
+            echo "  │  $line"
+        done
+        echo "  ────────────────────────────────────────────────────────────────"
+
+        # Check if the process is still alive
+        if kill -0 "$AI_PID" 2>/dev/null; then
+            _mem=$(ps -o rss= -p "$AI_PID" 2>/dev/null | awk '{printf "%.0f MB", $1/1024}' || echo "?")
+            echo "  │  Process $AI_PID is alive | RAM: $_mem"
+        else
+            echo ""
+            warn "  ❌ AI service process $AI_PID has DIED — not alive anymore!"
+            warn "     Last 20 lines of log:"
+            tail -20 "$LOG_DIR/ai-service.log" 2>/dev/null | while IFS= read -r line; do
+                warn "     | $line"
+            done
+            warn "  Fix the crash above, then re-run deploy_nodocker.sh"
+            break
+        fi
+
+        # Every 30s: check if HuggingFace model download is in progress
+        if [ $((_ai_elapsed % 30)) -eq 0 ]; then
+            _hf_cache_size=$(du -sh ~/.cache/huggingface 2>/dev/null | cut -f1 || echo "?")
+            echo "  │  HuggingFace cache size: $_hf_cache_size  (growing = models downloading)"
+            _open_net=$(ls -l /proc/"$AI_PID"/fd 2>/dev/null | grep -c socket || echo "?")
+            echo "  │  Open sockets: $_open_net  (>0 = active download or Milvus init)"
+        fi
+        echo ""
     else
-        printf "\r  ⏳ Elapsed: %3ds / 300s — waiting..." "$_ai_elapsed"
+        printf "\r  ⏳ [%3ds / 300s] waiting for /health ..." "$_ai_elapsed"
     fi
+
     sleep 1
     _ai_elapsed=$((_ai_elapsed + 1))
 done
+
 echo ""
-[ "$_ai_ready" = false ] && warn "  ⚠️  AI Service not ready after 300s — check $LOG_DIR/ai-service.log"
+[ "$_ai_ready" = false ] && {
+    warn "  ⚠️  AI Service not ready after 300s — check $LOG_DIR/ai-service.log"
+    warn "  Last 30 lines of log:"
+    tail -30 "$LOG_DIR/ai-service.log" 2>/dev/null | while IFS= read -r line; do
+        warn "  | $line"
+    done
+}
 
 info "Waiting for Backend to be ready (up to 60s)..."
 _be_ready=false
