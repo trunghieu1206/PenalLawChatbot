@@ -332,8 +332,8 @@ Nhiệm vụ: Dựa trên dữ liệu vụ án (coi là sự thật duy nhất) 
 ⚠️ TỘI DANH HỆ THỐNG XÁC ĐỊNH (căn cứ trung lập):
 {mapped_context}
 
-HƯỚNG DẪN Sử DỤNG TỘI DANH TRONG VAI TRÒ BÀO CHỮA (BẮT BUỘC TUÂN THỦ):
-● Nếu phương án nhẹ hơn được hiển thị ở trên (alternative_lighter): BẠT BUỘC lập luận để chuyển tội danh sang phương án nhẹ hơn đó. Dùng các điều khoản trong <legal_context> làm căn cứ. Đây là ưu tiên lập luận số 1.
+HƯỚNG DẪN SỬ DỤNG TỘI DANH TRONG VAI TRÒ BÀO CHỮA (BẮT BUỘC TUÂN THỦ):
+● Nếu phương án nhẹ hơn được hiển thị ở trên (alternative_lighter): BẮT BUỘC lập luận để chuyển tội danh sang phương án nhẹ hơn đó. Dùng các điều khoản trong <legal_context> làm căn cứ. Đây là ưu tiên lập luận số 1.
 ● Nếu KHÔNG có phương án nhẹ hơn (alternative_lighter = null): Tội danh trên đã là đương nhiên không tranh cãi được. Chấp nhận tội danh, tập trung lập luận giảm nhẹ (tình tiết giảm nhẹ, dưới khung, án treo).
 
 {nhan_than_context}
@@ -544,13 +544,13 @@ Nhiệm vụ: Dựa trên dữ liệu vụ án (coi là sự thật duy nhất) 
 
 {deterministic_context}
 
-⚖️ TỘI DANH HỆ THỐNG XÁC ĐỊNH (BUỘC SỤ DỤNG LÀM CĂN CỨ XÉT XỬ):
+⚖️ TỘI DANH HỆ THỐNG XÁC ĐỊNH (BẮT BUỘC SỬ DỤNG LÀM CĂN CỨ XÉT XỬ):
 {mapped_context}
 
 HƯỚNG DẪN CHO THẨM PHÁN (BUỘC TUÂN THỦ):
-● Tội danh và điều khoản được xác định ở trên là kết quả phân tích trung lập — TÒA ÁN BUỘC Sử DỤNG đây làm điểm xuất phát cho quyết định.
+● Tội danh và điều khoản được xác định ở trên là kết quả phân tích trung lập — TÒA ÁN BẮT BUỘC SỬ DỤNG đây làm điểm xuất phát cho quyết định.
 ● Nếu có phương án nhẹ hơn hoặc nặng hơn được hiển thị: Phân tích trung lập cả hai phías rồi đưa ra kết luận độc lập dựa trên bằng chứng trong hồ sơ. Giải thích tại sao chọn điều khoản này và bác bỏ các phương án khác.
-● TUYETJ ĐỐI KHÔNG tự thay đổi tội danh sang một điều khoản hoàn toàn khác không có trong mapped_context hay legal_context.
+● TUYỆT ĐỐI KHÔNG tự thay đổi tội danh sang một điều khoản hoàn toàn khác không có trong mapped_context hay legal_context.
 
 {nhan_than_context}
 ----------------

@@ -204,17 +204,17 @@ Trả về JSON array:
 
 QUY TẮC XÁC ĐỊNH alternative_lighter_article và alternative_heavier_article:
 
-► alternative_lighter_article: Bất kỳ luật sư bào chữa có thể lập luận hợp lệ để định tội sang điều khoản NHẰ HƠN không?
+► alternative_lighter_article: Bất kỳ luật sư bào chữa có thể lập luận hợp lệ để định tội sang điều khoản NHẸ HƠN không?
   - Nếu CÓ căn cứ pháp lý trong tài liệu đã cung cấp: điền {"article": "Điều X", "clause": "Khoản Y", "offense_name": "...", "reason": "lý do ngắn gọn"}
   - Nếu KHÔNG có căn cứ (tội danh đã rõ ràng, không thể tranh luận xuống dưới): null
-  Ví dụ: Ánh xạ vào Điều 123 (giết người) nhưng bước 0 chưa xác định rõ vũ khí → luật sư có thể tranh luận xuống Điều 134 → alternative_lighter = {"article": "Điều 134", "clause": "Khoản 1", "offense_name": "Cố ý gây thương tích", "reason": "Nếu hội đồng xet xử cho rằng chưa đủ căn cứ về ý định giết người"}
+  Ví dụ: Ánh xạ vào Điều 123 (giết người) nhưng bước 0 chưa xác định rõ vũ khí → luật sư có thể tranh luận xuống Điều 134 → alternative_lighter = {"article": "Điều 134", "clause": "Khoản 1", "offense_name": "Cố ý gây thương tích", "reason": "Nếu hội đồng xét xử cho rằng chưa đủ căn cứ về ý định giết người"}
 
 ► alternative_heavier_article: Bất kỳ luật sư bị hại có thể lập luận hợp lệ để định tội sang điều khoản NẶNG HƠN không?
   - Nếu CÓ căn cứ pháp lý trong tài liệu đã cung cấp: điền {"article": "Điều X", "clause": "Khoản Y", "offense_name": "...", "reason": "lý do ngắn gọn"}
   - Nếu KHÔNG có căn cứ (tội danh đã rõ ràng, không thể tranh luận lên trên): null
   Ví dụ: Ánh xạ vào Điều 170 (cưỡng đoạt) nhưng bị hại thấy bị cáo đã dùng vũ lực trực tiếp → có thể tranh lên Điều 168 (cướp) → alternative_heavier = {"article": "Điều 168", ...}
 
-Chỉ điền các lưựa chọn alternative khi CHÚNG CÓ TRONG tài liệu đã cung cấp. TUYỆT ĐỐI KHÔNG bịa đặt điều luật không có trong context.
+Chỉ điền các lựa chọn alternative khi CHÚNG CÓ TRONG tài liệu đã cung cấp. TUYỆT ĐỐI KHÔNG bịa đặt điều luật không có trong context.
 OUTPUT: CHỈ JSON array hợp lệ."""
 
         try:
