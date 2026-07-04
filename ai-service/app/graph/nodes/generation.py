@@ -715,6 +715,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 
         # Layer 2 — LLM Judge (skip if L1 already caught >= 2 issues)
         if len(issues) < 2:
+            print(f"  [VERIFY L2] Triggering LLM judge (L1 issues so far: {len(issues)})")
             response_snippet = ai_text[:1500]
             key_facts = {
                 k: facts.get(k)
@@ -769,34 +770,80 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
                 '  "role_issue": "TỐI ĐA 15 TỪ tiếng Việt nếu false, null nếu true"\n'
                 '}\n\n'
                 "QUY TẮC:\n"
-                "- factual_ok = false CHỈ KHI AI tự tạo ra chi tiết cụ thể (số tiền, số bản án, ngày tháng cụ thể) KHÔNG có trong NGUYÊN VĂN VỤ ÁN.\n"
+                "- factual_ok = false CHỈ KHI hệ thống tự tạo ra chi tiết cụ thể (số tiền, số bản án, ngày tháng cụ thể) KHÔNG có trong NGUYÊN VĂN VỤ ÁN.\n"
                 "- Nếu thông tin có trong NGUYÊN VĂN VỤ ÁN nhưng không có trong Bản tóm tắt thì VẪN HỢP LỆ (factual_ok = true).\n"
-                "- role_ok = false CHỈ KHI AI rõ ràng lập luận SAI chiều với vai trò được giao.\n"
+                "- role_ok = false CHỈ KHI hệ thống rõ ràng lập luận SAI chiều với vai trò được giao.\n"
                 "- Nếu không chắc → true (tránh false positive).\n"
                 "- TUYỆT ĐỐI KHÔNG đề cập tên trường kỹ thuật trong mô tả.\n"
-                "- TUYỆT ĐỐI KHÔNG dùng từ \"bịa\" hoặc \"bịa đặt\" trong factual_issue. Hãy dùng cụm \"có thể đã không chính xác trong [chi tiết]\".\n"
+                "- TUYỆT ĐỐI KHÔNG dùng từ \"bịa\" hoặc \"bịa đặt\" trong factual_issue. Hãy dùng cụm \"hệ thống có thể đã không chính xác trong [chi tiết]\".\n"
+                "- TUYỆT ĐỐI KHÔNG dùng từ \"AI\" trong bất kỳ trường nào. Luôn dùng \"hệ thống\" thay thế.\n"
                 "- Viết mô tả NGẮN GỌN tối đa 15 từ, lịch sự và dễ hiểu cho người dùng thông thường.\n"
                 "OUTPUT: Chỉ JSON hợp lệ, không markdown."
             )
+
+            # ── Debug: log the full prompt sent to the LLM judge ─────────────
+            print("  [VERIFY L2] ── JUDGE PROMPT ──────────────────────────────")
+            print(f"  [VERIFY L2] role          = {role!r}")
+            print(f"  [VERIFY L2] role_desc     = {role_map.get(role, role)!r}")
+            print(f"  [VERIFY L2] fact_summary  =\n{fact_summary}")
+            print(f"  [VERIFY L2] response_snippet (first 300 chars):\n{response_snippet[:300]!r}")
+            print("  [VERIFY L2] ───────────────────────────────────────────────")
+
             try:
                 judge_llm = llm.bind(max_tokens=400)
                 judge_resp = judge_llm.invoke(
                     _sanitize_msgs([HumanMessage(content=judge_prompt)])
                 )
+
+                # ── Debug: log raw LLM response ───────────────────────────────
+                print(f"  [VERIFY L2] Raw LLM judge response: {judge_resp.content!r}")
+
                 verdict = _extract_json(judge_resp.content)
-                if not verdict.get("factual_ok", True) and verdict.get("factual_issue"):
-                    issues.append(f"Nhất quán dữ liệu thực tế: {verdict['factual_issue']}")
-                if not verdict.get("role_ok", True) and verdict.get("role_issue"):
-                    issues.append(f"Vai trò: {verdict['role_issue']}")
+
+                # ── Debug: log parsed verdict ─────────────────────────────────
+                print(f"  [VERIFY L2] Parsed verdict: {verdict}")
+
+                factual_ok  = verdict.get("factual_ok", True)
+                factual_msg = verdict.get("factual_issue")
+                role_ok     = verdict.get("role_ok", True)
+                role_msg    = verdict.get("role_issue")
+
+                if not factual_ok and factual_msg:
+                    print(
+                        f"  [VERIFY L2] ❌ FACTUAL issue detected.\n"
+                        f"    → factual_ok  = {factual_ok}\n"
+                        f"    → factual_issue = {factual_msg!r}\n"
+                        f"    → Why: LLM judge determined the AI response contained "
+                        f"specific details not found in the original case text or extracted facts."
+                    )
+                    issues.append(f"Nhất quán dữ liệu thực tế: {factual_msg}")
+                else:
+                    print(f"  [VERIFY L2] ✅ Factual consistency OK (factual_ok={factual_ok})")
+
+                if not role_ok and role_msg:
+                    print(
+                        f"  [VERIFY L2] ❌ ROLE ADHERENCE issue detected.\n"
+                        f"    → role_ok    = {role_ok}\n"
+                        f"    → role_issue = {role_msg!r}\n"
+                        f"    → Why: LLM judge determined the hệ thống response argued in the "
+                        f"wrong direction for the assigned role '{role}' "
+                        f"({role_map.get(role, role)})."
+                    )
+                    issues.append(f"Vai trò: {role_msg}")
+                else:
+                    print(f"  [VERIFY L2] ✅ Role adherence OK (role_ok={role_ok})")
+
             except Exception as judge_err:
                 print(
-                    f"  [answer_verify] L2 judge error "
-                    f"({type(judge_err).__name__}): {judge_err} — skipping L2."
+                    f"  [VERIFY L2] ❌ LLM judge call FAILED\n"
+                    f"    → Exception type : {type(judge_err).__name__}\n"
+                    f"    → Exception msg  : {judge_err}\n"
+                    f"    → Action         : Skipping L2, final answer proceeds without L2 check."
                 )
         else:
             print(
-                f"  [answer_verify] L2 skipped — "
-                f"L1 already found {len(issues)} issue(s)."
+                f"  [VERIFY L2] Skipped — L1 already found {len(issues)} issue(s): "
+                + "; ".join(issues)
             )
 
         if not issues:

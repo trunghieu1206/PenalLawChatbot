@@ -42,7 +42,7 @@ def _make_measure_time():
 
 
 def build_graph(
-    llm,
+    llm,x
     retriever,
     milvus_client,
     reranker_fn,
@@ -154,7 +154,7 @@ def build_graph(
     # generate passes through the answer_verify quality gate
     workflow.add_edge("generate",          "answer_verify")
     workflow.add_edge("answer_verify",     END)
-    # practice_evaluate bypasses verification (has its own grading logic)
+    # practice_evaluate bypasses verification
     workflow.add_edge("practice_evaluate", END)
     workflow.add_edge("followup",          END)
     workflow.add_edge("casual",            END)
