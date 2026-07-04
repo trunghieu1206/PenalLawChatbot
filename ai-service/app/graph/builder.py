@@ -42,7 +42,7 @@ def _make_measure_time():
 
 
 def build_graph(
-    llm,x
+    llm,
     retriever,
     milvus_client,
     reranker_fn,
