@@ -196,9 +196,25 @@ Trả về JSON array:
     "offense_name": "Tội cướp tài sản",
     "applicable_reason": "Lý do áp dụng (bao gồm kết quả phân tích ý định chủ quan từ Bước 0)",
     "edition_applied": "BLHS 2015 (sửa đổi 2017)",
-    "edition_reason": "Nếu KHÔNG có tài liệu comparison: 'Áp dụng luật có hiệu lực tại thời điểm phạm tội'. Nếu CÓ tài liệu comparison: 'Áp dụng luật tại thời điểm phạm tội do luật mới không có lợi hơn'."
+    "edition_reason": "Nếu KHÔNG có tài liệu comparison: 'Áp dụng luật có hiệu lực tại thời điểm phạm tội'. Nếu CÓ tài liệu comparison: 'Áp dụng luật tại thời điểm phạm tội do luật mới không có lợi hơn'.",
+    "alternative_lighter_article": null,
+    "alternative_heavier_article": null
   }
 ]
+
+QUY TẮC XÁC ĐỊNH alternative_lighter_article và alternative_heavier_article:
+
+► alternative_lighter_article: Bất kỳ luật sư bào chữa có thể lập luận hợp lệ để định tội sang điều khoản NHẰ HƠN không?
+  - Nếu CÓ căn cứ pháp lý trong tài liệu đã cung cấp: điền {"article": "Điều X", "clause": "Khoản Y", "offense_name": "...", "reason": "lý do ngắn gọn"}
+  - Nếu KHÔNG có căn cứ (tội danh đã rõ ràng, không thể tranh luận xuống dưới): null
+  Ví dụ: Ánh xạ vào Điều 123 (giết người) nhưng bước 0 chưa xác định rõ vũ khí → luật sư có thể tranh luận xuống Điều 134 → alternative_lighter = {"article": "Điều 134", "clause": "Khoản 1", "offense_name": "Cố ý gây thương tích", "reason": "Nếu hội đồng xet xử cho rằng chưa đủ căn cứ về ý định giết người"}
+
+► alternative_heavier_article: Bất kỳ luật sư bị hại có thể lập luận hợp lệ để định tội sang điều khoản NẶNG HƠN không?
+  - Nếu CÓ căn cứ pháp lý trong tài liệu đã cung cấp: điền {"article": "Điều X", "clause": "Khoản Y", "offense_name": "...", "reason": "lý do ngắn gọn"}
+  - Nếu KHÔNG có căn cứ (tội danh đã rõ ràng, không thể tranh luận lên trên): null
+  Ví dụ: Ánh xạ vào Điều 170 (cưỡng đoạt) nhưng bị hại thấy bị cáo đã dùng vũ lực trực tiếp → có thể tranh lên Điều 168 (cướp) → alternative_heavier = {"article": "Điều 168", ...}
+
+Chỉ điền các lưựa chọn alternative khi CHÚNG CÓ TRONG tài liệu đã cung cấp. TUYỆT ĐỐI KHÔNG bịa đặt điều luật không có trong context.
 OUTPUT: CHỈ JSON array hợp lệ."""
 
         try:

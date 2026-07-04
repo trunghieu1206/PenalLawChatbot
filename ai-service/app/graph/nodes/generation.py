@@ -206,7 +206,7 @@ def make_generation_nodes(llm, bm25_index, bm25_docs, retriever, measure_time):
         # ── Build mapped_laws context ─────────────────────────────────────────
         mapped_context = ""
         if mapped_laws and not (len(mapped_laws) == 1 and mapped_laws[0].get("_mapping_error")):
-            lines = ["**Các tội danh đã xác định:**"]
+            lines = ["**Tội danh hệ thống đã xác định (từ phân tích trung lập):**"]
             for law in mapped_laws:
                 err = law.get("_mapping_error", False)
                 lines.append(
@@ -215,6 +215,22 @@ def make_generation_nodes(llm, bm25_index, bm25_docs, retriever, measure_time):
                     f"[{law.get('edition_applied','?')}]"
                     + (" ⚠️ (ánh xạ có thể không chính xác)" if err else "")
                 )
+                alt_l = law.get("alternative_lighter_article")
+                alt_h = law.get("alternative_heavier_article")
+                if alt_l:
+                    lines.append(
+                        f"  ↳ Phương án nhẹ hơn có thể tranh luận: "
+                        f"{alt_l.get('article','?')} {alt_l.get('clause','?')} "
+                        f"— {alt_l.get('offense_name','?')} "
+                        f"(lý do: {alt_l.get('reason','?')})"
+                    )
+                if alt_h:
+                    lines.append(
+                        f"  ↳ Phương án nặng hơn có thể tranh luận: "
+                        f"{alt_h.get('article','?')} {alt_h.get('clause','?')} "
+                        f"— {alt_h.get('offense_name','?')} "
+                        f"(lý do: {alt_h.get('reason','?')})"
+                    )
             mapped_context = "\n".join(lines)
         else:
             mapped_context = "**Lưu ý:** Hệ thống không thể xác định tội danh cụ thể từ thông tin đã cung cấp."
@@ -312,7 +328,14 @@ Nhiệm vụ: Dựa trên dữ liệu vụ án (coi là sự thật duy nhất) 
 </case_details>
 
 {deterministic_context}
+
+⚠️ TỘI DANH HỆ THỐNG XÁC ĐỊNH (căn cứ trung lập):
 {mapped_context}
+
+HƯỚNG DẪN Sử DỤNG TỘI DANH TRONG VAI TRÒ BÀO CHỮA (BẮT BUỘC TUÂN THỦ):
+● Nếu phương án nhẹ hơn được hiển thị ở trên (alternative_lighter): BẠT BUỘC lập luận để chuyển tội danh sang phương án nhẹ hơn đó. Dùng các điều khoản trong <legal_context> làm căn cứ. Đây là ưu tiên lập luận số 1.
+● Nếu KHÔNG có phương án nhẹ hơn (alternative_lighter = null): Tội danh trên đã là đương nhiên không tranh cãi được. Chấp nhận tội danh, tập trung lập luận giảm nhẹ (tình tiết giảm nhẹ, dưới khung, án treo).
+
 {nhan_than_context}
 ----------------
 
@@ -349,7 +372,7 @@ MỘT VÀI LƯU Ý:
 - CHỈ thay đổi kết luận khi người dùng cung cấp: (a) tình tiết thực tế mới trong hồ sơ, HOẶC (b) điều luật cụ thể chưa được xem xét.
 - Nếu bị phản đối mà không có bằng chứng mới: giữ nguyên kết luận, giải thích ngắn gọn căn cứ pháp lý.
 
-QUY TRÌNH TƯ DUY BÀO CHỮA (BẮT BUỘC THEO THỨ TỰ):
+QUY TRÌNH TƯ DUY BÀO CHỮA (BẮT BUỘC TOÀN BỘ):
 - KHÔNG GIẢ ĐỊNH: chỉ dùng tình tiết có trong case_details.
 - NGUYÊN TẮC CÓ LỢI (Thời gian): tội trước 2018 → áp dụng Luật 2015/2017 nếu nhẹ hơn.
 - MỤC TIÊU: Tìm mọi lý lẽ hợp pháp để giảm tội hoặc hình phạt cho thân chủ.
@@ -425,7 +448,14 @@ Nhiệm vụ: Dựa trên dữ liệu vụ án (coi là sự thật duy nhất) 
 </case_details>
 
 {deterministic_context}
+
+⚠️ TỘI DANH HỆ THỐNG XÁC ĐỊNH (căn cứ trung lập):
 {mapped_context}
+
+HƯỚNG DẪN SỬ DỤNG TỘI DANH TRONG VAI TRÒ BẢO VỆ BỊ HẠI (BẮT BUỘC TUÂN THỦ):
+● Nếu phương án nặng hơn được hiển thị ở trên (alternative_heavier): BẮT BUỘC lập luận để chuyển tội danh sang phương án nặng hơn đó. Dùng các điều khoản trong <legal_context> làm căn cứ. Đây là ưu tiên lập luận số 1.
+● Nếu KHÔNG có phương án nặng hơn (alternative_heavier = null): Tội danh trên đã là đương nhiên không tranh cãi được. Chấp nhận tội danh, tập trung lập luận tăng nặng, phản bác án treo, yêu cầu mức cao nhất trong khung.
+
 {nhan_than_context}
 ----------------
 
@@ -513,7 +543,15 @@ Nhiệm vụ: Dựa trên dữ liệu vụ án (coi là sự thật duy nhất) 
 </case_details>
 
 {deterministic_context}
+
+⚖️ TỘI DANH HỆ THỐNG XÁC ĐỊNH (BUỘC SỤ DỤNG LÀM CĂN CỨ XÉT XỬ):
 {mapped_context}
+
+HƯỚNG DẪN CHO THẨM PHÁN (BUỘC TUÂN THỦ):
+● Tội danh và điều khoản được xác định ở trên là kết quả phân tích trung lập — TÒA ÁN BUỘC Sử DỤNG đây làm điểm xuất phát cho quyết định.
+● Nếu có phương án nhẹ hơn hoặc nặng hơn được hiển thị: Phân tích trung lập cả hai phías rồi đưa ra kết luận độc lập dựa trên bằng chứng trong hồ sơ. Giải thích tại sao chọn điều khoản này và bác bỏ các phương án khác.
+● TUYETJ ĐỐI KHÔNG tự thay đổi tội danh sang một điều khoản hoàn toàn khác không có trong mapped_context hay legal_context.
+
 {nhan_than_context}
 ----------------
 
