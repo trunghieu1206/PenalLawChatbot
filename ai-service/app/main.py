@@ -161,6 +161,7 @@ class PredictResponse(BaseModel):
     extracted_facts: Optional[Dict[str, Any]] = None
     mapped_laws: Optional[List[Dict[str, Any]]] = None
     sentencing_data: Optional[Dict[str, Any]] = None
+    retrieved_article_nums: Optional[List[str]] = None  # article numbers from RAG-retrieved docs
 
 
 class HealthResponse(BaseModel):
@@ -471,6 +472,11 @@ async def predict_judgment(req: RequestBody):
             extracted_facts=output.get("extracted_facts"),
             mapped_laws=clean_laws,
             sentencing_data=output.get("sentencing_data"),
+            retrieved_article_nums=sorted({
+                str(d.metadata.get("article_number", ""))
+                for d in (output.get("documents") or [])
+                if d.metadata.get("article_number")
+            }) or None,
         )
     except Exception as e:
         import traceback

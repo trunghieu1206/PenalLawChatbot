@@ -500,12 +500,47 @@ def call_system(ai_url, question, role, timeout, log):
         log.warning(f"  /predict failed: {e}")
         return {"_error": True, "_error_msg": str(e)}
 
-def composite_hallucination(l1, l2, l3):
+def composite_hallucination(l1_retrieved, l2, l3):
+    """Composite score using retrieved-context L1 (strictest, most meaningful)."""
     score = 0.0
-    if l1 and l1.get("triggered"): score += 0.40
+    if l1_retrieved and l1_retrieved.get("triggered"): score += 0.40
     if l2 and l2.get("triggered"): score += 0.30
     if l3 and l3.get("triggered"): score += 0.30
     return round(score, 4)
+
+
+def layer1_vs_retrieved(mapped_laws: list, retrieved_nums: set) -> dict:
+    """
+    L1 (RETRIEVED-CONTEXT): Did the system cite an article NOT present in
+    the RAG-retrieved documents for this specific query?
+
+    This is stricter than the corpus-based L1: an article can exist in BLHS
+    yet still be a hallucination if the model invented it without retrieving it.
+    retrieved_nums: set of article number strings from the /predict response
+                    field `retrieved_article_nums`. If empty (old API), falls
+                    back to not triggering (returns {"triggered": False, "note": ...}).
+    """
+    if not retrieved_nums:
+        return {"triggered": False, "flagged": False, "false_articles": [],
+                "note": "retrieved_nums_unavailable — API did not return retrieved_article_nums"}
+
+    false_arts = []
+    for law in mapped_laws:
+        if law.get("_mapping_error"):
+            continue
+        num = re.search(r"(\d+[A-Za-z]?)", str(law.get("article", "")))
+        if not num:
+            continue
+        num = num.group(1)
+        if num in _ALWAYS_VALID:   # procedural/sentencing articles — always OK
+            continue
+        if num not in retrieved_nums:
+            false_arts.append({
+                "article": law.get("article", ""),
+                "reason":  "not_in_retrieved_docs",
+            })
+    flagged = len(false_arts) > 0
+    return {"triggered": flagged, "flagged": flagged, "false_articles": false_arts}
 
 def evaluate_metrics(response_dict, case, gt_nums, valid_corpus, role,
                      oai_judge, judge_model, is_baseline, log, skip_llm=False):
@@ -516,14 +551,16 @@ def evaluate_metrics(response_dict, case, gt_nums, valid_corpus, role,
         text_nums   = _extract_nums_from_text(result_text)
         mapped_laws = [{"article": f"Điều {n}"} for n in text_nums]
         extracted_facts = {}
+        retrieved_nums  = set()  # baseline has no RAG retrieval
     else:
         mapped_laws     = response_dict.get("mapped_laws") or []
         extracted_facts = response_dict.get("extracted_facts") or {}
+        # retrieved_article_nums: list of strings returned by /predict (new field)
+        retrieved_nums  = set(response_dict.get("retrieved_article_nums") or [])
 
     # 1. Primary Recall
-    # Always extract what the system cited — useful for manual review even when GT is N/A
     _sys_cited = sorted({
-        m.get("article", "").split()[-1]   # "Điều 134" → "134"
+        m.get("article", "").split()[-1]
         for m in mapped_laws
         if m.get("article") and not m.get("_mapping_error")
     } | _extract_nums_from_text(result_text))
@@ -539,15 +576,19 @@ def evaluate_metrics(response_dict, case, gt_nums, valid_corpus, role,
         recall_cited, recall_doc  = recall["cited_nums"], recall.get("document_source") or _sys_doc
     else:
         recall_hit, recall_source = None, "n/a"
-        recall_cited, recall_doc  = _sys_cited, _sys_doc  # show what system cited even with no GT
+        recall_cited, recall_doc  = _sys_cited, _sys_doc
 
-    # 2. Hallucination L1-L3 (deterministic — instant)
-    l1 = layer1_article_existence(mapped_laws, gt_nums, valid_corpus)
+    # 2. Hallucination
+    # L1 (retrieved-context, PRIMARY): did the model cite an article not in its retrieved docs?
+    l1_retrieved = layer1_vs_retrieved(mapped_laws, retrieved_nums)
+    # L1 (corpus, SECONDARY): did the model cite an article absent from the entire BLHS corpus?
+    l1_corpus    = layer1_article_existence(mapped_laws, gt_nums, valid_corpus)
     l2 = layer2_edition(mapped_laws, extracted_facts)
     l3 = layer3_sentencing(result_text, case["all_gt_articles"], {})
-    hall_score = composite_hallucination(l1, l2, l3)
+    # Composite uses retrieved-context L1 (more meaningful)
+    hall_score = composite_hallucination(l1_retrieved, l2, l3)
 
-    # 3. Role Adherence — signal (always) + optional LLM judge
+    # 3. Role Adherence
     sig = signal_score(result_text, role)
     if skip_llm:
         llm_result = {"score": None, "answers": {}, "note": "skipped"}
@@ -556,24 +597,31 @@ def evaluate_metrics(response_dict, case, gt_nums, valid_corpus, role,
     role_score = combined_score(sig["score"], llm_result.get("score"), w_sig=0.3, w_llm=0.7)
 
     return {
-        "recall":           recall_hit,
-        "recall_source":    recall_source,
-        "recall_cited":     recall_cited,
-        "recall_doc":       recall_doc,
-        "hallucination":    hall_score,
-        "hall_l1":          l1.get("triggered", False) if l1 else False,
-        "hall_l2":          l2.get("triggered", False) if l2 else False,
-        "hall_l3":          l3.get("triggered", False) if l3 else False,
-        "role_adherence":   role_score,
-        "role_sig_score":   sig["score"],
-        "role_d1":          round(sig.get("d1_article",  sig["score"]), 3),
-        "role_d2":          round(sig.get("d2_sentence", sig["score"]), 3),
-        "role_d3":          round(sig.get("d3_vocab",    sig["score"]), 3),
-        "role_d4":          round(sig.get("d4_struct",   sig["score"]), 3),
-        "role_llm_score":   llm_result.get("score"),
-        "role_llm_answers": llm_result.get("answers", {}),
-        "text_preview":     result_text[:300],
-        "full_response":    result_text,   # full text saved for offline LLM-as-a-judge rubric scoring
+        "recall":                recall_hit,
+        "recall_source":         recall_source,
+        "recall_cited":          recall_cited,
+        "recall_doc":            recall_doc,
+        "hallucination":         hall_score,
+        # L1 (retrieved-context) — primary, used in composite score
+        "hall_l1_retrieved":     l1_retrieved.get("triggered", False),
+        "hall_l1_retrieved_arts":l1_retrieved.get("false_articles", []),
+        "retrieved_nums":        sorted(retrieved_nums),
+        # L1 (corpus-wide) — secondary, kept for comparison
+        "hall_l1_corpus":        l1_corpus.get("triggered", False),
+        "hall_l2":               l2.get("triggered", False) if l2 else False,
+        "hall_l3":               l3.get("triggered", False) if l3 else False,
+        # Legacy alias so existing report code that reads hall_l1 still works
+        "hall_l1":               l1_retrieved.get("triggered", False),
+        "role_adherence":        role_score,
+        "role_sig_score":        sig["score"],
+        "role_d1":               round(sig.get("d1_article",  sig["score"]), 3),
+        "role_d2":               round(sig.get("d2_sentence", sig["score"]), 3),
+        "role_d3":               round(sig.get("d3_vocab",    sig["score"]), 3),
+        "role_d4":               round(sig.get("d4_struct",   sig["score"]), 3),
+        "role_llm_score":        llm_result.get("score"),
+        "role_llm_answers":      llm_result.get("answers", {}),
+        "text_preview":          result_text[:300],
+        "full_response":         result_text,
     }
 
 
@@ -613,7 +661,15 @@ def _print_case_report(report, cidx, total, case, role, sys_eval, rubric=None):
     report(f"  │       Law document source of cited article      : {sys_eval.get('recall_doc', 'N/A')}")
     report(f"  │       Hit method                                : {sys_eval.get('recall_source', 'N/A')}")
     report(f"  │  {h_icon} Hallucination : score={sys_eval['hallucination']}"
-           f"  L1={sys_eval['hall_l1']}  L2={sys_eval['hall_l2']}  L3={sys_eval['hall_l3']}")
+           f"  L1(retrieved)={sys_eval.get('hall_l1_retrieved', sys_eval['hall_l1'])}"
+           f"  L1(corpus)={sys_eval.get('hall_l1_corpus', '?')}"
+           f"  L2={sys_eval['hall_l2']}  L3={sys_eval['hall_l3']}")
+    retrieved = sys_eval.get("retrieved_nums", [])
+    if retrieved:
+        report(f"  │       Retrieved article nums : {', '.join(retrieved)}")
+    false_arts = sys_eval.get("hall_l1_retrieved_arts", [])
+    if false_arts:
+        report(f"  │       ⚠️  Cited but NOT retrieved: {', '.join(a['article'] for a in false_arts)}")
     report(f"  │  {ro_icon} Role Adherence: {sys_eval['role_adherence']:.3f}"
            f"  (d1_art={sys_eval.get('role_d1', '?')}  d2_sent={sys_eval.get('role_d2', '?')}  d3_voc={sys_eval.get('role_d3', '?')}  d4_cit={sys_eval.get('role_d4', '?')})")
     report(f"  │  Response: {repr(sys_eval['text_preview'][:120])}")
