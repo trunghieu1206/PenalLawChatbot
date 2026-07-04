@@ -137,11 +137,11 @@ if [ -d "$PROJECT_DIR/.git" ]; then
     info "Git repo found — pulling latest ($BRANCH)..."
     git -C "$PROJECT_DIR" checkout "$BRANCH"
     git -C "$PROJECT_DIR" pull origin "$BRANCH"
-elif [ -d "$PROJECT_DIR/ai-service" ]; then
+elif [ -f "$PROJECT_DIR/ai-service/requirements.txt" ]; then
     # Full project present (uploaded via scp) — use as-is, no clone needed
-    warn "Project directory found (non-git, uploaded via scp). Using as-is."
+    warn "Project directory found (non-git, uploaded via scp) — skipping clone."
 else
-    # Directory missing OR exists but is incomplete (e.g. only database/backups/ was created)
+    # Directory missing OR exists but is incomplete (e.g. only database/backups/ or empty ai-service/ was created)
     warn "Project incomplete or missing — cloning fresh (preserving any backups and .env)..."
     _clone_fresh "$PROJECT_DIR"
 fi

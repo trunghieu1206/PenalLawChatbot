@@ -12,18 +12,18 @@ tmux new -s deploy
 
 # upload scripts + .env template + DB backup ───────────────────────
 # Run these from your LOCAL machine (inside PenalLawChatbot/ directory):
-scp -P 2423 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@n3.ckey.vn:/root/
-scp -P 2423 .env.example root@n3.ckey.vn:/root/.env.example
+scp -P 2017 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@n2.ckey.vn:/root/
+scp -P 2017 .env.example root@n2.ckey.vn:/root/.env.example
 
 # ── ON SERVER: Run the base setup first ──────────────────────────────────────
 chmod +x setup_server.sh deploy_nodocker.sh restore_database.sh
 bash setup_server.sh
 
 # Create directories on the server first (scp cannot create them automatically)
-ssh -p 2423 root@n3.ckey.vn "mkdir -p ~/PenalLawChatbot/database/backups ~/PenalLawChatbot/ai-service/scraped_datasets"
+ssh -p 2017 root@n2.ckey.vn "mkdir -p ~/PenalLawChatbot/database/backups ~/PenalLawChatbot/ai-service/scraped_datasets"
 
-scp -P 2423 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260505_150435.sql \
-    root@n3.ckey.vn:~/PenalLawChatbot/database/backups/
+scp -P 2017 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260704_105955.sql \
+    root@n2.ckey.vn:~/PenalLawChatbot/database/backups/
 
 # ── ON SERVER: Finish deployment ─────────────────────────────────────────────
 # Back on your server terminal:
@@ -32,13 +32,13 @@ bash deploy_nodocker.sh
 
 ## upload results back to server (if server was restarted/reset)
 # Run from LOCAL machine:
-scp -P 2423 -r \
+scp -P 2017 -r \
   ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/results/* \
-  root@n3.ckey.vn:~/PenalLawChatbot/ai-service/evaluation/results/
+  root@n2.ckey.vn:~/PenalLawChatbot/ai-service/evaluation/results/
 
-scp -P 2423 \
+scp -P 2017 \
   ~/Desktop/Projects/PenalLawChatbot/ai-service/logs/eval_*.txt \
-  root@n3.ckey.vn:~/PenalLawChatbot/ai-service/logs/
+  root@n2.ckey.vn:~/PenalLawChatbot/ai-service/logs/
 
 # how to create backup db file and download to local
 ## create backup on server
@@ -122,13 +122,13 @@ python3 ai-service/evaluation/eval_rubric_victim.py \
 ## Run these from your LOCAL machine (inside ~/Desktop/Projects/PenalLawChatbot/)
 
 # Download result JSONs and JSONL files
-scp -P 2319 -r \
-  'root@n3.ckey.vn:~/PenalLawChatbot/ai-service/evaluation/results/' \
+scp -P 2478 -r \
+  'root@n2.ckey.vn:~/PenalLawChatbot/ai-service/evaluation/results/' \
   ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/
 
 # Download log .txt files
-scp -P 2319 \
-  'root@n3.ckey.vn:~/PenalLawChatbot/ai-service/logs/eval_*.txt' \
+scp -P 2478 \
+  'root@n2.ckey.vn:~/PenalLawChatbot/ai-service/logs/eval_*.txt' \
   ~/Desktop/Projects/PenalLawChatbot/ai-service/logs/
 
 ## (alt server — if using 74.81.39.6:10000 instead of n3.ckey.vn:1927)
