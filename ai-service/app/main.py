@@ -456,7 +456,7 @@ async def predict_judgment(req: RequestBody):
 
     try:
         output = await graph.ainvoke(inputs, config=config)
-        final_answer = output["messages"][-1].content
+        final_answer = output["messages"][-1].content # get the latest AI message 
 
         # Sanitize mapped_laws: replace any None field values with "" to
         # avoid Pydantic validation errors when no legal content was found
