@@ -76,3 +76,5 @@ __pycache__/
 *.pyo
 
 old_main.py
+
+ai-service/evaluation/results/*
