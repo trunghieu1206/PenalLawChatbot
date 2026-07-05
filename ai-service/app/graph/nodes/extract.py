@@ -191,7 +191,7 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
         reply = (
             "Để phân tích chính xác, Cần thêm thông tin sau:\n\n"
             + "\n".join(f"{i+1}. **{label}**" for i, label in enumerate(needed_labels))
-            + "\n\nVui lòng bổ sung và gửi lại mô tả vụ án."
+            + "\n\n⚠️ **Vui lòng copy lại toàn bộ nội dung vụ án ban đầu và bổ sung thêm các thông tin còn thiếu.**"
         )
         reply += (
             "\n\n**Thông tin tham khảo** (không bắt buộc, nhưng giúp phân tích tốt hơn):\n"

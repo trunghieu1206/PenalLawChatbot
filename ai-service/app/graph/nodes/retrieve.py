@@ -116,6 +116,8 @@ OUTPUT: CHI JSON hop le, khong markdown, khong giai thich."""
         seen_ids: set = set()
         all_docs: List[Document] = []
 
+        # ---------------- dense search ---------------------------------
+
         Q1_SEMANTIC_K    = 20
         Q2_Q3_SEMANTIC_K = 10
         for q_idx, q in enumerate(queries, start=1):
@@ -135,6 +137,8 @@ OUTPUT: CHI JSON hop le, khong markdown, khong giai thich."""
                 print(f"    \u2192 {len(docs)} retrieved, {added_sem} new unique")
             except Exception as e:
                 print(f"  [SEMANTIC ERROR Q{q_idx}] {type(e).__name__}: {e}")
+
+        # -------------- sparse search ----------------------------
 
         BM25_TOP_K = 5
         if bm25_index is not None and bm25_docs:
@@ -176,6 +180,8 @@ OUTPUT: CHI JSON hop le, khong markdown, khong giai thich."""
         else:
             if bm25_index is None:
                 print("  [BM25] Index not available -- keyword retrieval skipped")
+
+        # ----------------------------------------------
 
         if per_defendant:
             crime_editions = [
