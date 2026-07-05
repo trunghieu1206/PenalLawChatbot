@@ -12,18 +12,18 @@ tmux new -s deploy
 
 # upload scripts + .env template + DB backup ───────────────────────
 # Run these from your LOCAL machine (inside PenalLawChatbot/ directory):
-scp -P 2017 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@n2.ckey.vn:/root/
-scp -P 2017 .env.example root@n2.ckey.vn:/root/.env.example
+scp -P 16483 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@89.155.246.210:/root/
+scp -P 16483 .env.example root@89.155.246.210:/root/.env.example
 
 # ── ON SERVER: Run the base setup first ──────────────────────────────────────
 chmod +x setup_server.sh deploy_nodocker.sh restore_database.sh
 bash setup_server.sh
 
 # Create directories on the server first (scp cannot create them automatically)
-ssh -p 2017 root@n2.ckey.vn "mkdir -p ~/PenalLawChatbot/database/backups ~/PenalLawChatbot/ai-service/scraped_datasets"
+ssh -p 16483 root@89.155.246.210 "mkdir -p ~/PenalLawChatbot/database/backups ~/PenalLawChatbot/ai-service/scraped_datasets"
 
-scp -P 2017 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260704_105955.sql \
-    root@n2.ckey.vn:~/PenalLawChatbot/database/backups/
+scp -P 16483 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260704_105955.sql \
+    root@89.155.246.210:~/PenalLawChatbot/database/backups/
 
 # ── ON SERVER: Finish deployment ─────────────────────────────────────────────
 # Back on your server terminal:
@@ -32,13 +32,13 @@ bash deploy_nodocker.sh
 
 ## upload results back to server (if server was restarted/reset)
 # Run from LOCAL machine:
-scp -P 2017 -r \
+scp -P 16483 -r \
   ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/results/* \
-  root@n2.ckey.vn:~/PenalLawChatbot/ai-service/evaluation/results/
+  root@89.155.246.210:~/PenalLawChatbot/ai-service/evaluation/results/
 
-scp -P 2017 \
+scp -P 16483 \
   ~/Desktop/Projects/PenalLawChatbot/ai-service/logs/eval_*.txt \
-  root@n2.ckey.vn:~/PenalLawChatbot/ai-service/logs/
+  root@89.155.246.210:~/PenalLawChatbot/ai-service/logs/
 
 # how to create backup db file and download to local
 ## create backup on server
@@ -121,29 +121,25 @@ python3 ai-service/evaluation/eval_rubric_victim.py \
 ## Step 3 — download ALL results to local machine
 ## Run these from your LOCAL machine (inside ~/Desktop/Projects/PenalLawChatbot/)
 
-# Download result JSONs and JSONL files
-scp -P 2478 -r \
-  'root@n2.ckey.vn:~/PenalLawChatbot/ai-service/evaluation/results/' \
-  ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/
-
-# Download log .txt files
+# Download result JSONs and JSONL files (new_combined_* files only)
 scp -P 2478 \
-  'root@n2.ckey.vn:~/PenalLawChatbot/ai-service/logs/eval_*.txt' \
-  ~/Desktop/Projects/PenalLawChatbot/ai-service/logs/
+  'root@n2.ckey.vn:~/PenalLawChatbot/ai-service/evaluation/results/new_combined_*' \
+  ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/results/
 
-## (alt server — if using 74.81.39.6:10000 instead of n3.ckey.vn:1927)
-scp -P 10000 -r \
-  'root@74.81.39.6:~/PenalLawChatbot/ai-service/evaluation/results/' \
-  ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/
+# Download eval log .txt file (saved inside evaluation/logs/ on server)
+scp -P 2478 \
+  'root@n2.ckey.vn:~/PenalLawChatbot/ai-service/evaluation/logs/eval_1_100.txt' \
+  ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/logs/
 
-scp -P 10000 \
-  'root@74.81.39.6:~/PenalLawChatbot/ai-service/logs/eval_*.txt' \
-  ~/Desktop/Projects/PenalLawChatbot/ai-service/logs/
-
-## Step 4 — resume an interrupted eval (e.g. primary_recall crashed at case 200)
-python3 ai-service/evaluation/eval_primary_recall.py \
-  --resume \
-  --log-file ai-service/logs/eval_primary_recall.txt
+## Step 4 — resume an interrupted eval (run ON SERVER inside evaluation/ dir)
+cd ~/PenalLawChatbot/ai-service/evaluation
+python3 eval_combined_hallucination_recall_role_adherence.py \
+    --start 1 \
+    --end 100 \
+    --resume \
+    --ai-url http://localhost:8000 \
+    --timeout 600 \
+    --log-file logs/eval_1_100.txt
 
 # Logs
 [INFO]  Logs:

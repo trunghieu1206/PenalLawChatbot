@@ -18,7 +18,6 @@ HOW TO RUN (100 cases, resume-safe) (fresh start):
     --end 100 \
     --ai-url http://localhost:8000 \
     --timeout 600 \
-    --delay 0.5 \
     --log-file logs/eval_1_100.txt
 
 RESUME:
@@ -28,7 +27,6 @@ RESUME:
     --resume \
     --ai-url http://localhost:8000 \
     --timeout 600 \
-    --delay 0.5 \
     --log-file logs/eval_1_100.txt
 
 
@@ -326,25 +324,72 @@ def _article_num(s: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
-# L1 — Retrieved-context: cited article not in retrieved docs
-def layer1_vs_retrieved(mapped_laws: list, retrieved_nums: set) -> dict:
+# L1 — Retrieved-context: cited article in final response text not in retrieved docs
+def layer1_vs_retrieved(result_text: str, retrieved_nums: set) -> dict:
     """
-    L1: Did the system cite an article that was NOT in the RAG-retrieved documents?
-    Catches training-knowledge leakage — model invented an article not in its context.
+    L1: Does the final response text cite any article NOT in the RAG-retrieved documents?
+    Checks the generate node's output (free-form Vietnamese text) directly.
+    Catches training-knowledge leakage even when map_laws JSON stays clean.
+    Articles 1-77 (BLHS General Part — sentencing principles) are excluded
+    from the check via _ALWAYS_VALID since they are legitimately cited everywhere.
     """
     if not retrieved_nums:
         return {"triggered": False, "false_articles": [],
                 "note": "retrieved_nums unavailable — cannot check L1"}
+    cited_in_text = _extract_nums_from_text(result_text or "")
     false_arts = []
-    for law in mapped_laws:
-        if law.get("_mapping_error"):
-            continue
-        num = _article_num(law.get("article", ""))
-        if not num or num in _ALWAYS_VALID:
+    for num in cited_in_text:
+        if num in _ALWAYS_VALID:
             continue
         if num not in retrieved_nums:
-            false_arts.append({"article": law.get("article", ""), "reason": "not_in_retrieved_docs"})
+            false_arts.append({"article": f"Điều {num}", "reason": "cited_in_response_but_not_retrieved"})
     return {"triggered": len(false_arts) > 0, "false_articles": false_arts}
+
+
+# Map Laws Inefficiency — two-layer quality signal for the map_laws node
+def layer_map_laws_inefficiency(mapped_laws: list, retrieved_nums: set) -> dict:
+    """
+    Two-layer quality signal for the map_laws node.
+
+    ML1 (Citation check): Any valid article in mapped_laws is NOT in the retrieved set?
+         Detects cases where the map_laws LLM maps to articles that were
+         never retrieved — grounding failure.
+
+    ML2 (Return check): Did map_laws return any valid law articles at all?
+         Detects cases where the node returned nothing (null / empty / all errors)
+         — complete mapping failure.
+
+    triggered = ML1 OR ML2 (one fail counts as one inefficiency).
+    Excludes BLHS General Part (articles 1–77) from the citation check.
+    """
+    # ── ML2: did map_laws return valid results? ────────────────────────────────
+    valid_laws = [
+        law for law in mapped_laws
+        if not law.get("_mapping_error") and _article_num(law.get("article", ""))
+    ]
+    ml2_triggered = len(valid_laws) == 0  # map_laws returned nothing usable
+
+    # ── ML1: did map_laws cite articles outside the retrieved set? ────────────
+    if not retrieved_nums:
+        ml1_triggered = False
+        false_arts    = []
+    else:
+        false_arts = []
+        for law in valid_laws:
+            num = _article_num(law.get("article", ""))
+            if not num or num in _ALWAYS_VALID:
+                continue
+            if num not in retrieved_nums:
+                false_arts.append({"article": law.get("article", ""),
+                                   "reason": "in_mapped_laws_but_not_retrieved"})
+        ml1_triggered = len(false_arts) > 0
+
+    return {
+        "triggered":     ml1_triggered or ml2_triggered,
+        "ml1_triggered": ml1_triggered,   # cited unretrieved article
+        "ml2_triggered": ml2_triggered,   # returned no valid results
+        "false_articles": false_arts,
+    }
 
 
 # L2 — Edition consistency: wrong BLHS edition for crime date
@@ -423,8 +468,11 @@ def hallucination_binary(mapped_laws, retrieved_nums, extracted_facts,
     """
     Binary hallucination check.
     If ANY layer fires → hallucinated=True (1), else False (0).
+    L1 now checks the final response TEXT (generate node output) — not the
+    intermediate mapped_laws JSON — to catch training-knowledge leakage in
+    the free-form Vietnamese generation.
     """
-    l1 = layer1_vs_retrieved(mapped_laws, retrieved_nums)
+    l1 = layer1_vs_retrieved(result_text, retrieved_nums)  # ← text-level check
     l2 = layer2_edition(mapped_laws, extracted_facts)
     l3 = layer3_sentencing(result_text, gt_articles, {})
     any_triggered = l1["triggered"] or l2["triggered"] or l3["triggered"]
@@ -588,8 +636,15 @@ def signal_score(response: str, role: str) -> dict:
 
 def evaluate_metrics(response_dict, case, role):
     """
-    Computes all 4 deterministic metrics for a single /predict response.
+    Computes all 5 deterministic metrics for a single /predict response.
     No LLM calls — runs instantly.
+    Metrics:
+      A. Retrieval Recall       — primary GT article in reranker output
+      B. Generation Recall      — primary GT article cited in final response text
+      C. Map Laws Inefficiency  — map_laws JSON cites articles not in retrieved set
+      D. Hallucination          — final response text cites articles not retrieved (L1)
+                                  + wrong BLHS edition (L2) + wrong sentencing range (L3)
+      E. Role Adherence         — 4-dim deterministic keyword signal
     """
     result_text     = response_dict.get("result", response_dict.get("text", ""))
     mapped_laws     = response_dict.get("mapped_laws") or []
@@ -609,13 +664,19 @@ def evaluate_metrics(response_dict, case, role):
     else:
         gen_recall = {"hit": None, "source": "no_gt", "cited_nums": []}
 
-    # ── Metric C: Hallucination (binary) ─────────────────────────────────────
+    # ── Metric C: Map Laws Inefficiency ──────────────────────────────────────
+    # Quality signal for the map_laws node: how often does it map to articles
+    # that were NOT in the retrieved context?
+    ml_ineff = layer_map_laws_inefficiency(mapped_laws, retrieved_nums)
+
+    # ── Metric D: Hallucination (binary) ─────────────────────────────────────
+    # L1 checks final response TEXT (not mapped_laws JSON).
     hall = hallucination_binary(
         mapped_laws, retrieved_nums, extracted_facts,
         result_text, case["all_gt_articles"],
     )
 
-    # ── Metric D: Role Adherence ──────────────────────────────────────────────
+    # ── Metric E: Role Adherence ──────────────────────────────────────────────
     sig        = signal_score(result_text, role)
     role_score = sig["score"]
 
@@ -627,7 +688,12 @@ def evaluate_metrics(response_dict, case, role):
         # Generation Recall
         "generation_recall_hit":   gen_recall["hit"],
         "generation_recall_cited": gen_recall.get("cited_nums", []),
-        # Hallucination (binary)
+        # Map Laws Inefficiency (ML1=citation check, ML2=return check)
+        "map_laws_inefficiency":          ml_ineff["triggered"],
+        "map_laws_ineff_ml1_triggered":   ml_ineff["ml1_triggered"],
+        "map_laws_ineff_ml2_triggered":   ml_ineff["ml2_triggered"],
+        "map_laws_ineff_false_articles":  ml_ineff.get("false_articles", []),
+        # Hallucination (binary, L1=response text, L2=edition, L3=sentencing)
         "hallucinated":            hall["hallucinated"],
         "hall_l1_triggered":       hall["l1_triggered"],
         "hall_l1_false_articles":  hall["l1_false_articles"],
@@ -696,12 +762,25 @@ def _print_case_report(report, cidx, total, case, role, ev):
     report(f"  │  {_icon(gr)} Generation Recall : {'HIT' if gr else ('MISS' if gr is False else 'N/A')}")
     report(f"  │       Cited in response text    : {', '.join(cited) or 'None'}")
 
+    # Map Laws Inefficiency
+    ml_ineff  = ev.get("map_laws_inefficiency", False)
+    ml1       = ev.get("map_laws_ineff_ml1_triggered", False)
+    ml2       = ev.get("map_laws_ineff_ml2_triggered", False)
+    ml_icon   = "✅" if not ml_ineff else "⚠️ "
+    ml_status = "CLEAN" if not ml_ineff else "INEFFICIENT"
+    ml_arts   = ev.get("map_laws_ineff_false_articles", [])
+    report(f"  │  {ml_icon} Map Laws Ineff.  : {ml_status}  (ML1={ml1}  ML2={ml2})")
+    if ml2:
+        report(f"  │       ML2 — map_laws returned no valid articles (empty / all errors)")
+    if ml_arts:
+        report(f"  │       ML1 — Mapped but not retrieved : {', '.join(a['article'] for a in ml_arts)}")
+
     # Hallucination
     h_icon = "✅" if not ev["hallucinated"] else "🚨"
     report(f"  │  {h_icon} Hallucination     : {'CLEAN' if not ev['hallucinated'] else 'HALLUCINATED'}"
            f"  (L1={ev['hall_l1_triggered']}  L2={ev['hall_l2_triggered']}  L3={ev['hall_l3_triggered']})")
     if ev["hall_l1_false_articles"]:
-        report(f"  │       L1 — NOT retrieved : {', '.join(a['article'] for a in ev['hall_l1_false_articles'])}")
+        report(f"  │       L1 — Cited in response but not retrieved : {', '.join(a['article'] for a in ev['hall_l1_false_articles'])}")
     if ev["hall_l2_details"]:
         for d in ev["hall_l2_details"]:
             report(f"  │       L2 — Wrong edition : {d['article']} applied={d['applied']} expected={d['expected']}")
@@ -715,9 +794,8 @@ def _print_case_report(report, cidx, total, case, role, ev):
            f"  d3={ev.get('role_d3','?')}  d4={ev.get('role_d4','?')})")
     report(f"  │  Preview : {repr(ev['text_preview'][:200])}")
     report(f"  │  ── FULL RESPONSE ──────────────────────────────────────────")
-    full = ev.get('full_response', '')
-    for chunk_start in range(0, len(full), 200):
-        report(f"  │  {full[chunk_start:chunk_start+200]}")
+    for line in (ev.get('full_response', '') or '').splitlines():
+        report(f"  │  {line}")
     report(f"  └──────────────────────────────────────────────────────────────")
 
 
@@ -730,20 +808,22 @@ def _print_running_totals(report, metrics, processed):
     def _rate(hits, total): return hits / total if total else 0.0
     def _avg(lst): return sum(lst) / len(lst) if lst else 0.0
 
-    rr_rate  = _rate(s["ret_recall_hits"],  s["ret_recall_total"])
-    gr_rate  = _rate(s["gen_recall_hits"],  s["gen_recall_total"])
-    hall_rate = _avg(s["hallucination_flags"])  # avg of binary flags = rate
+    rr_rate   = _rate(s["ret_recall_hits"],  s["ret_recall_total"])
+    gr_rate   = _rate(s["gen_recall_hits"],  s["gen_recall_total"])
+    ml_rate   = _avg(s["map_laws_ineff_flags"])   # fraction of evals where map_laws was inefficient
+    hall_rate = _avg(s["hallucination_flags"])     # avg of binary flags = rate
     role_rate = _avg(s["role_scores"])
 
     report(f"  📊 Running totals after {processed} case(s)  ({n} role evals)")
-    report(f"     {'Metric':<26} {'Value':>9}  Target")
-    report(f"     {'-'*50}")
-    report(f"     {'Retrieval Recall':<26} {_pct(rr_rate):>9}  ≥90%  {'✅' if rr_rate >= 0.90 else '❌'}"
+    report(f"     {'Metric':<30} {'Value':>9}  Target")
+    report(f"     {'-'*55}")
+    report(f"     {'Retrieval Recall':<30} {_pct(rr_rate):>9}  ≥90%  {'✅' if rr_rate >= 0.90 else '❌'}"
            f"  ({s['ret_recall_hits']}/{s['ret_recall_total']})")
-    report(f"     {'Generation Recall':<26} {_pct(gr_rate):>9}  ≥90%  {'✅' if gr_rate >= 0.90 else '❌'}"
+    report(f"     {'Generation Recall':<30} {_pct(gr_rate):>9}  ≥90%  {'✅' if gr_rate >= 0.90 else '❌'}"
            f"  ({s['gen_recall_hits']}/{s['gen_recall_total']})")
-    report(f"     {'Hallucination Rate':<26} {_pct(hall_rate):>9}  ≤10%  {'✅' if hall_rate <= 0.10 else '❌'}")
-    report(f"     {'Role Adherence':<26} {_pct(role_rate):>9}  ≥85%  {'✅' if role_rate >= 0.85 else '❌'}")
+    report(f"     {'Map Laws Inefficiency':<30} {_pct(ml_rate):>9}  ≤15%  {'✅' if ml_rate <= 0.15 else '❌'}")
+    report(f"     {'Hallucination Rate':<30} {_pct(hall_rate):>9}  ≤10%  {'✅' if hall_rate <= 0.10 else '❌'}")
+    report(f"     {'Role Adherence':<30} {_pct(role_rate):>9}  ≥85%  {'✅' if role_rate >= 0.85 else '❌'}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -778,7 +858,7 @@ def main():
 
     report("=" * 70)
     report("VNPLaw Combined Evaluation")
-    report("  Metrics: Retrieval Recall · Generation Recall · Hallucination (binary) · Role Adherence")
+    report("  Metrics: Retrieval Recall · Generation Recall · Map Laws Inefficiency · Hallucination (binary) · Role Adherence")
     report("  ⚡ Fully deterministic — zero LLM API calls")
     report(f"  AI service : {args.ai_url}")
     report(f"  Case range : {args.start} – {'END' if not args.end else args.end}")
@@ -799,6 +879,7 @@ def main():
     preloaded = {
         "ret_recall_hits": 0, "ret_recall_total": 0,
         "gen_recall_hits": 0, "gen_recall_total": 0,
+        "map_laws_ineff_flags": [],
         "hallucination_flags": [], "role_scores": [],
         "clarification_skipped": 0, "timeout_skipped": 0,
         "ret_misses": [], "gen_misses": [],
@@ -833,6 +914,9 @@ def main():
                     if gr is not None:
                         preloaded["gen_recall_hits"]  += int(bool(gr))
                         preloaded["gen_recall_total"] += 1
+                    ml = ev.get("map_laws_inefficiency")
+                    if ml is not None:
+                        preloaded["map_laws_ineff_flags"].append(int(bool(ml)))
                     h = ev.get("hallucinated")
                     if h is not None:
                         preloaded["hallucination_flags"].append(int(bool(h)))
@@ -873,6 +957,7 @@ def main():
             "ret_recall_total":      preloaded["ret_recall_total"],
             "gen_recall_hits":       preloaded["gen_recall_hits"],
             "gen_recall_total":      preloaded["gen_recall_total"],
+            "map_laws_ineff_flags":  list(preloaded["map_laws_ineff_flags"]),
             "hallucination_flags":   list(preloaded["hallucination_flags"]),
             "role_scores":           list(preloaded["role_scores"]),
             "clarification_skipped": preloaded["clarification_skipped"],
@@ -968,6 +1053,7 @@ def main():
                     if gr is not None:
                         metrics["system"]["gen_recall_hits"]  += int(gr)
                         metrics["system"]["gen_recall_total"] += 1
+                    metrics["system"]["map_laws_ineff_flags"].append(int(bool(ev.get("map_laws_inefficiency", False))))
                     metrics["system"]["hallucination_flags"].append(int(ev["hallucinated"]))
                     metrics["system"]["role_scores"].append(ev["role_adherence"])
 
@@ -995,6 +1081,7 @@ def main():
         s = metrics["system"]
         rr_rate   = _rate(s["ret_recall_hits"],  s["ret_recall_total"])
         gr_rate   = _rate(s["gen_recall_hits"],  s["gen_recall_total"])
+        ml_rate   = _avg(s["map_laws_ineff_flags"])
         hall_rate = _avg(s["hallucination_flags"])
         role_rate = _avg(s["role_scores"])
         status    = "PARTIAL (interrupted)" if interrupted else "COMPLETE"
@@ -1007,16 +1094,18 @@ def main():
                 "case_range": f"{args.start}–{'END' if not args.end else args.end}",
             },
             "system": {
-                "retrieval_recall":  rr_rate,
-                "generation_recall": gr_rate,
-                "hallucination_rate": hall_rate,
-                "role_adherence":     role_rate,
+                "retrieval_recall":       rr_rate,
+                "generation_recall":      gr_rate,
+                "map_laws_inefficiency":  ml_rate,
+                "hallucination_rate":     hall_rate,
+                "role_adherence":         role_rate,
             },
             "pass": {
-                "retrieval_recall":  (rr_rate  >= 0.90) if rr_rate  is not None else None,
-                "generation_recall": (gr_rate  >= 0.90) if gr_rate  is not None else None,
-                "hallucination":     hall_rate <= 0.10,
-                "role":              role_rate >= 0.85,
+                "retrieval_recall":      (rr_rate  >= 0.90) if rr_rate  is not None else None,
+                "generation_recall":     (gr_rate  >= 0.90) if gr_rate  is not None else None,
+                "map_laws_inefficiency": ml_rate   <= 0.15,
+                "hallucination":         hall_rate <= 0.10,
+                "role":                  role_rate >= 0.85,
             },
         }
 
@@ -1038,13 +1127,14 @@ def main():
         report(f"  {'⚠️  PARTIAL ' if interrupted else ''}RESULTS — {processed} cases{resume_note}"
                f"  ({metrics['total_evals']} role evals){skipped_note}")
         report("=" * 70)
-        report(f"  {'Metric':<28} {'Value':>9}  {'Target':>8}  Pass?")
-        report(f"  {'-'*55}")
-        report(f"  {'Retrieval Recall':<28} {_pct_or_na(rr_rate):>9}  {'≥90%':>8}  {_pass_str(rr_rate, 0.90)}")
-        report(f"  {'Generation Recall':<28} {_pct_or_na(gr_rate):>9}  {'≥90%':>8}  {_pass_str(gr_rate, 0.90)}")
-        report(f"  {'Hallucination Rate':<28} {_pct(hall_rate):>9}  {'≤10%':>8}  {_pass_str(hall_rate, 0.10, 'le')}")
-        report(f"  {'Role Adherence':<28} {_pct(role_rate):>9}  {'≥85%':>8}  {_pass_str(role_rate, 0.85)}")
-        report(f"  {'-'*55}")
+        report(f"  {'Metric':<32} {'Value':>9}  {'Target':>8}  Pass?")
+        report(f"  {'-'*60}")
+        report(f"  {'Retrieval Recall':<32} {_pct_or_na(rr_rate):>9}  {'≥90%':>8}  {_pass_str(rr_rate, 0.90)}")
+        report(f"  {'Generation Recall':<32} {_pct_or_na(gr_rate):>9}  {'≥90%':>8}  {_pass_str(gr_rate, 0.90)}")
+        report(f"  {'Map Laws Inefficiency':<32} {_pct(ml_rate):>9}  {'≤15%':>8}  {_pass_str(ml_rate, 0.15, 'le')}")
+        report(f"  {'Hallucination Rate':<32} {_pct(hall_rate):>9}  {'≤10%':>8}  {_pass_str(hall_rate, 0.10, 'le')}")
+        report(f"  {'Role Adherence':<32} {_pct(role_rate):>9}  {'≥85%':>8}  {_pass_str(role_rate, 0.85)}")
+        report(f"  {'-'*60}")
         report(f"  Detailed JSONL : {out_path}")
         report(f"  Summary JSON   : {sum_path}")
         report(f"  Report TXT     : {report_path}  ← download this for offline review")
