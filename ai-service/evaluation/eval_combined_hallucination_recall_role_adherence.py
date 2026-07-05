@@ -331,26 +331,28 @@ def _article_num(s: str) -> Optional[str]:
 # L1 — Retrieved-context: cited article in final response text not in retrieved docs
 def layer1_vs_retrieved(result_text: str, retrieved_nums: set) -> dict:
     """
-    L1: Does the final response text cite any CRIME-SPECIFIC article (78+) that was
-    NOT in the RAG-retrieved documents?
-    Checks the generate node output (free-form Vietnamese text) directly.
-    Catches training-knowledge leakage on charge/sentence-determining articles.
+    L1: Does the final response text cite any CRIME-SPECIFIC article that was NOT in
+    the RAG-retrieved documents?
 
-    General Part articles (1-77: sentencing, mitigating/aggravating factors,
-    civil compensation principles) are EXCLUDED via _ALWAYS_VALID because:
-      - They are always-correct legal boilerplate cited in every criminal case.
-      - Their absence from retrieved_nums is NOT a grounding failure; they are
-        standard mandatory citations, not case-specific hallucinations.
-    Hallucination = citing a crime-specific article from training memory
-    instead of from the retrieved context.
+    General Part articles are EXCLUDED edition-aware via _is_general_part():
+      BLHS 1999 / sửa đổi 2009  →  Điều 1–77  are always-valid (General Part)
+      BLHS 2015 and later        →  Điều 1–107 are always-valid (General Part)
+    Edition is detected from the response text itself via BLHS markers.
+    Hallucination = citing a crime-specific (Special Part) article from training
+    memory instead of from the retrieved context.
     """
     if not retrieved_nums:
         return {"triggered": False, "false_articles": [],
                 "note": "retrieved_nums unavailable — cannot check L1"}
     cited_in_text = _extract_nums_from_text(result_text or "")
+    # Pass full response as context so _is_general_part can detect BLHS edition
+    full_text_lower = (result_text or "").lower()
     false_arts = []
     for num in cited_in_text:
-        if num in _ALWAYS_VALID:   # skip general-part articles (1–77)
+        if num in _ALWAYS_VALID:   # fast path: always valid regardless of edition
+            continue
+        # Edition-aware check for ambiguous range 78-107
+        if _is_general_part(num, full_text_lower):
             continue
         if num not in retrieved_nums:
             false_arts.append({"article": f"Điều {num}", "reason": "cited_in_response_but_not_retrieved"})
