@@ -673,8 +673,6 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
                 else:
                     history_msgs.append(AIMessage(content=sanitize_text(msg.get("content", ""))))
 
-        chain = prompt | llm | StrOutputParser()
-
         try:
             fmt_kwargs = dict(
                 role_instruction=role_instruction,

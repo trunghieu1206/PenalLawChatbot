@@ -59,6 +59,10 @@ YEU CAU:
 - evidence_query: Mo ta tang vat, cong cu pham toi, so luong, trong luong,
   gia tri tai san cu the co trong vu an. Neu khong co tang vat -> null.
 
+LUU Y:
+- chi co circumstance_query la viet dua theo role, behavior_query va evidence_query phai viet khach quan 
+
+
 TRA VE JSON (null neu khong co thong tin):
 {{"behavior_query": "...", "circumstance_query": "...", "evidence_query": "..."}}
 OUTPUT: CHI JSON hop le, khong markdown, khong giai thich."""
@@ -76,7 +80,7 @@ OUTPUT: CHI JSON hop le, khong markdown, khong giai thich."""
             ]
             if not q_list:
                 raise ValueError("All queries null")
-        except Exception:
+        except Exception: # fallback mechanism if llm fail to generate queries
             hanh_vi  = facts.get("hanh_vi", "")
             hau_qua  = facts.get("hau_qua", "")
             tang_vat = facts.get("tang_vat_loai", "")
@@ -185,6 +189,8 @@ OUTPUT: CHI JSON hop le, khong markdown, khong giai thich."""
         has_exclusion_indicators = bool(
             (state.get("extracted_facts") or {}).get("co_dau_hieu_loai_tru_tnhs")
         )
+
+        # check for exclusion legal liability to pin fetch related law articles 
         if has_exclusion_indicators:
             conditional_purposes = list(pinned_purposes) + ["self_defense", "necessity"]
             print("  [COND-PIN] Exclusion indicators found -- adding self_defense/necessity to pin list")
