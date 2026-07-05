@@ -1,22 +1,22 @@
 {
   "meta": {
     "status": "PARTIAL (interrupted)",
-    "n_cases_evaluated": 48,
-    "total_role_evaluations": 145,
+    "n_cases_evaluated": 59,
+    "total_role_evaluations": 177,
     "case_range": "1–100"
   },
   "system": {
-    "retrieval_recall": 0.931,
-    "generation_recall": 0.9793,
-    "map_laws_inefficiency": 0.0476,
-    "hallucination_rate": 0.0207,
-    "role_adherence": 0.8778
+    "retrieval_recall": 0.9322,
+    "generation_recall": 0.9831,
+    "map_laws_inefficiency": 0.0377,
+    "hallucination_rate": 0.113,
+    "role_adherence": 0.8813
   },
   "pass": {
     "retrieval_recall": true,
     "generation_recall": true,
     "map_laws_inefficiency": true,
-    "hallucination": true,
+    "hallucination": false,
     "role": true
   }
 }

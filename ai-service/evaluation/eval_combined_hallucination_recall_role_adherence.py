@@ -331,12 +331,18 @@ def _article_num(s: str) -> Optional[str]:
 # L1 — Retrieved-context: cited article in final response text not in retrieved docs
 def layer1_vs_retrieved(result_text: str, retrieved_nums: set) -> dict:
     """
-    L1: Does the final response text cite any article NOT in the RAG-retrieved documents?
-    Checks the generate node's output (free-form Vietnamese text) directly.
-    Catches training-knowledge leakage even when map_laws JSON stays clean.
-    ALL articles are checked — including general law (Điều 51, 52, 48, etc.) —
-    because the retrieval module DOES retrieve those when relevant. Citing them
-    without retrieval is genuine grounding failure.
+    L1: Does the final response text cite any CRIME-SPECIFIC article (78+) that was
+    NOT in the RAG-retrieved documents?
+    Checks the generate node output (free-form Vietnamese text) directly.
+    Catches training-knowledge leakage on charge/sentence-determining articles.
+
+    General Part articles (1-77: sentencing, mitigating/aggravating factors,
+    civil compensation principles) are EXCLUDED via _ALWAYS_VALID because:
+      - They are always-correct legal boilerplate cited in every criminal case.
+      - Their absence from retrieved_nums is NOT a grounding failure; they are
+        standard mandatory citations, not case-specific hallucinations.
+    Hallucination = citing a crime-specific article from training memory
+    instead of from the retrieved context.
     """
     if not retrieved_nums:
         return {"triggered": False, "false_articles": [],
@@ -344,6 +350,8 @@ def layer1_vs_retrieved(result_text: str, retrieved_nums: set) -> dict:
     cited_in_text = _extract_nums_from_text(result_text or "")
     false_arts = []
     for num in cited_in_text:
+        if num in _ALWAYS_VALID:   # skip general-part articles (1–77)
+            continue
         if num not in retrieved_nums:
             false_arts.append({"article": f"Điều {num}", "reason": "cited_in_response_but_not_retrieved"})
     return {"triggered": len(false_arts) > 0, "false_articles": false_arts}
