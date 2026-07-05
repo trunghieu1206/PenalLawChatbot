@@ -59,8 +59,10 @@ YEU CAU:
 - evidence_query: Mo ta tang vat, cong cu pham toi, so luong, trong luong,
   gia tri tai san cu the co trong vu an. Neu khong co tang vat -> null.
 
-LUU Y:
-- chi co circumstance_query la viet dua theo role, behavior_query va evidence_query phai viet khach quan 
+LUU Y QUAN TRONG:
+- chi co circumstance_query la viet dua theo role, behavior_query va evidence_query phai viet khach quan.
+- behavior_query: PHAI giu nguyen cac chi tiet ve y thuc chu quan, dong co, hoac lo so cua nghi pham (vi du: "so nan nhan chet", "muc dich tuoc doat tinh mang").
+- KHONG dua cac so do kich thuoc, trong luong vat ly chi tiet cua hung khi vao behavior_query (phai de danh cho evidence_query de tranh lam nhieu loang semantic search).
 
 
 TRA VE JSON (null neu khong co thong tin):
