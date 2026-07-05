@@ -23,13 +23,14 @@ def load_reranker(model_name: str, device: str):
         from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
         print(f"🔄 Loading reranker '{model_name}' on {device}...")
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        tokenizer = AutoTokenizer.from_pretrained(model_name) # load tokenizer
+        # load model (cross-encoder)
         model = AutoModelForSequenceClassification.from_pretrained(
             model_name,
             torch_dtype=torch.float16 if device.startswith("cuda") else torch.float32,
         )
-        model.eval()
-        model.to(device)
+        model.eval() # set model to evaluation mode (read-only) (if we dont do this then it might return a random answer everytime because it will go to training mode)
+        model.to(device) # move model to device (if GPU available then move to GPU VRAM)
         prec = "fp16" if device.startswith("cuda") else "fp32"
         print(f"✅ Reranker loaded: {model_name} ({prec}, AutoModel direct, max_length=1024).")
         return tokenizer, model
@@ -47,6 +48,8 @@ def make_rerank_scorer(tokenizer, model, device: str):
     If tokenizer/model is None, returns uniform zero scores (reranking disabled).
     """
     if tokenizer is None or model is None:
+        # if model loading failed, then skip reranking step by returning uniform zero scores
+        # so that retrieval module will still work
         def _scores_noop(pairs: List[Tuple[str, str]], batch_size: int = 8) -> List[float]:
             return [0.0] * len(pairs)
         return _scores_noop
@@ -57,17 +60,17 @@ def make_rerank_scorer(tokenizer, model, device: str):
         all_scores: List[float] = []
         for i in range(0, len(pairs), batch_size):
             batch = pairs[i: i + batch_size]
-            with torch.no_grad():
+            with torch.no_grad(): # disable learning (which speed up inference and save memory)
                 enc = tokenizer(
-                    [p[0] for p in batch],
-                    [p[1] for p in batch],
+                    [p[0] for p in batch], # query texts
+                    [p[1] for p in batch], # document texts
                     padding=True,
                     truncation=True,
-                    max_length=1024,
+                    max_length=1024, # truncate to 1024 tokens if law article is too long to speed up 
                     return_tensors="pt",
                 ).to(device)
-                logits = model(**enc).logits.view(-1).float()
-            all_scores.extend(logits.cpu().tolist())
+                logits = model(**enc).logits.view(-1).float() # get logit from model (each law article will have a logit)
+            all_scores.extend(logits.cpu().tolist()) # add scores to list (if GPU is used then move to CPU first)
         return all_scores
 
     return _rerank_scores

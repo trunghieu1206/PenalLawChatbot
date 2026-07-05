@@ -307,7 +307,7 @@ async def lifespan(app: FastAPI):
                 limit=_batch_size,
                 offset=_offset,
             )
-            if not _batch:
+            if not _batch: # stops when database returns empty list
                 break
             _page_num += 1
             for h in _batch:
@@ -316,7 +316,7 @@ async def lifespan(app: FastAPI):
                     metadata={
                         k: sanitize_text(h.get(k, "")) if isinstance(h.get(k, ""), str) else h.get(k, "")
                         for k in OUTPUT_FIELDS if k != "content"
-                    },
+                    }, # copy all fields except content to metadata
                 ))
             print(f"  [BM25 INIT] Page {_page_num}: fetched {len(_batch)} docs "
                   f"(running total: {len(_all_milvus_docs)})")
@@ -324,8 +324,7 @@ async def lifespan(app: FastAPI):
             if len(_batch) < _batch_size:
                 break  # last page
 
-        # Tokenize: simple whitespace split is sufficient for Vietnamese BM25.
-        # BM25 works on term frequency — no need for full NLP tokenization.
+        # Tokenize: using whitespace split
         _tokenized = [doc.page_content.lower().split() for doc in _all_milvus_docs]
         bm25_index = BM25Okapi(_tokenized)
         bm25_docs  = _all_milvus_docs

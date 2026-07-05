@@ -215,22 +215,25 @@ def make_generation_nodes(llm, bm25_index, bm25_docs, retriever, measure_time):
                     f"[{law.get('edition_applied','?')}]"
                     + (" ⚠️ (ánh xạ có thể không chính xác)" if err else "")
                 )
-                alt_l = law.get("alternative_lighter_article")
-                alt_h = law.get("alternative_heavier_article")
-                if alt_l:
-                    lines.append(
-                        f"  ↳ Phương án nhẹ hơn có thể tranh luận: "
-                        f"{alt_l.get('article','?')} {alt_l.get('clause','?')} "
-                        f"— {alt_l.get('offense_name','?')} "
-                        f"(lý do: {alt_l.get('reason','?')})"
-                    )
-                if alt_h:
-                    lines.append(
-                        f"  ↳ Phương án nặng hơn có thể tranh luận: "
-                        f"{alt_h.get('article','?')} {alt_h.get('clause','?')} "
-                        f"— {alt_h.get('offense_name','?')} "
-                        f"(lý do: {alt_h.get('reason','?')})"
-                    )
+                # For defense/victim roles only: expose alternative charges for advocacy.
+                # For judge (neutral): only the primary offense is shown — no alternatives.
+                if role != "neutral":
+                    alt_l = law.get("alternative_lighter_article")
+                    alt_h = law.get("alternative_heavier_article")
+                    if alt_l:
+                        lines.append(
+                            f"  ↳ Phương án nhẹ hơn có thể tranh luận: "
+                            f"{alt_l.get('article','?')} {alt_l.get('clause','?')} "
+                            f"— {alt_l.get('offense_name','?')} "
+                            f"(lý do: {alt_l.get('reason','?')})"
+                        )
+                    if alt_h:
+                        lines.append(
+                            f"  ↳ Phương án nặng hơn có thể tranh luận: "
+                            f"{alt_h.get('article','?')} {alt_h.get('clause','?')} "
+                            f"— {alt_h.get('offense_name','?')} "
+                            f"(lý do: {alt_h.get('reason','?')})"
+                        )
             mapped_context = "\n".join(lines)
         else:
             mapped_context = "**Lưu ý:** Hệ thống không thể xác định tội danh cụ thể từ thông tin đã cung cấp."
@@ -548,9 +551,9 @@ Nhiệm vụ: Dựa trên dữ liệu vụ án (coi là sự thật duy nhất) 
 {mapped_context}
 
 HƯỚNG DẪN CHO THẨM PHÁN (BUỘC TUÂN THỦ):
-● Tội danh và điều khoản được xác định ở trên là kết quả phân tích trung lập — TÒA ÁN BẮT BUỘC SỬ DỤNG đây làm điểm xuất phát cho quyết định.
-● Nếu có phương án nhẹ hơn hoặc nặng hơn được hiển thị: Phân tích trung lập cả hai phías rồi đưa ra kết luận độc lập dựa trên bằng chứng trong hồ sơ. Giải thích tại sao chọn điều khoản này và bác bỏ các phương án khác.
+● Tội danh và điều khoản được xác định ở trên là kết quả phân tích trung lập — TÒA ÁN BẮT BUỘC SỬ DỤNG đây làm căn cứ DUY NHẤT để định tội. KHÔNG đề xuất, so sánh, hay trình bày bất kỳ phương án tội danh thay thế nào khác (không có "Phương án 1", "Phương án 2").
 ● TUYỆT ĐỐI KHÔNG tự thay đổi tội danh sang một điều khoản hoàn toàn khác không có trong mapped_context hay legal_context.
+● Nhiệm vụ duy nhất của Tòa án là: xác nhận tội danh đã được xác định, phân tích đủ 4 yếu tố cấu thành, đánh giá tình tiết tăng nặng/giảm nhẹ, rồi ra QUYẾT ĐỊNH mức hình phạt cụ thể.
 
 {nhan_than_context}
 ----------------

@@ -59,17 +59,20 @@ class JinaEmbeddings(Embeddings):
             self._supports_task = False
             print("✅ Jina embedding model loaded (task= not supported — fine-tuned adapter).")
 
+    # takes a string of user query
+    # and returns vector (list of float)
     def _encode(self, texts: List[str]) -> List[List[float]]:
         kwargs = dict(
-            normalize_embeddings=True,
-            batch_size=self._batch_size,
+            normalize_embeddings=True, # forces every vector to have an exat length of 1.0
+            batch_size=self._batch_size, 
             show_progress_bar=False,
         )
         if self._supports_task:
-            kwargs["task"] = "retrieval"
-        vecs = self._model.encode(texts, **kwargs)
+            kwargs["task"] = "retrieval" 
+        vecs = self._model.encode(texts, **kwargs) # encodes all the texts into vectors 
         return vecs.tolist()
 
+    # not called in app.py
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         return self._encode(texts)
 
@@ -107,14 +110,15 @@ class MilvusRetriever:
     def invoke(self, query: str, top_k_override: Optional[int] = None) -> List[Document]:
         """Embed query, search Milvus with COSINE metric, return LangChain Documents."""
         limit = top_k_override if top_k_override is not None else self._k
-        vec = self._emb.embed_query(query)
+        vec = self._emb.embed_query(query) # embed user query then get vector representation
 
+        # search milvus
         results = self._client.search(
-            collection_name=self._col,
+            collection_name=self._col, 
             data=[vec],
-            limit=limit,
-            output_fields=self._fields,
-            search_params={"metric_type": "COSINE"},
+            limit=limit, 
+            output_fields=self._fields, 
+            search_params={"metric_type": "COSINE"}, # use cosine similarity
         )[0]
 
         # --- LOG RAG CHUNK IDs ---
@@ -126,6 +130,7 @@ class MilvusRetriever:
             print(f"    ID={r['id']}  score={r['distance']:.4f}  | Chương: {ch}  Điều: {art}  [{src}]")
         # -------------------------
 
+        # add retrieved law chunks into a list of LangChain Documents
         docs: List[Document] = []
         for r in results:
             entity = r["entity"]
