@@ -6,7 +6,7 @@ No imports from other eval_*.py files — all logic is inlined here.
 METRICS:
   1. Retrieval Recall  — primary article in rerank node output (retrieved_article_nums)
   2. Generation Recall — primary article cited in system's response text (regex)
-  3. Hallucination     — binary: any of L1/L2/L3 fires → hallucinated (1), else clean (0)
+  3. Hallucination     — binary: any of L1/L2 fires → hallucinated (1), else clean (0)
                          Rate = % of evaluations marked as hallucinated
   4. Role Adherence    — 4-dim deterministic keyword signal (0–1)
 
@@ -286,7 +286,7 @@ def recall_generation(primary_num: str, result_text: str) -> dict:
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SECTION 5 — HALLUCINATION (BINARY)
-# Binary: if ANY of L1/L2/L3 fires → hallucinated=True, else False.
+# Binary: if ANY of L1/L2 fires → hallucinated=True, else False.
 # Rate = fraction of evaluations where hallucinated=True.
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -430,50 +430,7 @@ def layer2_edition(mapped_laws: list, extracted_facts: dict) -> dict:
             "expected_edition": expected, "crime_date": crime_date_str}
 
 
-# L3 — Sentencing range: stated penalty contradicts the actual article range
-def _parse_penalty_years(text: str) -> Optional[tuple]:
-    t = text.lower()
-    m = re.search(r"t[ừu]\s*(\d+)\s*th[áa]ng\s*[đd][ếe]n\s*(\d+)\s*n[ăa]m", t)
-    if m:
-        return (int(m.group(1)) / 12, float(m.group(2)))
-    m = re.search(r"t[ừu]\s*(\d+)\s*n[ăa]m\s*[đd][ếe]n\s*(\d+)\s*n[ăa]m", t)
-    if m:
-        return (float(m.group(1)), float(m.group(2)))
-    m = re.search(r"[đd][ếe]n\s*(\d+)\s*n[ăa]m", t)
-    if m:
-        return (0.0, float(m.group(1)))
-    if "chung th" in t:
-        return (20.0, float("inf"))
-    if "tử hình" in t:
-        return (float("inf"), float("inf"))
-    return None
 
-
-def layer3_sentencing(response_text: str, gt_articles: list,
-                      article_contents: dict) -> dict:
-    primary = next(
-        (a for a in gt_articles
-         if _article_num(a) and _article_num(a) not in _ALWAYS_VALID),
-        None,
-    )
-    if not primary:
-        return {"triggered": False, "note": "no_primary_article"}
-    content = article_contents.get(primary, "")
-    if not content:
-        return {"triggered": False, "note": f"no_content_for_{primary}"}
-    actual = _parse_penalty_years(content)
-    stated = _parse_penalty_years(response_text)
-    if actual and stated:
-        s_min, s_max = stated
-        a_min, a_max = actual
-        tol = 1.5
-        min_ok = abs(s_min - a_min) <= tol
-        max_ok = (a_max == float("inf") and s_max >= 15) or \
-                 (a_max != float("inf") and abs(s_max - a_max) <= tol)
-        if not (min_ok and max_ok):
-            return {"triggered": True,
-                    "stated": stated, "actual": actual, "primary": primary}
-    return {"triggered": False, "stated": stated, "actual": actual, "primary": primary}
 
 
 def hallucination_binary(mapped_laws, retrieved_nums, extracted_facts,
@@ -481,23 +438,20 @@ def hallucination_binary(mapped_laws, retrieved_nums, extracted_facts,
     """
     Binary hallucination check.
     If ANY layer fires → hallucinated=True (1), else False (0).
-    L1 now checks the final response TEXT (generate node output) — not the
+    L1 checks the final response TEXT (generate node output) — not the
     intermediate mapped_laws JSON — to catch training-knowledge leakage in
     the free-form Vietnamese generation.
+    L2 checks the crime date against the applied BLHS edition.
     """
     l1 = layer1_vs_retrieved(result_text, retrieved_nums)  # ← text-level check
     l2 = layer2_edition(mapped_laws, extracted_facts)
-    l3 = layer3_sentencing(result_text, gt_articles, {})
-    any_triggered = l1["triggered"] or l2["triggered"] or l3["triggered"]
+    any_triggered = l1["triggered"] or l2["triggered"]
     return {
         "hallucinated":      any_triggered,
         "l1_triggered":      l1["triggered"],
         "l1_false_articles": l1.get("false_articles", []),
         "l2_triggered":      l2["triggered"],
         "l2_details":        l2.get("details", []),
-        "l3_triggered":      l3["triggered"],
-        "l3_stated":         l3.get("stated"),
-        "l3_actual":         l3.get("actual"),
     }
 
 
@@ -656,7 +610,7 @@ def evaluate_metrics(response_dict, case, role):
       B. Generation Recall      — primary GT article cited in final response text
       C. Map Laws Inefficiency  — map_laws JSON cites articles not in retrieved set
       D. Hallucination          — final response text cites articles not retrieved (L1)
-                                  + wrong BLHS edition (L2) + wrong sentencing range (L3)
+                                  + wrong BLHS edition (L2)
       E. Role Adherence         — 4-dim deterministic keyword signal
     """
     result_text     = response_dict.get("result", response_dict.get("text", ""))
@@ -706,15 +660,12 @@ def evaluate_metrics(response_dict, case, role):
         "map_laws_ineff_ml1_triggered":   ml_ineff["ml1_triggered"],
         "map_laws_ineff_ml2_triggered":   ml_ineff["ml2_triggered"],
         "map_laws_ineff_false_articles":  ml_ineff.get("false_articles", []),
-        # Hallucination (binary, L1=response text, L2=edition, L3=sentencing)
+        # Hallucination (binary, L1=response text, L2=edition)
         "hallucinated":            hall["hallucinated"],
         "hall_l1_triggered":       hall["l1_triggered"],
         "hall_l1_false_articles":  hall["l1_false_articles"],
         "hall_l2_triggered":       hall["l2_triggered"],
         "hall_l2_details":         hall["l2_details"],
-        "hall_l3_triggered":       hall["l3_triggered"],
-        "hall_l3_stated":          hall.get("l3_stated"),
-        "hall_l3_actual":          hall.get("l3_actual"),
         # Role Adherence
         "role_adherence":          role_score,
         "role_d1":                 sig["d1_article"],
@@ -791,14 +742,12 @@ def _print_case_report(report, cidx, total, case, role, ev):
     # Hallucination
     h_icon = "✅" if not ev["hallucinated"] else "🚨"
     report(f"  │  {h_icon} Hallucination     : {'CLEAN' if not ev['hallucinated'] else 'HALLUCINATED'}"
-           f"  (L1={ev['hall_l1_triggered']}  L2={ev['hall_l2_triggered']}  L3={ev['hall_l3_triggered']})")
+           f"  (L1={ev['hall_l1_triggered']}  L2={ev['hall_l2_triggered']})")
     if ev["hall_l1_false_articles"]:
         report(f"  │       L1 — Cited in response but not retrieved : {', '.join(a['article'] for a in ev['hall_l1_false_articles'])}")
     if ev["hall_l2_details"]:
         for d in ev["hall_l2_details"]:
             report(f"  │       L2 — Wrong edition : {d['article']} applied={d['applied']} expected={d['expected']}")
-    if ev["hall_l3_triggered"]:
-        report(f"  │       L3 — Sentencing mismatch: stated={ev['hall_l3_stated']}  actual={ev['hall_l3_actual']}")
 
     # Role Adherence
     ra_icon = "✅" if (ev["role_adherence"] or 0) >= 0.7 else "⚠️ "
