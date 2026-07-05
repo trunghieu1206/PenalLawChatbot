@@ -238,6 +238,25 @@ def make_generation_nodes(llm, bm25_index, bm25_docs, retriever, measure_time):
         else:
             mapped_context = "**Lưu ý:** Hệ thống không thể xác định tội danh cụ thể từ thông tin đã cung cấp."
 
+        # ── Build explicit charge block for judge role only ───────────────────
+        # This is injected at the very top of the judge prompt (highest LLM
+        # attention zone) to prevent the LLM from switching to a different
+        # article it may encounter inside legal_context documents.
+        judge_charge_block = ""
+        if role == "neutral" and mapped_laws and not (len(mapped_laws) == 1 and mapped_laws[0].get("_mapping_error")):
+            first_law = mapped_laws[0]
+            _art   = first_law.get("article", "?")
+            _cl    = first_law.get("clause", "")
+            _name  = first_law.get("offense_name", "?")
+            _ed    = first_law.get("edition_applied", "?")
+            judge_charge_block = (
+                f"BẮT BUỘC:\n"
+                f"TỘI DANH PHẢI XÉT XỬ DỰA TRÊN TỘI DANH ĐÃ ĐƯỢC XÁC ĐỊNH SAU: {_art} {_cl} — {_name} [{_ed}]\n"
+                f"TÒA ÁN CHỈ ĐƯỢC SỬ DỤNG TỘI DANH NÀY. TUYỆT ĐỐI KHÔNG ĐƯỢC tự chuyển sang "
+                f"bất kỳ tội danh nào khác (kể cả các điều khoản xuất hiện trong `legal_context`).\n"
+                f"KHÔNG VIẾT \"Phương án 1\", \"Phương án 2\", hay bất kỳ lựa chọn thay thế nào.\n"
+            )
+
         # ── Build deterministic sentencing context ────────────────────────────
         sentencing_data = state.get("sentencing_data") or {}
         det_lines = []
@@ -532,7 +551,8 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 | (số điều) | (nội dung) | (tên bộ luật + năm) | (lý do áp dụng) |
 """
         else:  # neutral — judge perspective
-            prompt_template = """{role_instruction}
+            prompt_template = """{judge_charge_block}
+{role_instruction}
 
 Nhiệm vụ: Dựa trên dữ liệu vụ án (coi là sự thật duy nhất) và văn bản luật, hãy ra PHÁN QUYẾT CỤ THỂ.
 
@@ -656,7 +676,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
         chain = prompt | llm | StrOutputParser()
 
         try:
-            formatted_prompt = prompt.format_messages(
+            fmt_kwargs = dict(
                 role_instruction=role_instruction,
                 context=context_text,
                 case_details=case_details,
@@ -664,6 +684,9 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
                 mapped_context=mapped_context,
                 nhan_than_context=nhan_than_context,
             )
+            if role == "neutral":
+                fmt_kwargs["judge_charge_block"] = judge_charge_block
+            formatted_prompt = prompt.format_messages(**fmt_kwargs)
             final_messages = history_msgs + formatted_prompt
             response = llm.invoke(_sanitize_msgs(final_messages)).content
         except Exception as e:
