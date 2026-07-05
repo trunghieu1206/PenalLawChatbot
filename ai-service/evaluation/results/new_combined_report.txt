@@ -295,7 +295,7 @@ Gia đ
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 1 case(s)  (3 role evals)
+  📊 Running totals after 1 case(s)  (3 role evals)13
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (3/3)
@@ -643,7 +643,7 @@ Gia đình bị hại cần tiếp tục thu thậ
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 2 case(s)  (6 role evals)
+  📊 Running totals after 2 case(s)  (6 role evals)26
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (6/6)
@@ -944,7 +944,7 @@ Gia đình bị hại cần tập hợp đầy đủ các
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 3 case(s)  (9 role evals)
+  📊 Running totals after 3 case(s)  (9 role evals)39
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (9/9)
@@ -1338,7 +1338,7 @@ Gia đình bị hại cần tiếp tục phối hợp chặt chẽ với cơ qua
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 4 case(s)  (12 role evals)
+  📊 Running totals after 4 case(s)  (12 role evals)412
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (12/12)
@@ -1653,7 +1653,7 @@ Gia đình bị hại cần tiếp tục theo dõi diễn biến của vụ án,
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 5 case(s)  (15 role evals)
+  📊 Running totals after 5 case(s)  (15 role evals)515
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (15/15)
@@ -2030,7 +2030,7 @@ Gia đình bị hại cần tiếp tục
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 6 case(s)  (18 role evals)
+  📊 Running totals after 6 case(s)  (18 role evals)618
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (18/18)
@@ -2314,7 +2314,7 @@ Gia đình bị hại cần tiếp tục thu thập và cung cấp đầy đủ 
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 7 case(s)  (21 role evals)
+  📊 Running totals after 7 case(s)  (21 role evals)721
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (21/21)
@@ -2782,7 +2782,7 @@ Gia đình bị hại cần tiếp tục thu thập và lưu giữ đầy đủ 
   │   Căn cứ đề nghị hình phạt bổ sung. |
 | 48 | Trả lại tài sản, sửa chữa hoặc bồi thường thiệt hại | BLHS 2015 (sửa đổi 2025) | Căn cứ yêu cầu bồi thường thiệt hại cho bị hại. |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 8 case(s)  (24 role evals)
+  📊 Running totals after 8 case(s)  (24 role evals)824
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (24/24)
@@ -3062,7 +3062,7 @@ Gia đình bị h
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 9 case(s)  (27 role evals)
+  📊 Running totals after 9 case(s)  (27 role evals)927
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (27/27)
@@ -3353,7 +3353,7 @@ Gia đình bị hại cần tiếp tục phối hợp chặt chẽ với cơ qua
 *Vui lòng đối chiếu với 
   │  văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 10 case(s)  (30 role evals)
+  📊 Running totals after 10 case(s)  (30 role evals)1030
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (30/30)
@@ -3667,7 +3667,7 @@ Gia đình bị hại (trong trường hợp này là Nhà nước và xã hội
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 11 case(s)  (33 role evals)
+  📊 Running totals after 11 case(s)  (33 role evals)1133
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (33/33)
@@ -4003,7 +4003,7 @@ Gia đình bị hại cần tiếp tục thu thập và cung cấp đầy đủ 
   │  n quyết định hình phạt |
 | 48 | Bồi thường thiệt hại | BLHS 2015 (sửa đổi 2017) | Căn cứ yêu cầu bồi thường thiệt hại |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 12 case(s)  (36 role evals)
+  📊 Running totals after 12 case(s)  (36 role evals)1236
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (36/36)
@@ -4342,7 +4342,7 @@ Gia đình bị hại cần tiếp tục phối hợp chặt chẽ với cơ qua
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 13 case(s)  (39 role evals)
+  📊 Running totals after 13 case(s)  (39 role evals)1339
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (39/39)
@@ -4750,7 +4750,7 @@ Gia đình bị hại cần tiếp tục phối hợp chặt chẽ với Cơ qua
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 14 case(s)  (42 role evals)
+  📊 Running totals after 14 case(s)  (42 role evals)1442
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (42/42)
@@ -5093,7 +5093,7 @@ Gia đình bị hại cần thu thập đầy đủ các h
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 15 case(s)  (45 role evals)
+  📊 Running totals after 15 case(s)  (45 role evals)1545
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (45/45)
@@ -5377,7 +5377,7 @@ Gia đình bị hại cần tiếp tục phối hợp chặt chẽ với cơ qua
 | 322 | Tội tổ chức đánh bạc hoặc gá bạc trái phép | BLHS 20
   │  15 (sửa đổi 2017) | Xác định tội danh và khung hình phạt |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 16 case(s)  (48 role evals)
+  📊 Running totals after 16 case(s)  (48 role evals)1648
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (48/48)
@@ -5695,7 +5695,7 @@ Gia đình
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 17 case(s)  (51 role evals)
+  📊 Running totals after 17 case(s)  (51 role evals)1751
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (51/51)
@@ -6048,7 +6048,7 @@ Gia đình bị hại cần tiếp tục thu thập và lưu giữ đầy đủ 
 *Vui lòng đối chiếu với văn bản luật gố
   │  c để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 18 case(s)  (54 role evals)
+  📊 Running totals after 18 case(s)  (54 role evals)1854
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (54/54)
@@ -6356,7 +6356,7 @@ Gia đình bị hại cần tiếp tục phối hợp chặt chẽ với cơ qua
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 19 case(s)  (57 role evals)
+  📊 Running totals after 19 case(s)  (57 role evals)1957
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (57/57)
@@ -6628,7 +6628,7 @@ Gia đình bị hại cần thu thập đầy đủ các hóa đơn, ch
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 20 case(s)  (60 role evals)
+  📊 Running totals after 20 case(s)  (60 role evals)2060
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (60/60)
@@ -6998,7 +6998,7 @@ Gia đình bị hại cần tiếp tục theo dõi sát sao diễn biến của 
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 21 case(s)  (63 role evals)
+  📊 Running totals after 21 case(s)  (63 role evals)2163
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (63/63)
@@ -7311,7 +7311,7 @@ Gia đình bị hại cần tiếp tục phối hợp chặt chẽ với cơ qua
   │  hại | BLHS 2015 (sửa đổi 2017) | Đề nghị bồi thường thiệt hại cho bị hại |
 | 327 | Tội chứa mại dâm | BLHS 2015 (sửa đổi 2017) | Xác định tội danh và khung hình phạt chính, hình phạt bổ sung |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 22 case(s)  (66 role evals)
+  📊 Running totals after 22 case(s)  (66 role evals)2266
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (66/66)
@@ -7717,7 +7717,7 @@ Gia đình bị hại cần tiếp t
 *Vui lòng 
   │  đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 23 case(s)  (69 role evals)
+  📊 Running totals after 23 case(s)  (69 role evals)2369
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall              100.0%  ≥90%  ✅  (69/69)
@@ -8090,7 +8090,7 @@ Gia đình bị hại nên thường xuyên liên hệ với cơ quan tiến hà
 | 42 | Bồi thường thiệt hại | BLHS 1999 (sửa đổi 2009) | Nghĩa vụ b
   │  ồi thường thiệt hại của người phạm tội |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 24 case(s)  (72 role evals)
+  📊 Running totals after 24 case(s)  (72 role evals)2472
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall               95.8%  ≥90%  ✅  (69/72)
@@ -8401,7 +8401,7 @@ Gia đ
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.
   │  *
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 25 case(s)  (75 role evals)
+  📊 Running totals after 25 case(s)  (75 role evals)2575
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall               96.0%  ≥90%  ✅  (72/75)
@@ -8735,7 +8735,7 @@ Gia đình bị
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 26 case(s)  (78 role evals)
+  📊 Running totals after 26 case(s)  (78 role evals)2678
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall               96.2%  ≥90%  ✅  (75/78)
@@ -9162,7 +9162,7 @@ Gia đình bị hại cần tiếp tục phối hợp c
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 27 case(s)  (81 role evals)
+  📊 Running totals after 27 case(s)  (81 role evals)2781
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall               96.3%  ≥90%  ✅  (78/81)
@@ -9475,7 +9475,7 @@ Gia đình bị hại (
 | 41 | Cấm đảm nhiệm chức vụ, cấm hành nghề hoặc làm công việc nhất định | BLHS 2015 (sửa đ
   │  ổi 2017) | Căn cứ áp dụng hình phạt bổ sung cấm đảm nhiệm chức vụ, cấm hành nghề hoặc làm công việc nhất định (nếu có) |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 28 case(s)  (84 role evals)
+  📊 Running totals after 28 case(s)  (84 role evals)2884
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall               96.4%  ≥90%  ✅  (81/84)
@@ -9784,7 +9784,7 @@ Gia đình bị hại cần tiếp tục thu thập và cung cấp đầy đủ 
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 29 case(s)  (87 role evals)
+  📊 Running totals after 29 case(s)  (87 role evals)2987
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall               95.4%  ≥90%  ✅  (83/87)
@@ -10139,7 +10139,7 @@ Gia đình bị hại cần tiếp tục phối hợp chặt chẽ với cơ qua
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 30 case(s)  (90 role evals)
+  📊 Running totals after 30 case(s)  (90 role evals)3090
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall               93.3%  ≥90%  ✅  (84/90)
@@ -10481,7 +10481,7 @@ Gia đình bị hại cần tiếp tục thu thập và cung cấp đầy đ
   │  ổi 2017) | Quy định về hình phạt bổ sung tịch thu tài sản. |
 | 41 | | BLHS 2015 (sửa đổi 2017) | Quy định về hình phạt bổ sung cấm đảm nhiệm chức vụ, cấm hành nghề hoặc làm công việc nhất định. |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 31 case(s)  (93 role evals)
+  📊 Running totals after 31 case(s)  (93 role evals)3193
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall               93.5%  ≥90%  ✅  (87/93)
@@ -10883,7 +10883,7 @@ Gia đình bị hại cần tiếp tục phối hợp chặt chẽ với cơ qua
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 32 case(s)  (96 role evals)
+  📊 Running totals after 32 case(s)  (96 role evals)3296
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall               93.8%  ≥90%  ✅  (90/96)
@@ -11204,7 +11204,7 @@ Gia đình bị hại cần thu thập đầy đủ các chứng cứ, hóa đơ
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 33 case(s)  (99 role evals)
+  📊 Running totals after 33 case(s)  (99 role evals)3399
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall               93.9%  ≥90%  ✅  (93/99)
@@ -11511,7 +11511,7 @@ Gia đình bị hại cần thu thập đầy đủ các hóa đơn, chứng t�
 | 48 | Bồi thường thiệt hại | BLHS 2015 (sửa 
   │  đổi 2017) | Căn cứ để yêu cầu bị cáo bồi thường thiệt hại vật chất và tinh thần cho bị hại. |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 34 case(s)  (102 role evals)
+  📊 Running totals after 34 case(s)  (102 role evals)34102
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall               94.1%  ≥90%  ✅  (96/102)
@@ -11844,7 +11844,7 @@ Gia đình bị hại cần thu thập đầy đủ các hóa đơn, chứng t�
 *Vui lòng đối chiếu với văn bản luật
   │   gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 35 case(s)  (105 role evals)
+  📊 Running totals after 35 case(s)  (105 role evals)35105
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall               94.3%  ≥90%  ✅  (99/105)
@@ -12152,7 +12152,7 @@ Gia đình bị hại cần tiếp tục thu thập và lưu giữ đầy đủ 
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 36 case(s)  (108 role evals)
+  📊 Running totals after 36 case(s)  (108 role evals)36108
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall               94.4%  ≥90%  ✅  (102/108)
@@ -12493,7 +12493,7 @@ Gia đình bị hại cần tiếp tục thu thập và cung cấp đầy đủ 
 *Vui lòng đối chiếu 
   │  với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 37 case(s)  (111 role evals)
+  📊 Running totals after 37 case(s)  (111 role evals)37111
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall               94.6%  ≥90%  ✅  (105/111)
@@ -12793,7 +12793,7 @@ Gia đình bị hại cần tiếp tục theo dõi diễn biến vụ án, phố
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 38 case(s)  (114 role evals)
+  📊 Running totals after 38 case(s)  (114 role evals)38114
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall               94.7%  ≥90%  ✅  (108/114)
@@ -13093,7 +13093,7 @@ Gia đình bị hại cần tiếp tục phối hợp chặt chẽ với cơ qua
 *Vui lòng đối chiếu 
   │  với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 39 case(s)  (117 role evals)
+  📊 Running totals after 39 case(s)  (117 role evals)39117
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall               94.9%  ≥90%  ✅  (111/117)
@@ -13463,7 +13463,7 @@ Gia đình bị hại cần tiếp tục theo dõi chặt chẽ diễn biến c�
 
 *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 40 case(s)  (120 role evals)
+  📊 Running totals after 40 case(s)  (120 role evals)40120
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall               95.0%  ≥90%  ✅  (114/120)
@@ -13760,7 +13760,7 @@ Gia đình bị hại cần tiếp tục theo dõi s
 | 45 | Khi quyết định hình phạt | BLHS 1999 | Nguyên tắc quyết định hình phạt |
 | 42 | Bồi thường thiệt hại | BLHS 1999 | Nghĩa vụ bồi thường của người phạm tội |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 41 case(s)  (123 role evals)
+  📊 Running totals after 41 case(s)  (123 role evals)41123
      Metric                         Value  Target
      --------------------------------------------------
      Retrieval Recall               95.1%  ≥90%  ✅  (117/123)
@@ -14133,7 +14133,7 @@ Resume mode: 41 fully-done cases + 1 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 42 case(s)  (126 role evals)
+  📊 Running totals after 42 case(s)  (126 role evals)42126
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   95.2%  ≥90%  ✅  (120/126)
@@ -14372,7 +14372,7 @@ Resume mode: 41 fully-done cases + 1 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 43 case(s)  (129 role evals)
+  📊 Running totals after 43 case(s)  (129 role evals)43129
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   94.6%  ≥90%  ✅  (122/129)
@@ -14609,7 +14609,7 @@ Resume mode: 41 fully-done cases + 1 partial — loaded from progress sidecar.
   │  | 42 | Trả lại tài sản, sửa chữa hoặc bồi thường thiệt hại | BLHS 1999 (sửa đổi 2009) | Căn cứ yêu cầu bồi thường thiệt hại |
   │  | 36 | Cấm đảm nhiệm chức vụ, cấm hành nghề hoặc làm công việc nhất định | BLHS 1999 (sửa đổi 2009) | Căn cứ đề nghị hình phạt bổ sung |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 44 case(s)  (132 role evals)
+  📊 Running totals after 44 case(s)  (132 role evals)44132
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   94.7%  ≥90%  ✅  (125/132)
@@ -14825,7 +14825,7 @@ Resume mode: 41 fully-done cases + 1 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 45 case(s)  (135 role evals)
+  📊 Running totals after 45 case(s)  (135 role evals)45135
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   94.8%  ≥90%  ✅  (128/135)
@@ -15066,7 +15066,7 @@ Resume mode: 41 fully-done cases + 1 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 46 case(s)  (138 role evals)
+  📊 Running totals after 46 case(s)  (138 role evals)46138
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   92.8%  ≥90%  ✅  (128/138)
@@ -15275,7 +15275,7 @@ Resume mode: 41 fully-done cases + 1 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 47 case(s)  (141 role evals)
+  📊 Running totals after 47 case(s)  (141 role evals)47141
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   92.9%  ≥90%  ✅  (131/141)
@@ -15514,7 +15514,7 @@ Resume mode: 41 fully-done cases + 1 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 48 case(s)  (144 role evals)
+  📊 Running totals after 48 case(s)  (144 role evals)48144
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   93.1%  ≥90%  ✅  (134/144)
@@ -15765,7 +15765,7 @@ Resume mode: 48 fully-done cases + 1 partial — loaded from progress sidecar.
   │  | 133 | Tội đe doạ giết người | BLHS 2015 (sửa đổi 2017) | Xác định tội danh và khung hình phạt đối với hành vi của bị cáo. |
   │  | 304 | Tội chế tạo, tàng trữ, vận chuyển, sử dụng, mua bán trái phép hoặc chiếm đoạt vũ khí quân dụng, phương tiện kỹ thuật quân sự | BLHS 2015 (sửa đổi 2017) | Căn cứ áp dụng hình phạt bổ sung cấm cư trú theo Khoản 5. |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 49 case(s)  (147 role evals)
+  📊 Running totals after 49 case(s)  (147 role evals)49147
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   93.2%  ≥90%  ✅  (137/147)
@@ -15986,7 +15986,7 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  | 48 | Biện pháp tư pháp | BLHS 2015 (sửa đổi 2017) | Căn cứ yêu cầu bồi thường thiệt hại |
   │  | 52 | Các tình tiết tăng nặng trách nhiệm hình sự | BLHS 2015 (sửa đổi 2017) | Căn cứ xem xét tình tiết tăng nặng |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 50 case(s)  (150 role evals)
+  📊 Running totals after 50 case(s)  (150 role evals)50150
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   93.3%  ≥90%  ✅  (140/150)
@@ -16225,7 +16225,7 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 51 case(s)  (153 role evals)
+  📊 Running totals after 51 case(s)  (153 role evals)51153
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   93.5%  ≥90%  ✅  (143/153)
@@ -16493,7 +16493,7 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 52 case(s)  (156 role evals)
+  📊 Running totals after 52 case(s)  (156 role evals)52156
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   93.6%  ≥90%  ✅  (146/156)
@@ -16708,7 +16708,7 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 53 case(s)  (159 role evals)
+  📊 Running totals after 53 case(s)  (159 role evals)53159
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   93.7%  ≥90%  ✅  (149/159)
@@ -16960,7 +16960,7 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 54 case(s)  (162 role evals)
+  📊 Running totals after 54 case(s)  (162 role evals)54162
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   92.6%  ≥90%  ✅  (150/162)
@@ -17169,13 +17169,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 55 case(s)  (165 role evals)
+  📊 Running totals after 55 case(s)  (165 role evals)55165
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   92.7%  ≥90%  ✅  (153/165)
      Generation Recall                  98.2%  ≥90%  ✅  (162/165)
      Map Laws Inefficiency               4.9%  ≤15%  ✅
-     Hallucination Rate                  4.8%  ≤10%  ✅
+     Hallucination Rate                  4.2%  ≤10%  ✅
      Role Adherence                     88.1%  ≥85%  ✅
 
 ━━━ CASE 56/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -17382,13 +17382,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  | 305 | Khoản 5 | BLHS 2015 (sửa đổi 2017) | Căn cứ đề nghị hình phạt bổ sung (phạt tiền) |
   │  | 299 | Khoản 5 | BLHS 2015 (sửa đổi 2017) | Căn cứ đề nghị hình phạt bổ sung (tịch thu tài sản) |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 56 case(s)  (168 role evals)
+  📊 Running totals after 56 case(s)  (168 role evals)56168
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   92.9%  ≥90%  ✅  (156/168)
      Generation Recall                  98.2%  ≥90%  ✅  (165/168)
      Map Laws Inefficiency               4.5%  ≤15%  ✅
-     Hallucination Rate                  4.8%  ≤10%  ✅
+     Hallucination Rate                  4.2%  ≤10%  ✅
      Role Adherence                     88.1%  ≥85%  ✅
 
 ━━━ CASE 57/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -17663,13 +17663,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 57 case(s)  (171 role evals)
+  📊 Running totals after 57 case(s)  (171 role evals)57171
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   93.0%  ≥90%  ✅  (159/171)
      Generation Recall                  98.2%  ≥90%  ✅  (168/171)
      Map Laws Inefficiency               4.3%  ≤15%  ✅
-     Hallucination Rate                  4.7%  ≤10%  ✅
+     Hallucination Rate                  4.1%  ≤10%  ✅
      Role Adherence                     88.2%  ≥85%  ✅
 
 ━━━ CASE 58/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -17887,13 +17887,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 58 case(s)  (174 role evals)
+  📊 Running totals after 58 case(s)  (174 role evals)58174
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   93.1%  ≥90%  ✅  (162/174)
      Generation Recall                  98.3%  ≥90%  ✅  (171/174)
      Map Laws Inefficiency               4.0%  ≤15%  ✅
-     Hallucination Rate                  4.6%  ≤10%  ✅
+     Hallucination Rate                  4.0%  ≤10%  ✅
      Role Adherence                     88.1%  ≥85%  ✅
 
 ━━━ CASE 59/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -18104,13 +18104,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 59 case(s)  (177 role evals)
+  📊 Running totals after 59 case(s)  (177 role evals)59177
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   93.2%  ≥90%  ✅  (165/177)
      Generation Recall                  98.3%  ≥90%  ✅  (174/177)
      Map Laws Inefficiency               3.8%  ≤15%  ✅
-     Hallucination Rate                  4.5%  ≤10%  ✅
+     Hallucination Rate                  4.0%  ≤10%  ✅
      Role Adherence                     88.1%  ≥85%  ✅
 
 ━━━ CASE 60/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -18326,13 +18326,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  | 41 | Cấm đảm nhiệm chức vụ, cấm hành nghề hoặc làm công việc nhất định | BLHS 2015 (sửa đổi 2017) | Căn cứ áp dụng hình phạt bổ sung cấm hành nghề |
   │  | 47 | Tịch thu vật, tiền trực tiếp liên quan đến tội phạm | BLHS 2015 (sửa đổi 2017) | Căn cứ tịch thu vật chứng |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 60 case(s)  (180 role evals)
+  📊 Running totals after 60 case(s)  (180 role evals)60180
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   93.3%  ≥90%  ✅  (168/180)
      Generation Recall                  98.3%  ≥90%  ✅  (177/180)
      Map Laws Inefficiency               3.6%  ≤15%  ✅
-     Hallucination Rate                  4.4%  ≤10%  ✅
+     Hallucination Rate                  3.9%  ≤10%  ✅
      Role Adherence                     88.2%  ≥85%  ✅
 
 ━━━ CASE 61/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -18604,13 +18604,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 61 case(s)  (183 role evals)
+  📊 Running totals after 61 case(s)  (183 role evals)61183
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   93.4%  ≥90%  ✅  (171/183)
      Generation Recall                  98.4%  ≥90%  ✅  (180/183)
      Map Laws Inefficiency               3.4%  ≤15%  ✅
-     Hallucination Rate                  4.4%  ≤10%  ✅
+     Hallucination Rate                  3.8%  ≤10%  ✅
      Role Adherence                     88.2%  ≥85%  ✅
 
 ━━━ CASE 62/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -18799,13 +18799,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 62 case(s)  (186 role evals)
+  📊 Running totals after 62 case(s)  (186 role evals)62186
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   93.5%  ≥90%  ✅  (174/186)
      Generation Recall                  98.4%  ≥90%  ✅  (183/186)
      Map Laws Inefficiency               3.2%  ≤15%  ✅
-     Hallucination Rate                  4.3%  ≤10%  ✅
+     Hallucination Rate                  3.8%  ≤10%  ✅
      Role Adherence                     88.2%  ≥85%  ✅
 
 ━━━ CASE 63/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -19046,13 +19046,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 63 case(s)  (189 role evals)
+  📊 Running totals after 63 case(s)  (189 role evals)63189
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   93.7%  ≥90%  ✅  (177/189)
      Generation Recall                  98.4%  ≥90%  ✅  (186/189)
      Map Laws Inefficiency               3.1%  ≤15%  ✅
-     Hallucination Rate                  4.2%  ≤10%  ✅
+     Hallucination Rate                  3.7%  ≤10%  ✅
      Role Adherence                     88.3%  ≥85%  ✅
 
 ━━━ CASE 64/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -19272,13 +19272,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 64 case(s)  (192 role evals)
+  📊 Running totals after 64 case(s)  (192 role evals)64192
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   93.8%  ≥90%  ✅  (180/192)
      Generation Recall                  98.4%  ≥90%  ✅  (189/192)
      Map Laws Inefficiency               2.9%  ≤15%  ✅
-     Hallucination Rate                  4.2%  ≤10%  ✅
+     Hallucination Rate                  3.6%  ≤10%  ✅
      Role Adherence                     88.3%  ≥85%  ✅
 
 ━━━ CASE 65/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -19517,13 +19517,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 65 case(s)  (195 role evals)
+  📊 Running totals after 65 case(s)  (195 role evals)65195
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   92.8%  ≥90%  ✅  (181/195)
      Generation Recall                  98.5%  ≥90%  ✅  (192/195)
      Map Laws Inefficiency               2.8%  ≤15%  ✅
-     Hallucination Rate                  5.1%  ≤10%  ✅
+     Hallucination Rate                  4.6%  ≤10%  ✅
      Role Adherence                     88.4%  ≥85%  ✅
 
 ━━━ CASE 66/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -19877,13 +19877,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 66 case(s)  (198 role evals)
+  📊 Running totals after 66 case(s)  (198 role evals)66198
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   91.9%  ≥90%  ✅  (182/198)
      Generation Recall                  97.5%  ≥90%  ✅  (193/198)
      Map Laws Inefficiency               2.7%  ≤15%  ✅
-     Hallucination Rate                  6.6%  ≤10%  ✅
+     Hallucination Rate                  6.1%  ≤10%  ✅
      Role Adherence                     88.4%  ≥85%  ✅
 
 ━━━ CASE 67/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -20112,13 +20112,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 67 case(s)  (201 role evals)
+  📊 Running totals after 67 case(s)  (201 role evals)67201
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   92.0%  ≥90%  ✅  (185/201)
      Generation Recall                  97.5%  ≥90%  ✅  (196/201)
      Map Laws Inefficiency               2.6%  ≤15%  ✅
-     Hallucination Rate                  7.5%  ≤10%  ✅
+     Hallucination Rate                  6.0%  ≤10%  ✅
      Role Adherence                     88.4%  ≥85%  ✅
 
 ━━━ CASE 68/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -20328,13 +20328,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 68 case(s)  (204 role evals)
+  📊 Running totals after 68 case(s)  (204 role evals)68204
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   92.2%  ≥90%  ✅  (188/204)
      Generation Recall                  97.5%  ≥90%  ✅  (199/204)
      Map Laws Inefficiency               2.5%  ≤15%  ✅
-     Hallucination Rate                  7.4%  ≤10%  ✅
+     Hallucination Rate                  5.9%  ≤10%  ✅
      Role Adherence                     88.4%  ≥85%  ✅
 
 ━━━ CASE 69/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -20548,13 +20548,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  | 48 | Các tình tiết tăng nặng trách nhiệm hình sự (Khoản 1 điểm h) | BLHS 1999 (sửa đổi 2009) | Bị cáo phạm tội đối với trẻ em, người ở trong tình trạng không thể tự vệ được. |
   │  | 42 | Bồi thường thiệt hại | BLHS 1999 (sửa đổi 2009) | Buộc người phạm tội phải bồi thường thiệt hại vật chất và tinh thần. |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 69 case(s)  (207 role evals)
+  📊 Running totals after 69 case(s)  (207 role evals)69207
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   92.3%  ≥90%  ✅  (191/207)
      Generation Recall                  97.6%  ≥90%  ✅  (202/207)
      Map Laws Inefficiency               3.6%  ≤15%  ✅
-     Hallucination Rate                  7.7%  ≤10%  ✅
+     Hallucination Rate                  6.3%  ≤10%  ✅
      Role Adherence                     88.2%  ≥85%  ✅
 
 ━━━ CASE 70/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -20776,13 +20776,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  | 48 | Trả lại tài sản, sửa chữa hoặc bồi thường thiệt hại | BLHS 2015 (sửa đổi 2017) | Căn cứ yêu cầu bồi thường thiệt hại |
   │  | 47 | Tịch thu vật, tiền trực tiếp liên quan đến tội phạm | BLHS 2015 (sửa đổi 2017) | Căn cứ tịch thu tang vật, tiền thu lợi bất chính |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 70 case(s)  (210 role evals)
+  📊 Running totals after 70 case(s)  (210 role evals)70210
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   92.4%  ≥90%  ✅  (194/210)
      Generation Recall                  97.6%  ≥90%  ✅  (205/210)
      Map Laws Inefficiency               3.5%  ≤15%  ✅
-     Hallucination Rate                  7.6%  ≤10%  ✅
+     Hallucination Rate                  6.2%  ≤10%  ✅
      Role Adherence                     88.3%  ≥85%  ✅
 
 ━━━ CASE 71/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -21022,13 +21022,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 71 case(s)  (213 role evals)
+  📊 Running totals after 71 case(s)  (213 role evals)71213
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   92.5%  ≥90%  ✅  (197/213)
      Generation Recall                  97.7%  ≥90%  ✅  (208/213)
      Map Laws Inefficiency               3.4%  ≤15%  ✅
-     Hallucination Rate                  8.0%  ≤10%  ✅
+     Hallucination Rate                  6.1%  ≤10%  ✅
      Role Adherence                     88.4%  ≥85%  ✅
 
 ━━━ CASE 72/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -21236,13 +21236,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  | 52 | Tình tiết tăng nặng trách nhiệm hình sự (Khoản 1 Điểm i; Khoản 1 Điểm n) | BLHS 2015 (sửa đổi 2017) | Áp dụng tình tiết tăng nặng do phạm tội đối với người dưới 16 tuổi và dùng phương tiện có khả năng gây nguy hại cho nhiều người |
   │  | 48 | Trả lại tài sản, sửa chữa hoặc bồi thường thiệt hại | BLHS 2015 (sửa đổi 2017) | Căn cứ yêu cầu bồi thường thiệt hại cho bị hại |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 72 case(s)  (216 role evals)
+  📊 Running totals after 72 case(s)  (216 role evals)72216
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   92.6%  ≥90%  ✅  (200/216)
      Generation Recall                  97.7%  ≥90%  ✅  (211/216)
      Map Laws Inefficiency               3.3%  ≤15%  ✅
-     Hallucination Rate                  7.9%  ≤10%  ✅
+     Hallucination Rate                  6.0%  ≤10%  ✅
      Role Adherence                     88.5%  ≥85%  ✅
 
 ━━━ CASE 73/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -21461,13 +21461,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 73 case(s)  (219 role evals)
+  📊 Running totals after 73 case(s)  (219 role evals)73219
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   91.3%  ≥90%  ✅  (200/219)
      Generation Recall                  96.3%  ≥90%  ✅  (211/219)
      Map Laws Inefficiency               3.2%  ≤15%  ✅
-     Hallucination Rate                  8.2%  ≤10%  ✅
+     Hallucination Rate                  6.4%  ≤10%  ✅
      Role Adherence                     88.5%  ≥85%  ✅
 
 ━━━ CASE 74/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -21710,13 +21710,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 74 case(s)  (222 role evals)
+  📊 Running totals after 74 case(s)  (222 role evals)74222
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   91.4%  ≥90%  ✅  (203/222)
      Generation Recall                  96.4%  ≥90%  ✅  (214/222)
      Map Laws Inefficiency               3.1%  ≤15%  ✅
-     Hallucination Rate                  8.6%  ≤10%  ✅
+     Hallucination Rate                  6.8%  ≤10%  ✅
      Role Adherence                     88.5%  ≥85%  ✅
 
 ━━━ CASE 75/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -21927,13 +21927,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 75 case(s)  (225 role evals)
+  📊 Running totals after 75 case(s)  (225 role evals)75225
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   91.6%  ≥90%  ✅  (206/225)
      Generation Recall                  96.4%  ≥90%  ✅  (217/225)
      Map Laws Inefficiency               3.0%  ≤15%  ✅
-     Hallucination Rate                  8.9%  ≤10%  ✅
+     Hallucination Rate                  6.7%  ≤10%  ✅
      Role Adherence                     88.6%  ≥85%  ✅
 
 ━━━ CASE 76/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -22125,13 +22125,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  | 32 | Các hình phạt chính và hình phạt bổ sung | BLHS 2015 (sửa đổi 2017) | Xác định các loại hình phạt có thể áp dụng |
   │  | 47 | Xử lý vật chứng, tài sản | BLHS 2015 (sửa đổi 2017) | Cơ sở pháp lý cho việc tịch thu vật chứng |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 76 case(s)  (228 role evals)
+  📊 Running totals after 76 case(s)  (228 role evals)76228
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   91.7%  ≥90%  ✅  (209/228)
      Generation Recall                  96.5%  ≥90%  ✅  (220/228)
      Map Laws Inefficiency               2.9%  ≤15%  ✅
-     Hallucination Rate                  9.2%  ≤10%  ✅
+     Hallucination Rate                  6.6%  ≤10%  ✅
      Role Adherence                     88.5%  ≥85%  ✅
 
 ━━━ CASE 77/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -22368,13 +22368,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 77 case(s)  (231 role evals)
+  📊 Running totals after 77 case(s)  (231 role evals)77231
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   90.9%  ≥90%  ✅  (210/231)
      Generation Recall                  96.5%  ≥90%  ✅  (223/231)
      Map Laws Inefficiency               2.8%  ≤15%  ✅
-     Hallucination Rate                 10.0%  ≤10%  ✅
+     Hallucination Rate                 7.4%  ≤10%  ✅
      Role Adherence                     88.5%  ≥85%  ✅
 
 ━━━ CASE 78/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -22597,13 +22597,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 78 case(s)  (234 role evals)
+  📊 Running totals after 78 case(s)  (234 role evals)78234
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   90.6%  ≥90%  ✅  (212/234)
      Generation Recall                  96.2%  ≥90%  ✅  (225/234)
      Map Laws Inefficiency               2.7%  ≤15%  ✅
-     Hallucination Rate                  9.8%  ≤10%  ✅
+     Hallucination Rate                  7.3%  ≤10%  ✅
      Role Adherence                     88.6%  ≥85%  ✅
 
 ━━━ CASE 79/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -22671,13 +22671,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  Vui lòng kiểm tra lại ngày phạm tội và gửi lại.
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 79 case(s)  (237 role evals)
+  📊 Running totals after 79 case(s)  (237 role evals)79237
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   90.6%  ≥90%  ✅  (212/234)
      Generation Recall                  96.2%  ≥90%  ✅  (225/234)
      Map Laws Inefficiency               5.3%  ≤15%  ✅
-     Hallucination Rate                  9.7%  ≤10%  ✅
+     Hallucination Rate                  7.2%  ≤10%  ✅
      Role Adherence                     87.5%  ≥85%  ✅
 
 ━━━ CASE 80/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -22896,13 +22896,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 80 case(s)  (240 role evals)
+  📊 Running totals after 80 case(s)  (240 role evals)80240
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   90.3%  ≥90%  ✅  (214/237)
      Generation Recall                  96.2%  ≥90%  ✅  (228/237)
      Map Laws Inefficiency               6.0%  ≤15%  ✅
-     Hallucination Rate                 10.0%  ≤10%  ✅
+     Hallucination Rate                 7.5%  ≤10%  ✅
      Role Adherence                     87.4%  ≥85%  ✅
 
 ━━━ CASE 81/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -23126,13 +23126,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 81 case(s)  (243 role evals)
+  📊 Running totals after 81 case(s)  (243 role evals)81243
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   90.4%  ≥90%  ✅  (217/240)
      Generation Recall                  95.8%  ≥90%  ✅  (230/240)
      Map Laws Inefficiency               5.9%  ≤15%  ✅
-     Hallucination Rate                  9.9%  ≤10%  ✅
+     Hallucination Rate                  7.4%  ≤10%  ✅
      Role Adherence                     87.5%  ≥85%  ✅
 
 ━━━ CASE 82/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -23333,13 +23333,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  | 52 | Các tình tiết tăng nặng trách nhiệm hình sự | BLHS 2015 (sửa đổi 2017) | Áp dụng tình tiết tăng nặng "Phạm tội có tính chất côn đồ" |
   │  | 48 | Bồi thường thiệt hại | BLHS 2015 (sửa đổi 2017) | Xác định nghĩa vụ bồi thường của người phạm tội |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 82 case(s)  (246 role evals)
+  📊 Running totals after 82 case(s)  (246 role evals)82246
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   90.5%  ≥90%  ✅  (220/243)
      Generation Recall                  95.9%  ≥90%  ✅  (233/243)
      Map Laws Inefficiency               5.7%  ≤15%  ✅
-     Hallucination Rate                  9.8%  ≤10%  ✅
+     Hallucination Rate                  7.3%  ≤10%  ✅
      Role Adherence                     87.6%  ≥85%  ✅
 
 ━━━ CASE 83/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -23600,13 +23600,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 83 case(s)  (249 role evals)
+  📊 Running totals after 83 case(s)  (249 role evals)83249
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   90.7%  ≥90%  ✅  (223/246)
      Generation Recall                  95.9%  ≥90%  ✅  (236/246)
      Map Laws Inefficiency               5.6%  ≤15%  ✅
-     Hallucination Rate                  9.6%  ≤10%  ✅
+     Hallucination Rate                  7.2%  ≤10%  ✅
      Role Adherence                     87.6%  ≥85%  ✅
 
 ━━━ CASE 84/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -23919,13 +23919,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  | 41 | Cấm đảm nhiệm chức vụ, cấm hành nghề hoặc làm công việc nhất định | BLHS 2015 (sửa đổi 2017) | Căn cứ áp dụng hình phạt bổ sung. |
   │  | 47 | Tịch thu vật, tiền | BLHS 2015 (sửa đổi 2017) | Căn cứ áp dụng biện pháp tư pháp tịch thu tang vật, công cụ phạm tội và thu lợi bất chính. |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 84 case(s)  (252 role evals)
+  📊 Running totals after 84 case(s)  (252 role evals)84252
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   90.8%  ≥90%  ✅  (226/249)
      Generation Recall                  96.0%  ≥90%  ✅  (239/249)
      Map Laws Inefficiency               5.5%  ≤15%  ✅
-     Hallucination Rate                  9.9%  ≤10%  ✅
+     Hallucination Rate                  7.1%  ≤10%  ✅
      Role Adherence                     87.6%  ≥85%  ✅
 
 ━━━ CASE 85/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -24149,13 +24149,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 85 case(s)  (255 role evals)
+  📊 Running totals after 85 case(s)  (255 role evals)85255
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   90.9%  ≥90%  ✅  (229/252)
      Generation Recall                  96.0%  ≥90%  ✅  (242/252)
      Map Laws Inefficiency               5.3%  ≤15%  ✅
-     Hallucination Rate                  9.8%  ≤10%  ✅
+     Hallucination Rate                  7.1%  ≤10%  ✅
      Role Adherence                     87.6%  ≥85%  ✅
 
 ━━━ CASE 86/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -24365,13 +24365,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 86 case(s)  (258 role evals)
+  📊 Running totals after 86 case(s)  (258 role evals)86258
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   91.0%  ≥90%  ✅  (232/255)
      Generation Recall                  96.1%  ≥90%  ✅  (245/255)
      Map Laws Inefficiency               5.2%  ≤15%  ✅
-     Hallucination Rate                 10.1%  ≤10%  ❌
+     Hallucination Rate                 7.4%  ≤10%  ✅
      Role Adherence                     87.6%  ≥85%  ✅
 
 ━━━ CASE 87/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -24744,13 +24744,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 87 case(s)  (261 role evals)
+  📊 Running totals after 87 case(s)  (261 role evals)87261
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   91.0%  ≥90%  ✅  (232/255)
      Generation Recall                  96.1%  ≥90%  ✅  (245/255)
      Map Laws Inefficiency               5.1%  ≤15%  ✅
-     Hallucination Rate                 11.1%  ≤10%  ❌
+     Hallucination Rate                 8.4%  ≤10%  ✅
      Role Adherence                     87.6%  ≥85%  ✅
 
 ━━━ CASE 88/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -24975,13 +24975,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  | 50 | Căn cứ quyết định hình phạt | BLHS 2015 (sửa đổi 2017) | Tòa án cần cân nhắc tính chất, mức độ nguy hiểm của hành vi, nhân thân bị cáo, tình tiết tăng nặng. |
   │  | 48 | Trả lại tài sản, sửa chữa hoặc bồi thường thiệt hại | BLHS 2015 (sửa đổi 2017) | Buộc bị cáo bồi thường thiệt hại vật chất và công khai xin lỗi bị hại. |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 88 case(s)  (264 role evals)
+  📊 Running totals after 88 case(s)  (264 role evals)88264
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   91.0%  ≥90%  ✅  (232/255)
      Generation Recall                  96.1%  ≥90%  ✅  (245/255)
      Map Laws Inefficiency               5.0%  ≤15%  ✅
-     Hallucination Rate                 11.0%  ≤10%  ❌
+     Hallucination Rate                 8.3%  ≤10%  ✅
      Role Adherence                     87.7%  ≥85%  ✅
 
 ━━━ CASE 89/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -25251,13 +25251,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 89 case(s)  (267 role evals)
+  📊 Running totals after 89 case(s)  (267 role evals)89267
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   91.1%  ≥90%  ✅  (235/258)
      Generation Recall                  96.1%  ≥90%  ✅  (248/258)
      Map Laws Inefficiency               4.9%  ≤15%  ✅
-     Hallucination Rate                 10.9%  ≤10%  ❌
+     Hallucination Rate                 8.2%  ≤10%  ✅
      Role Adherence                     87.8%  ≥85%  ✅
 
 ━━━ CASE 90/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -25474,13 +25474,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  | 85 | Các tình tiết tăng nặng trách nhiệm hình sự | BLHS 2015 (sửa đổi 2017) | Áp dụng tình tiết tăng nặng tái phạm nguy hiểm |
   │  | 349 | Tội tổ chức, môi giới cho người khác trốn đi nước ngoài hoặc ở lại nước ngoài trái phép | BLHS 2015 (sửa đổi 2017) | Định tội và định khung hình phạt cho hành vi của bị cáo (Khoản 3a, Khoản 4) |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 90 case(s)  (270 role evals)
+  📊 Running totals after 90 case(s)  (270 role evals)90270
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   91.2%  ≥90%  ✅  (238/261)
      Generation Recall                  96.2%  ≥90%  ✅  (251/261)
      Map Laws Inefficiency               4.8%  ≤15%  ✅
-     Hallucination Rate                 10.7%  ≤10%  ❌
+     Hallucination Rate                 8.1%  ≤10%  ✅
      Role Adherence                     87.7%  ≥85%  ✅
 
 ━━━ CASE 91/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -25689,13 +25689,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 91 case(s)  (273 role evals)
+  📊 Running totals after 91 case(s)  (273 role evals)91273
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   91.3%  ≥90%  ✅  (241/264)
      Generation Recall                  96.2%  ≥90%  ✅  (254/264)
      Map Laws Inefficiency               4.7%  ≤15%  ✅
-     Hallucination Rate                 10.6%  ≤10%  ❌
+     Hallucination Rate                 8.1%  ≤10%  ✅
      Role Adherence                     87.8%  ≥85%  ✅
 
 ━━━ CASE 92/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -25709,13 +25709,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   ┌─ ⏳ Processing Role: VICTIM ───────────────────────
   │  ✅ Fetched in 5.1s
   ⤼ [SKIP] Role VICTIM returned clarification — excluded.
-  📊 Running totals after 92 case(s)  (276 role evals)
+  📊 Running totals after 92 case(s)  (276 role evals)92276
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   91.3%  ≥90%  ✅  (241/264)
      Generation Recall                  96.2%  ≥90%  ✅  (254/264)
      Map Laws Inefficiency               4.7%  ≤15%  ✅
-     Hallucination Rate                 10.6%  ≤10%  ❌
+     Hallucination Rate                 8.0%  ≤10%  ✅
      Role Adherence                     87.8%  ≥85%  ✅
 
 ━━━ CASE 93/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -25930,13 +25930,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 93 case(s)  (279 role evals)
+  📊 Running totals after 93 case(s)  (279 role evals)93279
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   90.6%  ≥90%  ✅  (242/267)
      Generation Recall                  95.9%  ≥90%  ✅  (256/267)
      Map Laws Inefficiency               4.6%  ≤15%  ✅
-     Hallucination Rate                 10.9%  ≤10%  ❌
+     Hallucination Rate                 8.2%  ≤10%  ✅
      Role Adherence                     87.8%  ≥85%  ✅
 
 ━━━ CASE 94/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -26142,13 +26142,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  | 261 | Tội cản trở giao thông đường bộ (Khoản 1 điểm a) | BLHS 2015 (sửa đổi 2017) | Xác định tội danh và khung hình phạt |
   │  | 48 | Bồi thường thiệt hại | BLHS 2015 (sửa đổi 2017) | Căn cứ yêu cầu bồi thường thiệt hại |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 94 case(s)  (282 role evals)
+  📊 Running totals after 94 case(s)  (282 role evals)94282
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   90.7%  ≥90%  ✅  (245/270)
      Generation Recall                  95.9%  ≥90%  ✅  (259/270)
      Map Laws Inefficiency               4.5%  ≤15%  ✅
-     Hallucination Rate                 11.1%  ≤10%  ❌
+     Hallucination Rate                 8.2%  ≤10%  ✅
      Role Adherence                     87.8%  ≥85%  ✅
 
 ━━━ CASE 95/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -26439,13 +26439,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 95 case(s)  (285 role evals)
+  📊 Running totals after 95 case(s)  (285 role evals)95285
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   90.8%  ≥90%  ✅  (248/273)
      Generation Recall                  96.0%  ≥90%  ✅  (262/273)
      Map Laws Inefficiency               4.4%  ≤15%  ✅
-     Hallucination Rate                 11.0%  ≤10%  ❌
+     Hallucination Rate                 8.1%  ≤10%  ✅
      Role Adherence                     87.9%  ≥85%  ✅
 
 ━━━ CASE 96/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -26670,13 +26670,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 96 case(s)  (288 role evals)
+  📊 Running totals after 96 case(s)  (288 role evals)96288
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   90.9%  ≥90%  ✅  (251/276)
      Generation Recall                  96.0%  ≥90%  ✅  (265/276)
      Map Laws Inefficiency               4.3%  ≤15%  ✅
-     Hallucination Rate                 11.2%  ≤10%  ❌
+     Hallucination Rate                 8.3%  ≤10%  ✅
      Role Adherence                     87.9%  ≥85%  ✅
 
 ━━━ CASE 97/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -26912,13 +26912,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 97 case(s)  (291 role evals)
+  📊 Running totals after 97 case(s)  (291 role evals)97291
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   90.0%  ≥90%  ❌  (251/279)
      Generation Recall                  95.7%  ≥90%  ✅  (267/279)
      Map Laws Inefficiency               4.3%  ≤15%  ✅
-     Hallucination Rate                 11.8%  ≤10%  ❌
+     Hallucination Rate                 8.9%  ≤10%  ✅
      Role Adherence                     87.9%  ≥85%  ✅
 
 ━━━ CASE 98/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -27152,13 +27152,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  | 53 | Tái phạm, tái phạm nguy hiểm | BLHS 2015 (sửa đổi 2017) | Xác định bị cáo Trần Minh Nh thuộc trường hợp tái phạm nguy hiểm. |
   │  | 290 | Tội sử dụng mạng máy tính, mạng viễn thông, phương tiện điện tử thực hiện hành vi chiếm đoạt tài sản | BLHS 2015 (sửa đổi 2017) | Xác định tội danh và khung hình phạt chính cho hành vi của các bị cáo. |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 98 case(s)  (294 role evals)
+  📊 Running totals after 98 case(s)  (294 role evals)98294
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   90.1%  ≥90%  ✅  (254/282)
      Generation Recall                  95.7%  ≥90%  ✅  (270/282)
      Map Laws Inefficiency               4.2%  ≤15%  ✅
-     Hallucination Rate                 12.0%  ≤10%  ❌
+     Hallucination Rate                 9.2%  ≤10%  ✅
      Role Adherence                     87.9%  ≥85%  ✅
 
 ━━━ CASE 99/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -27364,13 +27364,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  | 48 | Trả lại tài sản, sửa chữa hoặc bồi thường thiệt hại | BLHS 2015 (sửa đổi 2017) | Căn cứ yêu cầu bồi thường thiệt hại vật chất do hành vi phạm tội gây ra. |
   │  | 47 | Tịch thu vật, tiền trực tiếp liên quan đến tội phạm | BLHS 2015 (sửa đổi 2017) | Căn cứ tịch thu công cụ, phương tiện phạm tội. |
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 99 case(s)  (297 role evals)
+  📊 Running totals after 99 case(s)  (297 role evals)99297
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   90.2%  ≥90%  ✅  (257/285)
      Generation Recall                  95.8%  ≥90%  ✅  (273/285)
      Map Laws Inefficiency               4.1%  ≤15%  ✅
-     Hallucination Rate                 11.9%  ≤10%  ❌
+     Hallucination Rate                 9.1%  ≤10%  ✅
      Role Adherence                     88.0%  ≥85%  ✅
 
 ━━━ CASE 100/100 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -27576,13 +27576,13 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   │  
   │  *Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*
   └──────────────────────────────────────────────────────────────
-  📊 Running totals after 100 case(s)  (300 role evals)
+  📊 Running totals after 100 case(s)  (300 role evals)100300
      Metric                             Value  Target
      -------------------------------------------------------
      Retrieval Recall                   90.3%  ≥90%  ✅  (260/288)
      Generation Recall                  95.8%  ≥90%  ✅  (276/288)
      Map Laws Inefficiency               4.0%  ≤15%  ✅
-     Hallucination Rate                 11.8%  ≤10%  ❌
+     Hallucination Rate                 9.0%  ≤10%  ✅
      Role Adherence                     88.0%  ≥85%  ✅
 
 ======================================================================
@@ -27593,7 +27593,7 @@ Resume mode: 49 fully-done cases + 0 partial — loaded from progress sidecar.
   Retrieval Recall                     90.3%      ≥90%  ✅ PASS
   Generation Recall                    95.8%      ≥90%  ✅ PASS
   Map Laws Inefficiency                 4.0%      ≤15%  ✅ PASS
-  Hallucination Rate                   11.8%      ≤10%  ❌ FAIL
+  Hallucination Rate                   9.0%      ≤10%  ✅ PASS
   Role Adherence                       88.0%      ≥85%  ✅ PASS
   ------------------------------------------------------------
   Detailed JSONL : /root/PenalLawChatbot/ai-service/evaluation/results/new_combined_results.jsonl
