@@ -127,8 +127,8 @@ scp -P 1501 \
   ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/results/
 
 # Download eval log .txt file (saved inside evaluation/logs/ on server)
-scp -P 2478 \
-  'root@n2.ckey.vn:~/PenalLawChatbot/ai-service/evaluation/logs/eval_1_100.txt' \
+scp -P 1501 \
+  'root@n3.ckey.vn:~/PenalLawChatbot/ai-service/evaluation/logs/eval_1_100.txt' \
   ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/logs/
 
 ## Step 4 — resume an interrupted eval (run ON SERVER inside evaluation/ dir)

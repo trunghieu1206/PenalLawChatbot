@@ -715,8 +715,8 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
         if hallucinated:
             arts = ", ".join(f"Điều {a}" for a in hallucinated)
             issues.append(
-                f"Trích dẫn không có cơ sở: {arts} "
-                f"— không tìm thấy trong văn bản luật đã truy xuất."
+                f"Bạn nên tự kiểm tra lại {arts} "
+                f"trong văn bản luật gốc để xác nhận điều khoản này áp dụng cho vụ án."
             )
             print(f"  [VERIFY L1-A] ❌ Hallucinated articles: {hallucinated}")
         else:
@@ -730,8 +730,8 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
         if wrong_edition:
             correct = _edition_for_date(crime_date) or "không xác định"
             issues.append(
-                f"Có thể áp dụng sai phiên bản luật: {', '.join(wrong_edition)}. "
-                f"Ngày phạm tội {crime_date} → phải dùng {correct}."
+                f"Bạn nên kiểm tra lại phiên bản Bộ luật Hình sự áp dụng cho {', '.join(wrong_edition)}: "
+                f"với ngày phạm tội {crime_date}, phiên bản phù hợp là {correct}."
             )
             print(f"  [VERIFY L1-B] ❌ Wrong edition(s) cited: {wrong_edition} "
                   f"(expected: {correct})")
@@ -742,8 +742,8 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
         role_score = _verify_role_signal(ai_text, role)
         if role_score < 0.35:
             issues.append(
-                f"Giọng văn có thể chưa nhất quán với vai '{role}' "
-                f"(điểm tín hiệu = {role_score:.2f}/1.00)."
+                f"Bạn nên xem xét lại góc độ lập luận để phù hợp hơn với vai '{role}' "
+                f"khi vận dụng phân tích này vào thực tiễn."
             )
             print(f"  [VERIFY L1-C] ❌ Role signal weak: score={role_score:.2f} "
                   f"(threshold=0.35) for role='{role}'")
@@ -854,7 +854,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
                         f"    → Why: LLM judge determined the AI response contained "
                         f"specific details not found in the original case text or extracted facts."
                     )
-                    issues.append(f"Nhất quán dữ liệu thực tế: {factual_msg}")
+                    issues.append(f"Bạn nên xác nhận lại thông tin sau với hồ sơ gốc: {factual_msg}")
                 else:
                     print(f"  [VERIFY L2] ✅ Factual consistency OK (factual_ok={factual_ok})")
 
@@ -867,7 +867,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
                         f"wrong direction for the assigned role '{role}' "
                         f"({role_map.get(role, role)})."
                     )
-                    issues.append(f"Vai trò: {role_msg}")
+                    issues.append(f"Bạn nên cân nhắc điều chỉnh góc lập luận cho phù hợp hơn với vai '{role}': {role_msg}")
                 else:
                     print(f"  [VERIFY L2] ✅ Role adherence OK (role_ok={role_ok})")
 
@@ -890,9 +890,9 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 
         warning_block = (
             "\n\n---\n"
-            "**Ghi chú hệ thống (Kiểm chứng câu trả lời):**\n"
+            "**Lưu ý khi tham khảo:**\n"
             + "\n".join(f"- {i}" for i in issues)
-            + "\n\n*Vui lòng đối chiếu với văn bản luật gốc để xác nhận.*"
+            + "\n\n*Phân tích trên mang tính tham khảo. Để đảm bảo chính xác, bạn nên đối chiếu với văn bản luật gốc và tư vấn luật sư có thẩm quyền.*"
         )
         print(f"  ⚠️ Answer verification: {len(issues)} issue(s) detected.")
         return {"messages": [AIMessage(content=ai_text + warning_block)]}
