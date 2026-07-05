@@ -21,6 +21,10 @@ HOW TO RUN (100 cases, resume-safe) (fresh start):
     --log-file logs/eval_1_100.txt
 
 RESUME:
+    cd ~/PenalLawChatbot/ai-service/evaluation
+
+    tmux new -s eval
+
     python3 eval_combined_hallucination_recall_role_adherence.py \
     --start 1 \
     --end 100 \
@@ -330,8 +334,9 @@ def layer1_vs_retrieved(result_text: str, retrieved_nums: set) -> dict:
     L1: Does the final response text cite any article NOT in the RAG-retrieved documents?
     Checks the generate node's output (free-form Vietnamese text) directly.
     Catches training-knowledge leakage even when map_laws JSON stays clean.
-    Articles 1-77 (BLHS General Part — sentencing principles) are excluded
-    from the check via _ALWAYS_VALID since they are legitimately cited everywhere.
+    ALL articles are checked — including general law (Điều 51, 52, 48, etc.) —
+    because the retrieval module DOES retrieve those when relevant. Citing them
+    without retrieval is genuine grounding failure.
     """
     if not retrieved_nums:
         return {"triggered": False, "false_articles": [],
@@ -339,8 +344,6 @@ def layer1_vs_retrieved(result_text: str, retrieved_nums: set) -> dict:
     cited_in_text = _extract_nums_from_text(result_text or "")
     false_arts = []
     for num in cited_in_text:
-        if num in _ALWAYS_VALID:
-            continue
         if num not in retrieved_nums:
             false_arts.append({"article": f"Điều {num}", "reason": "cited_in_response_but_not_retrieved"})
     return {"triggered": len(false_arts) > 0, "false_articles": false_arts}
@@ -794,7 +797,16 @@ def _print_case_report(report, cidx, total, case, role, ev):
            f"  d3={ev.get('role_d3','?')}  d4={ev.get('role_d4','?')})")
     report(f"  │  Preview : {repr(ev['text_preview'][:200])}")
     report(f"  │  ── FULL RESPONSE ──────────────────────────────────────────")
+    _MAX_LINE = 300  # max chars per response line written to the report
     for line in (ev.get('full_response', '') or '').splitlines():
+        # Collapse markdown table separator rows (lines of pure |, :, -, spaces)
+        stripped = line.strip().strip('|').replace(':', '').replace('-', '').replace(' ', '')
+        if len(line.strip()) > 20 and stripped == '':
+            report(f"  │  [table separator row omitted]")
+            continue
+        # Truncate excessively long lines (e.g. wide markdown table cells)
+        if len(line) > _MAX_LINE:
+            line = line[:_MAX_LINE] + f"  …[+{len(line)-_MAX_LINE} chars]"
         report(f"  │  {line}")
     report(f"  └──────────────────────────────────────────────────────────────")
 
