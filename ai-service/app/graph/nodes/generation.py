@@ -206,7 +206,7 @@ def make_generation_nodes(llm, bm25_index, bm25_docs, retriever, measure_time):
         # ── Build mapped_laws context ─────────────────────────────────────────
         mapped_context = ""
         if mapped_laws and not (len(mapped_laws) == 1 and mapped_laws[0].get("_mapping_error")):
-            lines = ["**Tội danh hệ thống đã xác định (từ phân tích trung lập):**"]
+            lines = ["**Tội danh đã được xác định (từ hồ sơ vụ án):**"]
             for law in mapped_laws:
                 err = law.get("_mapping_error", False)
                 lines.append(
@@ -236,7 +236,7 @@ def make_generation_nodes(llm, bm25_index, bm25_docs, retriever, measure_time):
                         )
             mapped_context = "\n".join(lines)
         else:
-            mapped_context = "**Lưu ý:** Hệ thống không thể xác định tội danh cụ thể từ thông tin đã cung cấp."
+            mapped_context = "**Lưu ý:** Không thể xác định tội danh cụ thể từ thông tin đã cung cấp."
 
         # ── Build explicit charge block for judge role only ───────────────────
         # This is injected at the very top of the judge prompt (highest LLM
@@ -315,19 +315,22 @@ def make_generation_nodes(llm, bm25_index, bm25_docs, retriever, measure_time):
         role_instructions = {
             "defense": (
                 "Bạn là Luật sư Bào chữa, đang bảo vệ thân chủ. "
+                "TUYỆT ĐỐI KHÔNG sử dụng từ 'hệ thống' (ví dụ không viết 'hệ thống đã xác định...'). Hãy xưng hô là 'Luật sư' hoặc 'Chúng tôi'.\n"
                 "Nhiệm vụ: phân tích pháp lý CHỈ THEO HƯỚNG CÓ LỢI cho thân chủ. "
                 "TUYỆT ĐỐI không đề xuất mức án nặng hơn. "
                 "Nếu phải đề cập tình tiết tăng nặng: CHỈ để phản bác hoặc giảm thiểu tác động."
             ),
             "victim": (
                 "Bạn là Luật sư Bảo vệ Bị hại. "
+                "TUYỆT ĐỐI KHÔNG sử dụng từ 'hệ thống' (ví dụ không viết 'hệ thống đã xác định...'). Hãy xưng hô là 'Luật sư' hoặc 'Chúng tôi'.\n"
                 "Nhiệm vụ: phân tích pháp lý CHỈ THEO HƯỚNG BẢO VỆ QUYỀN LỢI BỊ HẠI TỐI ĐA. "
                 "TUYỆT ĐỐI không đề xuất án nhẹ hơn cho bị cáo. "
                 "Nếu phải đề cập tình tiết giảm nhẹ: CHỈ để phản bác hoặc chứng minh không đủ điều kiện."
             ),
             "neutral": (
                 "Bạn là Thẩm phán Hội đồng xét xử, "
-                "đang ra phán quyết trung lập, khách quan, hai chiều dựa trên pháp luật."
+                "đang ra phán quyết trung lập, khách quan, hai chiều dựa trên pháp luật. "
+                "TUYỆT ĐỐI KHÔNG sử dụng từ 'hệ thống' (ví dụ không viết 'hệ thống đã xác định...'). Hãy xưng hô là 'Hội đồng xét xử' hoặc 'Tòa án'."
             ),
         }
         role_instruction = role_instructions.get(role, role_instructions["neutral"])
