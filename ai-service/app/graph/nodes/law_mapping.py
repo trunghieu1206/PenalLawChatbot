@@ -219,13 +219,16 @@ QUY TẮC XÁC ĐỊNH alternative_lighter_article và alternative_heavier_artic
 - Nếu KHÔNG có điều luật tội danh nào nhẹ hơn/nặng hơn phù hợp trong tài liệu đã cung cấp → BẮT BUỘC để null.
 
 ► alternative_lighter_article: Bất kỳ luật sư bào chữa có thể lập luận hợp lệ để định tội sang điều khoản TỘI DANH CỤ THỂ NHẸ HƠN không?
-  - Nếu CÓ căn cứ pháp lý trong tài liệu đã cung cấp: điền {"article": "Điều X", "clause": "Khoản Y", "offense_name": "...", "reason": "lý do ngắn gọn"}
-  - Nếu KHÔNG có căn cứ (tội danh đã rõ ràng, không thể tranh luận xuống dưới): null
-  Ví dụ: Ánh xạ vào Điều 123 (giết người) nhưng bước 0 chưa xác định rõ vũ khí → luật sư có thể tranh luận xuống Điều 134 → alternative_lighter = {"article": "Điều 134", "clause": "Khoản 3", "offense_name": "Cố ý gây thương tích", "reason": "Nếu hội đồng xét xử cho rằng chưa đủ căn cứ về ý định giết người"}
+  - BẮT BUỘC SUY NGHĨ NHƯ LUẬT SƯ: Đừng quá khắt khe. Hãy tìm mọi góc độ có thể (ý định chủ quan chưa rõ, lỗi vô ý vs cố ý, bị hại có một phần lỗi...) để đề xuất một điều luật nhẹ hơn CÙNG NHÓM (nếu có trong `legal_context`).
+  - Nếu CÓ thể lập luận: điền {"article": "Điều X", "clause": "Khoản Y", "offense_name": "...", "reason": "lý do ngắn gọn"}
+  - Chỉ để `null` nếu hoàn toàn không có điều luật nào nhẹ hơn trong tài liệu.
+  Ví dụ 1: Ánh xạ Điều 123 (giết người) → tranh luận xuống Điều 134 (Cố ý gây thương tích) nếu ý định giết người chưa rõ.
+  Ví dụ 2: Ánh xạ Điều 134 (Cố ý gây thương tích) → tranh luận xuống Điều 138 (Vô ý gây thương tích) với lý do bị cáo chỉ lỡ tay, không mong muốn hậu quả thương tích nặng xảy ra.
 
-► alternative_heavier_article: Bất kỳ luật sư bị hại có thể lập luận hợp lệ để định tội sang điều khoản TỘI DANH CỤ THỂ NẶNG HƠN không?
-  - Nếu CÓ căn cứ pháp lý trong tài liệu đã cung cấp: điền {"article": "Điều X", "clause": "Khoản Y", "offense_name": "...", "reason": "lý do ngắn gọn"}
-  - Nếu KHÔNG có căn cứ (tội danh đã rõ ràng, không thể tranh luận lên trên): null
+► alternative_heavier_article: Bất kỳ luật sư bị hại/VKS có thể lập luận hợp lệ để định tội sang điều khoản TỘI DANH CỤ THỂ NẶNG HƠN không?
+  - Tương tự như trên, hãy suy nghĩ theo hướng buộc tội mạnh nhất có thể.
+  - Nếu CÓ thể lập luận: điền {"article": "Điều X", "clause": "Khoản Y", "offense_name": "...", "reason": "lý do ngắn gọn"}
+  - Nếu KHÔNG: null
   Ví dụ: Ánh xạ vào Điều 170 (cưỡng đoạt) nhưng bị hại thấy bị cáo đã dùng vũ lực trực tiếp → có thể tranh lên Điều 168 (cướp) → alternative_heavier = {"article": "Điều 168", ...}
 
 Chỉ điền các lựa chọn alternative khi CHÚNG CÓ TRONG tài liệu đã cung cấp. TUYỆT ĐỐI KHÔNG bịa đặt điều luật không có trong context.
