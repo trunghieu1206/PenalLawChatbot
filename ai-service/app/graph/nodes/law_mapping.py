@@ -234,6 +234,8 @@ OUTPUT: CHỈ JSON array hợp lệ."""
             print(f"  [MAP_LAWS] LLM output:\n{raw_output}")
 
             mapped = _extract_json(raw_output)
+            if isinstance(mapped, dict):
+                mapped = [mapped]
             if not isinstance(mapped, list) or len(mapped) == 0:
                 raise ValueError("Empty or non-list mapped_laws")
 
