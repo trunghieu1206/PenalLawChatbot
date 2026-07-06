@@ -138,6 +138,9 @@ BẢNG CÁC CẶP ĐIỀU LUẬT THƯỜNG BỊ NHẦM — ĐỌC TRƯỚC KHI �
   → Nạn nhân sống: Điều 123 chưa đạt. KHÔNG hạ xuống Điều 134.
   → Tình tiết "có tính chất côn đồ" (điểm n khoản 1 Điều 123): hành vi hung hãn, bột phát, coi
     thường tính mạng người khác dù không có thù oán từ trước.
+    ★ DẤU HIỆU CÔN ĐỒ: Bị cáo dùng hung khí tấn công người thân/quen chỉ vì lý do rất nhỏ nhặt
+    (bị mắng, tranh cãi nhỏ, va chạm giao thông...). Đây LÀ hành vi côn đồ → BẮT BUỘC xét khoản 1.
+    ★ Khi đã xác định côn đồ → ánh xạ Khoản 1 Điều 123, KHÔNG ánh xạ Khoản 2.
 
 [NHÓM 2 — TỘI XÂM PHẠM TÀI SẢN]
 • Điều 168 vs Điều 170 vs Điều 171 vs Điều 173:
@@ -204,12 +207,17 @@ Trả về JSON array:
 
 QUY TẮC XÁC ĐỊNH alternative_lighter_article và alternative_heavier_article:
 
-► alternative_lighter_article: Bất kỳ luật sư bào chữa có thể lập luận hợp lệ để định tội sang điều khoản NHẸ HƠN không?
+🚫 RÀNG BUỘC BẮT BUỘC:
+- alternative_lighter_article và alternative_heavier_article CHỈ ĐƯỢC điền các điều luật quy định TỘI DANH CỤ THỂ (tội phạm thực thể).
+- TUYỆT ĐỐI KHÔNG điền các điều luật chung/thủ tục như: Điều 57 (phạm tội chưa đạt), Điều 15 (chuẩn bị), Điều 50 (căn cứ quyết định hình phạt), Điều 51/52 (tình tiết giảm/tăng nặng), Điều 7 (hiệu lực luật)...
+- Nếu KHÔNG có điều luật tội danh nào nhẹ hơn/nặng hơn phù hợp trong tài liệu đã cung cấp → BẮT BUỘC để null.
+
+► alternative_lighter_article: Bất kỳ luật sư bào chữa có thể lập luận hợp lệ để định tội sang điều khoản TỘI DANH CỤ THỂ NHẸ HƠN không?
   - Nếu CÓ căn cứ pháp lý trong tài liệu đã cung cấp: điền {"article": "Điều X", "clause": "Khoản Y", "offense_name": "...", "reason": "lý do ngắn gọn"}
   - Nếu KHÔNG có căn cứ (tội danh đã rõ ràng, không thể tranh luận xuống dưới): null
-  Ví dụ: Ánh xạ vào Điều 123 (giết người) nhưng bước 0 chưa xác định rõ vũ khí → luật sư có thể tranh luận xuống Điều 134 → alternative_lighter = {"article": "Điều 134", "clause": "Khoản 1", "offense_name": "Cố ý gây thương tích", "reason": "Nếu hội đồng xét xử cho rằng chưa đủ căn cứ về ý định giết người"}
+  Ví dụ: Ánh xạ vào Điều 123 (giết người) nhưng bước 0 chưa xác định rõ vũ khí → luật sư có thể tranh luận xuống Điều 134 → alternative_lighter = {"article": "Điều 134", "clause": "Khoản 3", "offense_name": "Cố ý gây thương tích", "reason": "Nếu hội đồng xét xử cho rằng chưa đủ căn cứ về ý định giết người"}
 
-► alternative_heavier_article: Bất kỳ luật sư bị hại có thể lập luận hợp lệ để định tội sang điều khoản NẶNG HƠN không?
+► alternative_heavier_article: Bất kỳ luật sư bị hại có thể lập luận hợp lệ để định tội sang điều khoản TỘI DANH CỤ THỂ NẶNG HƠN không?
   - Nếu CÓ căn cứ pháp lý trong tài liệu đã cung cấp: điền {"article": "Điều X", "clause": "Khoản Y", "offense_name": "...", "reason": "lý do ngắn gọn"}
   - Nếu KHÔNG có căn cứ (tội danh đã rõ ràng, không thể tranh luận lên trên): null
   Ví dụ: Ánh xạ vào Điều 170 (cưỡng đoạt) nhưng bị hại thấy bị cáo đã dùng vũ lực trực tiếp → có thể tranh lên Điều 168 (cướp) → alternative_heavier = {"article": "Điều 168", ...}
