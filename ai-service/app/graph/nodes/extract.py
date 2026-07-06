@@ -47,6 +47,7 @@ Trả về JSON với các trường sau (dùng null nếu không tìm thấy th
   "ngay_tam_giam": "dd/mm/yyyy",
   "ten_bi_cao": "tên bị cáo (nếu có nhiều bị cáo, để dạng 'A, B, C')",
   "co_tien_an": "true/false (⚠️ LƯỤ Ý QUAN TRỌNG: Chỉ set true nếu văn bản ghi rõ là CÓ tiền án / chưa xóa án tích. Nếu văn bản ghi 'Tiền án: Không' và các bản án cũ chỉ nằm ở mục 'Nhân thân' hoặc 'đã được xóa án tích', BẮT BUỘC set là false)",
+  "tai_pham_nguy_hiem": "true/false/null (⚠️ Chỉ set true nếu bị cáo đã từng bị xét xử trong trường hợp 'Tái phạm nguy hiểm' (ví dụ: bản án ghi rõ 'Tái phạm nguy hiểm', hoặc kết án theo điểm g khoản 2...'). Set false nếu có tiền án nhưng không có 'Tái phạm nguy hiểm'. Null nếu không có tiền án hoặc không xác định được.)",
   "da_boi_thuong": true/false,
   "da_thanh_khan_khai_bao": true/false,
   "is_multi_defendant": true/false,

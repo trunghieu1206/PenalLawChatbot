@@ -152,9 +152,13 @@ BẢNG CÁC CẶP ĐIỀU LUẬT THƯỜNG BỊ NHẦM — ĐỌC TRƯỚC KHI �
   → Điều 174 (Lừa đảo): Gian dối TRƯỚC hoặc ĐỒNG THỜI khi nhận tài sản.
   → Điều 175 (Lạm dụng tín nhiệm): Nhận tài sản hợp pháp trước, SAU ĐÓ mới chiếm đoạt.
 
-  ★ LƯU Ý VỀ TÁI PHẠM NGUY HIỂM VÀ ĐỊNH KHUNG TÀI SẢN:
-  → Nếu giá trị tài sản ĐÃ ĐỦ ĐỊNH MỨC (vd: >2 triệu đối với trộm cắp/lừa đảo, >4 triệu đối với lạm dụng tín nhiệm), tiền án "Tái phạm nguy hiểm" SẼ được dùng làm tình tiết định khung nâng lên Khoản 2. Tiền án KHÔNG bị triệt tiêu vào Khoản 1.
-  → CHỈ KHI giá trị tài sản DƯỚI định mức (<2 triệu hoặc <4 triệu), tiền án mới bị dùng để định tội (Khoản 1) và không được dùng để nâng khung nữa.
+  ★ QUY TẮC BẮT BUỘC VỀ TÁI PHẠM NGUY HIỂM VÀ ĐỊNH KHUNG:
+  → Trong SỰ KIỆN (facts), kiểm tra trường `tai_pham_nguy_hiem`:
+     • Nếu `tai_pham_nguy_hiem = true` VÀ giá trị tài sản ≥ định mức cơ bản của Khoản 1:
+       BẮT BUỘC ánh xạ sang Khoản nào có tình tiết "Tái phạm nguy hiểm" (thường là Khoản 2 điểm g).
+       Tiền án KHÔNG bị "dùng hết" vào Khoản 1. Khoản 1 đã có giá trị tài sản đảm bảo.
+     • Nếu `tai_pham_nguy_hiem = false/null` hoặc tài sản DƯỚI định mức: ánh xạ Khoản 1 bình thường.
+
 [NHÓM 3 — TỘI XÂM PHẠM TÌNH DỤC]
 • Điều 141 vs Điều 143 vs Điều 145:
   → Điều 141 (Hiếp dâm): Dùng vũ lực / đe dọa dùng vũ lực / lợi dụng không thể kháng cự.
