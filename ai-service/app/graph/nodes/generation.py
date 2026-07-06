@@ -251,9 +251,9 @@ def make_generation_nodes(llm, bm25_index, bm25_docs, retriever, measure_time):
             _ed    = first_law.get("edition_applied", "?")
             judge_charge_block = (
                 f"BẮT BUỘC:\n"
-                f"TỘI DANH PHẢI XÉT XỬ DỰA TRÊN TỘI DANH ĐÃ ĐƯỢC XÁC ĐỊNH SAU: {_art} {_cl} — {_name} [{_ed}]\n"
-                f"TÒA ÁN CHỈ ĐƯỢC SỬ DỤNG TỘI DANH NÀY. TUYỆT ĐỐI KHÔNG ĐƯỢC tự chuyển sang "
-                f"bất kỳ tội danh nào khác (kể cả các điều khoản xuất hiện trong `legal_context`).\n"
+                f"TỘI DANH PHẢI XÉT XỬ DỰA TRÊN TỘI DANH VÀ ĐIỀU KHOẢN ĐÃ ĐƯỢC XÁC ĐỊNH SAU: {_art} {_cl} — {_name} [{_ed}]\n"
+                f"TÒA ÁN CHỈ ĐƯỢC SỬ DỤNG TỘI DANH VÀ KHOẢN NÀY. TUYỆT ĐỐI KHÔNG ĐƯỢC tự chuyển sang "
+                f"bất kỳ tội danh (Điều) hay khung hình phạt (Khoản) nào khác (kể cả các điều khoản xuất hiện trong `legal_context`).\n"
                 f"KHÔNG VIẾT \"Phương án 1\", \"Phương án 2\", hay bất kỳ lựa chọn thay thế nào.\n"
             )
 
