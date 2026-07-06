@@ -138,9 +138,8 @@ BẢNG CÁC CẶP ĐIỀU LUẬT THƯỜNG BỊ NHẦM — ĐỌC TRƯỚC KHI �
   → Nạn nhân sống: Điều 123 chưa đạt. KHÔNG hạ xuống Điều 134.
   → Tình tiết "có tính chất côn đồ" (điểm n khoản 1 Điều 123): hành vi hung hãn, bột phát, coi
     thường tính mạng người khác dù không có thù oán từ trước.
-    ★ DẤU HIỆU CÔN ĐỒ: Bị cáo dùng hung khí tấn công người thân/quen chỉ vì lý do rất nhỏ nhặt
-    (bị mắng, tranh cãi nhỏ, va chạm giao thông...). Đây LÀ hành vi côn đồ → BẮT BUỘC xét khoản 1.
-    ★ Khi đã xác định côn đồ → ánh xạ Khoản 1 Điều 123, KHÔNG ánh xạ Khoản 2.
+    ★ DẤU HIỆU CÔN ĐỒ: Bị cáo tấn công vô cớ hoặc vì lý do cực kỳ nhỏ nhặt (bị nhìn đểu, va chạm nhẹ...) NHƯNG lại dùng bạo lực tàn ác, bất chấp tính mạng.
+    ★ KHÔNG PHẢI CÔN ĐỒ: Nếu có mâu thuẫn từ trước, hoặc nạn nhân có lời lẽ chửi bới, đe dọa, thách thức, hoặc tranh chấp tiền bạc (vd: mâu thuẫn trả tiền quán, nợ nần). Đây là "do mâu thuẫn", KHÔNG áp dụng tình tiết côn đồ.
 
 [NHÓM 2 — TỘI XÂM PHẠM TÀI SẢN]
 • Điều 168 vs Điều 170 vs Điều 171 vs Điều 173:
