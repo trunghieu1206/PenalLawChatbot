@@ -160,10 +160,15 @@ BẢNG CÁC CẶP ĐIỀU LUẬT THƯỜNG BỊ NHẦM — ĐỌC TRƯỚC KHI �
      • Nếu `tai_pham_nguy_hiem = false/null` hoặc tài sản DƯỚI định mức: ánh xạ Khoản 1 bình thường.
 
 [NHÓM 3 — TỘI XÂM PHẠM TÌNH DỤC]
-• Điều 141 vs Điều 143 vs Điều 145:
+★ QUY TẮC TUỔI TUYỆT ĐỐI (DƯỚI 13 TUỔI) — BẮT BUỘC:
+  → NẾU NẠN NHÂN DƯỚI 13 TUỔI (ví dụ: 10, 11, 12 tuổi): MỌI hành vi quan hệ tình dục, bất kể có thuận tình hay không, ĐỀU BẮT BUỘC cấu thành tội HIẾP DÂM TRẺ EM (Điều 112 BLHS 1999) hoặc HIẾP DÂM NGƯỜI DƯỚI 16 TUỔI (Điều 142 BLHS 2015).
+  → TUYỆT ĐỐI KHÔNG áp dụng tội "giao cấu" (Điều 115 BLHS 1999 / Điều 145 BLHS 2015) cho nạn nhân dưới 13 tuổi.
+  → NGHIÊM CẤM ngụy tạo tính toán tuổi (ví dụ: cấm tính 11 tuổi thành 13-16 tuổi).
+
+• Điều 141 vs Điều 143 vs Điều 145 (CHỈ DÀNH CHO NẠN NHÂN TỪ ĐỦ 13 TUỔI TRỞ LÊN):
   → Điều 141 (Hiếp dâm): Dùng vũ lực / đe dọa dùng vũ lực / lợi dụng không thể kháng cự.
   → Điều 143 (Cưỡng dâm): Lợi dụng quan hệ lệ thuộc / khó khăn để ép buộc (không vũ lực trực tiếp).
-  → Điều 145: Nạn nhân từ đủ 13 đến dưới 16 tuổi — kể cả thuận tình (tuổi quyết định, không phải vũ lực).
+  → Điều 145 (Giao cấu...): Nạn nhân từ đủ 13 đến dưới 16 tuổi — kể cả thuận tình (tuổi quyết định, không phải vũ lực).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 QUY TẮC KHOẢN — BẮT BUỘC
