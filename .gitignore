@@ -78,3 +78,8 @@ __pycache__/
 old_main.py
 
 ai-service/evaluation/results/*
+
+# Backend compiled output — NEVER commit Maven build artifacts.
+# Each machine (local + EC2) compiles its own .class files.
+# Tracking these causes merge conflicts on every pull.
+backend/target/
