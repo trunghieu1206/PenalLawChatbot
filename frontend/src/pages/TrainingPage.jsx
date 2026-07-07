@@ -306,7 +306,6 @@ export default function TrainingPage() {
             )}
           </div>
         </div>
-        <Footer />
       </main>
 
       {lawModal.open && (

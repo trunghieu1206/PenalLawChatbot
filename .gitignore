@@ -83,3 +83,5 @@ ai-service/evaluation/results/*
 # Each machine (local + EC2) compiles its own .class files.
 # Tracking these causes merge conflicts on every pull.
 backend/target/
+
+*.doc
