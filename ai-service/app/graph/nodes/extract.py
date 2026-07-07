@@ -36,7 +36,7 @@ Trả về JSON với các trường sau (dùng null nếu không tìm thấy th
   "cong_cu": "công cụ phương tiện",
   "tinh_tiet_tang_nang": ["list tình tiết tăng nặng"],
   "tinh_tiet_giam_nhe": ["list tình tiết giảm nhẹ"],
-  "ngay_pham_toi": "dd/mm/yyyy",
+  "ngay_pham_toi": "dd/mm/yyyy — QUAN TRỌNG: Nếu hành vi phạm tội xảy ra nhiều lần hoặc kéo dài trong một khoảng thời gian, hãy lấy ngày/tháng/năm của LẦN ĐẦU TIÊN xảy ra hành vi. Ví dụ: 'từ tháng 3 đến tháng 6 năm 2017' → trích xuất '01/03/2017'. 'giữa tháng 3 năm 2017' → '15/03/2017'. 'đầu tháng 4 năm 2018' → '01/04/2018'. 'cuối năm 2019' → '01/10/2019'. Chỉ trả về null nếu HOÀN TOÀN không có thông tin về thời gian nào trong văn bản.",
   "ngay_xet_xu": "dd/mm/yyyy nếu có trong mô tả, nếu không để null",
   "loi_pham_toi": "cố ý trực tiếp | cố ý gián tiếp | vô ý quá tự tin | vô ý cẩu thả | null",
   "giai_doan_pham_toi": "hoàn thành | chưa đạt | chuẩn bị | tự ý chấm dứt | null",
@@ -112,6 +112,13 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
         """Validates MUST HAVE fields; writes _missing_fields to state."""
         print("[NODE: clarification_check]")
         facts = state.get("extracted_facts") or {}
+
+        # Normalize the string "null" → Python None so the LLM's literal "null"
+        # output does not bypass the required-field check as a truthy string.
+        for key in list(facts.keys()):
+            if facts[key] == "null" or facts[key] == "":
+                facts[key] = None
+
         missing = [f for f in REQUIRED_FIELDS if not facts.get(f)]
 
         if not missing:

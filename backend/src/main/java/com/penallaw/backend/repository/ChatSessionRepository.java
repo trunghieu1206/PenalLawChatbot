@@ -20,7 +20,7 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
     @Query("SELECT s.user, COUNT(s) FROM ChatSession s WHERE s.user IS NOT NULL GROUP BY s.user")
     List<Object[]> findUserSessionCounts();
 
-    /** Session count grouped by mode (role). Returns [mode, count] pairs.
+    /** Session count grouped by role. Returns [role, count] pairs.
      *  Named groupByMode (not countByMode) to avoid Spring Data's derived-query
      *  parsing treating 'countBy' as a WHERE clause prefix. */
     @Query("SELECT COALESCE(s.mode, 'neutral'), COUNT(s) FROM ChatSession s GROUP BY s.mode")

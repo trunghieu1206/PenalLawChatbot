@@ -28,7 +28,6 @@ public class AiServiceClient {
     /**
      * Single shared WebClient instance built once at startup.
      * WebClient is thread-safe and designed to be reused across requests.
-     * Building it on every call (as before) was wasteful.
      */
     private WebClient client;
 

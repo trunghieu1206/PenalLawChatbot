@@ -35,7 +35,10 @@ public class AuthService {
                 .build();
         userRepository.save(user);
 
+        // convert to UserDetails because Spring Security requires this type of format
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
+
+        // then generate a JWT token
         String token = jwtService.generateToken(userDetails);
         return new AuthDTOs.AuthResponse(token, user.getEmail(), user.getFullName(), user.getRole());
     }

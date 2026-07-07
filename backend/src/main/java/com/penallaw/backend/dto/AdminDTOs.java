@@ -11,6 +11,7 @@ import java.util.UUID;
 public class AdminDTOs {
 
     /** One message in a conversation (for admin feedback view). */
+    // a message of the pooup window when admin wants to view session
     public record MessageSummary(
             UUID id,
             String role,
@@ -23,6 +24,7 @@ public class AdminDTOs {
      * Full feedback record returned to the admin panel.
      * Includes the full conversation context and review status.
      */
+    // full data returned to admin feedback page from BE to FE
     public record FeedbackDetail(
             UUID id,
             @JsonProperty("session_id")   UUID    sessionId,
@@ -37,7 +39,10 @@ public class AdminDTOs {
             List<MessageSummary> conversation
     ) {}
 
-    /** Response after submitting feedback. */
+    /**
+     * Response after submitting feedback.
+     * Or after admin reviews a feedback
+     * */
     public record FeedbackResponse(UUID id, String message) {}
 
     /** Request body for feedback submission. */

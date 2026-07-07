@@ -17,6 +17,8 @@ import java.io.IOException;
 
 @Component
 @RequiredArgsConstructor
+// extends OncePerRequestFilter makes every request must go through this method before
+// touching controllers
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
@@ -35,6 +37,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
+        // get the token
         final String jwt = authHeader.substring(7);
         String userEmail;
         try {
@@ -44,12 +47,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
+        // check:
+        // 1. user email actually retrieved
+        // 2. is this user not authenticated?
+        // no need to continue if one condition fails
         if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             UserDetails userDetails = userDetailsService.loadUserByUsername(userEmail);
             if (jwtService.isTokenValid(jwt, userDetails)) {
+
                 UsernamePasswordAuthenticationToken authToken =
                         new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                 authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                // log the user in
+                // Spring Security uses a central vault "SecurityContextHolder" to keep track of valid users
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             }
         }

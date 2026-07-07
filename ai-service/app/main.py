@@ -149,7 +149,7 @@ _svc = Services(llm=None, retriever=None, milvus_client=None, reranker_fn=None)
 # ===========================================================
 # REQUEST / RESPONSE MODELS
 # ===========================================================
-class RequestBody(BaseModel):
+class RequestBody(BaseModel): # PredictRequest
     case_content: str
     role: Literal["defense", "victim", "neutral"] = "neutral"
     conversation_history: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
@@ -161,7 +161,7 @@ class PredictResponse(BaseModel):
     extracted_facts: Optional[Dict[str, Any]] = None
     mapped_laws: Optional[List[Dict[str, Any]]] = None
     sentencing_data: Optional[Dict[str, Any]] = None
-    retrieved_article_nums: Optional[List[str]] = None  # article numbers from RAG-retrieved docs
+    retrieved_article_nums: Optional[List[str]] = None  # article numbers from RAG-retrieved docs, only used for evaluating metrics in eval_combined
 
 
 class HealthResponse(BaseModel):
