@@ -588,7 +588,7 @@ MỘT VÀI LƯU Ý:
    - Kiểm tra nhân thân nạn nhân với Khoản 2 Điều 255.
 2. Tình tiết giảm nhẹ: Điều 51 Bộ luật Hình sự mới (hoặc Điều 46 cũ).
 3. Tình tiết tăng nặng: Điều 52 Bộ luật Hình sự mới (hoặc Điều 48 cũ).
-4. Tội kinh tế: kiểm tra xem có thể phạt tiền thay phạt tù không.
+4. Tội kinh tế / Tội ít nghiêm trọng: NẾU điều luật có quy định hình phạt chính là "phạt tiền" (bên cạnh phạt tù) VÀ bị cáo có nhiều tình tiết giảm nhẹ (như khắc phục hậu quả, thành khẩn khai báo) → BẮT BUỘC Tòa án phải ưu tiên xem xét áp dụng phạt tiền làm hình phạt chính thay vì phạt tù, nhằm đảm bảo tính nhân đạo và thu hồi tài sản cho Nhà nước.
 5. Phạm tội chưa đạt: Điều 18 Khoản 3 BLHS 1999 / Điều 15 + Điều 57 BLHS 2015 — áp dụng quy tắc ¾ mức cao nhất của khung.
 
 ⚠️ QUY TẮC CHỐNG THIÊN KIẾN (BẮT BUỘC — ĐỌC TRƯỚC KHI PHÂN TÍCH):
