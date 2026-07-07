@@ -32,6 +32,7 @@ def make_retrieve_nodes(llm, retriever, milvus_client, bm25_index, bm25_docs,
         circumstance_instruction = _ROLE_CIRCUMSTANCE_INSTRUCTION.get(
             role, _ROLE_CIRCUMSTANCE_INSTRUCTION["neutral"]
         )
+        sentencing = state.get("sentencing_data") or {}
 
         prompt = f"""Ban la chuyen gia phan tich ho so phap ly hinh su Viet Nam.
 Dua vao noi dung vu an va cac su kien da trich xuat, hay tao 3 cau truy van
@@ -40,8 +41,8 @@ de tim kiem dieu luat phu hop trong co so du lieu phap luat.
 NOI DUNG VU AN (nguon du lieu duy nhat):
 {case_text}
 
-SU KIEN DA TRICH XUAT:
-{json.dumps(facts, ensure_ascii=False, indent=2)}
+SU KIEN DA TRICH XUAT (bao gom ca do tuoi tinh toan):
+{json.dumps({"facts": facts, "sentencing_data": sentencing}, ensure_ascii=False, indent=2)}
 
 QUY TAC BAT BUOC:
 1. CHI su dung thong tin co trong "NOI DUNG VU AN" hoac "SU KIEN DA TRICH XUAT".
@@ -57,12 +58,13 @@ YEU CAU:
   bang phuong tien/cong cu gi, thoi diem/hoan canh, hau qua thuc te xay ra.
 - circumstance_query: {circumstance_instruction}
 - evidence_query: Mo ta tang vat, cong cu pham toi, so luong, trong luong,
-  gia tri tai san cu the co trong vu an. Neu khong co tang vat -> null.
+  gia tri tai san cu direct he co trong vu an. Neu khong co tang vat -> null.
 
 LUU Y QUAN TRONG:
 - chi co circumstance_query la viet dua theo role, behavior_query va evidence_query phai viet khach quan.
-- behavior_query: PHAI giu nguyen cac chi tiet ve y thuc chu quan, dong co, hoac lo so cua nghi pham (vi du: "so nan nhan chet", "muc dich tuoc doat tinh mang").
-- KHONG dua cac so do kich thuoc, trong luong vat ly chi tiet cua hung khi vao behavior_query (phai de danh cho evidence_query de tranh lam nhieu loang semantic search).
+- behavior_query: PHAI giu nguyen cac chi tiet ve y thuc chu quan, dong co, hoac lo so cua nghi pham.
+- KHONG dua cac so do kich thuoc, trong luong vat ly chi tiet cua hung khi vao behavior_query.
+- ⚠️ NEU nan nhan la tre em (victim_age_at_crime < 16 hoac < 13), BAT BUOC phai ghi ro tuoi chinh xac cua nan nhan trong behavior_query va chu dong su dung cac thuat ngu phap ly nhu "hiep dam tre em", "hiep dam nguoi duoi 16 tuoi", "giao cau voi tre em" de cong cu tim kiem bat dung dieu luat dac thu. KHONG chi dung chung chung la "giao cau".
 
 
 TRA VE JSON (null neu khong co thong tin):
