@@ -1090,18 +1090,29 @@ OUTPUT: CHỈ JSON hợp lệ."""
         _full_case    = state.get("full_case_content") or ""
         _per_def      = state.get("per_defendant_dates") or []
         _sentencing   = state.get("sentencing_data") or {}
-        print("  ┌─ [FOLLOWUP] MemorySaver State Dump ─────────────────────────")
-        print(f"  │  question (current turn) : '{question[:80]}'")
-        print(f"  │  user_role               : {role}")
-        print(f"  │  chat_history turns      : {len(full_history)}")
-        print(f"  │  ── Checkpoint-restored fields ──")
-        print(f"  │  full_case_content       : '{_full_case[:80]}...' ({len(_full_case)} chars)")
-        print(f"  │  extracted_facts fields  : {list(_facts.keys()) if _facts else '(empty)'}")
-        print(f"  │  mapped_laws             : {len(mapped_laws)} entries → {[f'Điều {m.get(\"article_number\",\"?\")}' for m in mapped_laws[:5]]}")
-        print(f"  │  documents               : {len(_docs)} docs → {[f'Điều {d.metadata.get(\"article_number\",\"?\")} ({d.metadata.get(\"source\",\"?\")})' for d in _docs[:5]]}")
-        print(f"  │  per_defendant_dates     : {len(_per_def)} defendants")
-        print(f"  │  sentencing_data keys    : {list(_sentencing.keys()) if _sentencing else '(empty)'}")
-        print("  └─────────────────────────────────────────────────────────────")
+        # Pre-compute previews to avoid backslash-in-f-string SyntaxError (Python < 3.12)
+        _laws_preview = [
+            "Dieu " + str(m.get("article_number", "?"))
+            for m in mapped_laws[:5]
+        ]
+        _docs_preview = [
+            "Dieu " + str(d.metadata.get("article_number", "?"))
+            + " (" + str(d.metadata.get("source", "?")) + ")"
+            for d in _docs[:5]
+        ]
+        print("  +- [FOLLOWUP] MemorySaver State Dump ----------------------------")
+        print(f"  |  question (current turn) : '{question[:80]}'")
+        print(f"  |  user_role               : {role}")
+        print(f"  |  chat_history turns      : {len(full_history)}")
+        print( "  |  -- Checkpoint-restored fields --")
+        print(f"  |  full_case_content       : '{_full_case[:80]}...' ({len(_full_case)} chars)")
+        print(f"  |  extracted_facts fields  : {list(_facts.keys()) if _facts else '(empty)'}")
+        print(f"  |  mapped_laws             : {len(mapped_laws)} entries -> {_laws_preview}")
+        print(f"  |  documents               : {len(_docs)} docs -> {_docs_preview}")
+        print(f"  |  per_defendant_dates     : {len(_per_def)} defendants")
+        print(f"  |  sentencing_data keys    : {list(_sentencing.keys()) if _sentencing else '(empty)'}")
+        print( "  +----------------------------------------------------------------")
+
 
         print(f"  [FOLLOWUP] role={role} | history_turns={len(chat_history)} | query='{question[:60]}'")
         print(f"  [FOLLOWUP] restored mapped_laws={len(mapped_laws)} entries")
