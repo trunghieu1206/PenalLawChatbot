@@ -18,11 +18,8 @@ from app.core.config import OUTPUT_FIELDS
 from app.graph.nodes.extract import make_extract_nodes
 from app.graph.nodes.retrieve import make_retrieve_nodes
 from app.graph.nodes.law_mapping import make_map_laws_node
-from app.graph.nodes.generation import (
-    classify_intent,
-    application_mode_router,
-    make_generation_nodes,
-)
+from app.graph.nodes.routing import classify_intent, application_mode_router
+from app.graph.nodes.generation import make_generation_nodes
 
 
 def _make_measure_time():

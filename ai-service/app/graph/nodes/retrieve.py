@@ -288,15 +288,18 @@ OUTPUT: CHI JSON hop le, khong markdown, khong giai thich."""
             art_no = str(d.metadata.get("article_number", ""))
             src    = d.metadata.get("source", "")
 
+            # skip article not in relevant editions
             if src in all_known_editions and src not in relevant_editions:
                 continue
 
+            # get article number using regex
             try:
                 art_num_match = re.search(r"\d+", str(art_no))
                 art_val = int(art_num_match.group(0)) if art_num_match else 9999
             except Exception:
                 art_val = 9999
 
+            # tag documents 
             is_general_part = False
             if "1999" in src and art_val <= 77:
                 is_general_part = True

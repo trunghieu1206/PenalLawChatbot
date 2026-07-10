@@ -1,7 +1,11 @@
 """
 graph/nodes/generation.py — VNPLaw AI Service
 Nodes: generate, answer_verify, practice_evaluate, casual_respond,
-       followup_generate, and the classify_intent router.
+       followup_generate.
+
+Routing functions (classify_intent, application_mode_router) have been
+moved to routing.py. Keyword lists are re-imported here for the
+_looks_like_case helper used inside make_generation_nodes.
 """
 import json
 import time
@@ -23,119 +27,9 @@ from app.utils.dates import _edition_for_date
 from app.utils.clean_json import _extract_json
 from app.utils.text import sanitize_text, _sanitize_msgs, cleanup_response
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# INTENT ROUTER  (pure function — no LLM dependency)
-# ─────────────────────────────────────────────────────────────────────────────
-
-CASUAL_PHRASES = [
-    "xin chào", "chào bạn", "hi", "hello", "hey", "helo", "ola",
-    "bạn là ai", "bạn là gì", "chatbot là gì", "cảm ơn", "thank",
-    "ok bạn", "được rồi", "bye", "tạm biệt", "hẹn gặp",
-]
-
-LEGAL_KEYWORDS = [
-    # Legal acts
-    "điều", "khoản", "bộ luật", "tội", "hình phạt", "hành vi", "án",
-    "phạt", "tù", "phạm tội", "phạm tội", "ngày", "năm", "tháng",
-    # Actors
-    "bị cáo", "bị hại", "nạn nhân", "bị can", "nghi phạm", "thủ phạm",
-    "luật sư", "viện kiểm sát", "tòa án", "công an", "cảnh sát", "thẩm phán",
-    # Criminal acts (Vietnamese)
-    "giết", "đánh", "chém", "bắn", "cướp", "trộm", "lừa đảo", "hiếp",
-    "tống tiền", "bắt cóc", "đốt", "buôn bán", "ma túy", "mua bán",
-    "tàng trữ", "sản xuất", "vận chuyển", "chiếm đoạt", "xâm phạm",
-    "gây thương tích", "tham nhũng", "hối lộ", "trốn thuế", "gian lận",
-    # Legal process
-    "tạm giam", "xét xử", "khởi tố", "điều tra", "truy tố", "kết án",
-    "bắt giữ", "khám xét", "thu giữ", "tang vật", "biên bản",
-    # Sentencing
-    "tình tiết", "giảm nhẹ", "tăng nặng", "án treo", "cải tạo",
-    "chung thân", "tử hình", "bồi thường", "tịch thu",
-    # English fallback
-    "law", "penal", "crime", "criminal", "offense", "sentence",
-]
-
-FOLLOWUP_PHRASES = [
-    "giải thích thêm", "tại sao", "vì sao", "thế còn", "thế nếu",
-    "còn điều", "điều đó có nghĩa", "bạn vừa nói", "ý bạn là",
-    "phân tích thêm", "nói rõ hơn", "chi tiết hơn", "ví dụ",
-    "như vậy thì", "trong trường hợp", "nếu bị cáo", "nếu nạn nhân",
-    "why", "what if", "can you explain", "elaborate", "clarify",
-    "you said", "earlier you", "in that case",
-]
-
-
-def classify_intent(state: AgentState) -> str:
-    """
-    Route messages into one of 3 paths:
-      'casual'   — greeting, chit-chat, off-topic → simple canned response
-      'followup' — elaboration/question about a prior AI response
-      'new_case' — penal law case or legal question → full RAG pipeline
-
-    Practice Mode always routes as 'new_case'.
-    """
-    # Practice Mode bypass
-    if state.get("is_practice_mode"):
-        print("  [INTENT] Practice Mode → new_case (bypass heuristics)")
-        return "new_case"
-
-    history  = state.get("chat_history", []) or []
-    question = state["question"].strip()
-    q_lower  = question.lower()
-
-    # Layer 2a: Greeting / casual fast-path
-    if any(phrase in q_lower for phrase in CASUAL_PHRASES) and len(question) < 80:
-        print(f"  [INTENT] Greeting phrase detected → casual | query='{question[:60]}'")
-        return "casual"
-
-    # Layer 2b: Legal keyword detection
-    has_legal = any(kw in q_lower for kw in LEGAL_KEYWORDS)
-
-    # Layer 2c: No legal keywords and no history → casual
-    if len(question) < 120 and not has_legal and not history:
-        print("  [INTENT] Short + no legal keywords + no history → casual")
-        return "casual"
-
-    # Layer 2d: Long input with legal keywords → new_case
-    if len(question) > 400 and has_legal:
-        print(f"  [INTENT] Long ({len(question)} chars) + legal keywords → new_case")
-        return "new_case"
-
-    # Very long input regardless of keywords
-    if len(question) > 600:
-        print("  [INTENT] Very long input → new_case (no keyword check)")
-        return "new_case"
-
-    # Layer 2e: No history → treat as new case
-    if not history:
-        print("  [INTENT] No history → new_case")
-        return "new_case"
-
-    # Layer 2f: Follow-up phrase fast-path
-    if any(phrase in q_lower for phrase in FOLLOWUP_PHRASES) and history:
-        print(f"  [INTENT] Follow-up phrase detected → followup | query='{question[:60]}'")
-        return "followup"
-
-    # Layer 3: Deterministic fallback
-    if history:
-        intent = "followup"
-        print("  [INTENT] No fast-path matched + has history → followup (default)")
-    else:
-        intent = "new_case"
-        print("  [INTENT] No fast-path matched + no history → new_case (default)")
-
-    print(f"  [INTENT] → {intent} | query='{question[:80]}'")
-    return intent
-
-
-def application_mode_router(state: AgentState) -> str:
-    """Router: after map_laws, decide generate vs practice_evaluate."""
-    if state.get("is_practice_mode"):
-        print("  [ROUTER: application_mode] practice_evaluate")
-        return "practice_evaluate"
-    print("  [ROUTER: application_mode] generate")
-    return "generate"
+# Keyword lists are defined in routing.py; imported here for the
+# _looks_like_case helper used inside make_generation_nodes.
+from app.graph.nodes.routing import CASUAL_PHRASES, LEGAL_KEYWORDS, FOLLOWUP_PHRASES
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -177,8 +71,8 @@ def make_generation_nodes(llm, bm25_index, bm25_docs, retriever, measure_time):
         facts       = state.get("extracted_facts") or {}
         mapped_laws = state.get("mapped_laws") or []
         documents   = state.get("documents") or []
-        history     = state.get("chat_history") or []
         case_details = state.get("full_case_content", state.get("question", ""))
+
 
         # ── Build context text from temporally-tagged documents ───────────────
         primary_docs    = [d for d in documents if d.metadata.get("_temporal_role") == "primary"]
@@ -667,14 +561,12 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
 
         prompt = ChatPromptTemplate.from_template(prompt_template)
 
-        # Change history messages into List[BaseMessage]
-        history_msgs = []
-        if history:
-            for msg in history[-8:]:
-                if msg.get("role") == "user":
-                    history_msgs.append(HumanMessage(content=sanitize_text(msg.get("content", ""))))
-                else:
-                    history_msgs.append(AIMessage(content=sanitize_text(msg.get("content", ""))))
+        # NOTE: history is intentionally NOT injected here.
+        # generate_node is only reachable via the new_case branch
+        # (START → extract_facts → ... → map_laws → generate).
+        # Injecting chat_history from a prior case would contaminate
+        # the fresh analysis with irrelevant messages.
+        # History-aware responses are handled solely by followup_generate_node.
 
         try:
             fmt_kwargs = dict(
@@ -688,7 +580,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
             if role == "neutral":
                 fmt_kwargs["judge_charge_block"] = judge_charge_block
             formatted_prompt = prompt.format_messages(**fmt_kwargs)
-            final_messages = history_msgs + formatted_prompt
+            final_messages = formatted_prompt
             response = llm.invoke(_sanitize_msgs(final_messages)).content
         except Exception as e:
             return {"messages": [AIMessage(content=f"Lỗi xử lý: {e}")]}
