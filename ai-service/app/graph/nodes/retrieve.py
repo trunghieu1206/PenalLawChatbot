@@ -114,7 +114,8 @@ OUTPUT: CHI JSON hop le, khong markdown, khong giai thich."""
         queries       = state.get("retrieval_queries") or [state["question"]]
         role          = state.get("user_role", "neutral")
         facts         = state.get("extracted_facts") or {}
-        per_defendant = state.get("per_defendant_dates") or []
+        single = _edition_for_date(facts.get("ngay_pham_toi", ""))
+        crime_editions = [single] if single else []
         seen_ids: set = set()
         all_docs: List[Document] = []
 
@@ -185,16 +186,6 @@ OUTPUT: CHI JSON hop le, khong markdown, khong giai thich."""
 
         # ----------------------------------------------
 
-        if per_defendant:
-            crime_editions = [
-                _edition_for_date(d.get("ngay_pham_toi", ""))
-                for d in per_defendant
-            ]
-            crime_editions = [e for e in crime_editions if e]
-        else:
-            single = _edition_for_date(facts.get("ngay_pham_toi", ""))
-            crime_editions = [single] if single else []
-
         pinned_purposes = _PINNED_PURPOSES.get(role, _PINNED_PURPOSES["neutral"])
         has_exclusion_indicators = bool(
             (state.get("extracted_facts") or {}).get("co_dau_hieu_loai_tru_tnhs")
@@ -254,18 +245,8 @@ OUTPUT: CHI JSON hop le, khong markdown, khong giai thich."""
         facts = state.get("extracted_facts") or {}
         trial_edition = _edition_for_date(facts.get("ngay_xet_xu", ""))
 
-        per_defendant = state.get("per_defendant_dates") or []
-        if per_defendant:
-            updated_per_defendant = []
-            for d_info in per_defendant:
-                edition = _edition_for_date(d_info.get("ngay_pham_toi", "")) or ""
-                updated_per_defendant.append({**d_info, "crime_edition": edition})
-            crime_editions = {d["crime_edition"] for d in updated_per_defendant if d["crime_edition"]}
-            per_defendant  = updated_per_defendant
-            print(f"  [TEMPORAL] Multi-defendant mode: editions={crime_editions}")
-        else:
-            single = _edition_for_date(facts.get("ngay_pham_toi", ""))
-            crime_editions = {single} if single else set()
+        single = _edition_for_date(facts.get("ngay_pham_toi", ""))
+        crime_editions = {single} if single else set()
 
         if not crime_editions:
             print("  [TEMPORAL] Cannot determine any crime edition -- passing all docs")
@@ -299,7 +280,7 @@ OUTPUT: CHI JSON hop le, khong markdown, khong giai thich."""
             except Exception:
                 art_val = 9999
 
-            # tag documents 
+            # tag documents
             is_general_part = False
             if "1999" in src and art_val <= 77:
                 is_general_part = True
@@ -313,10 +294,6 @@ OUTPUT: CHI JSON hop le, khong markdown, khong giai thich."""
                 always.append(d)
             elif src in crime_editions:
                 d.metadata["_temporal_role"] = "primary"
-                d.metadata["_primary_for"] = [
-                    di["name"] for di in per_defendant
-                    if di.get("crime_edition") == src
-                ] or ["all"]
                 tagged.append(d)
             elif needs_comparison and src == trial_edition:
                 d.metadata["_temporal_role"] = "comparison"
@@ -347,7 +324,8 @@ OUTPUT: CHI JSON hop le, khong markdown, khong giai thich."""
             f"adjustment={len(always)} "
             f"(sem:{stats['adjustment']['sem']} bm25:{stats['adjustment']['bm25']} pin:{stats['adjustment']['pin']})"
         )
-        return {"documents": result, "per_defendant_dates": per_defendant}
+        return {"documents": result}
+
 
     @measure_time('rerank')
     def rerank_node(state: AgentState) -> dict:

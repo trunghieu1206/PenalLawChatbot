@@ -55,16 +55,7 @@ Trả về JSON với các trường sau (dùng null nếu không tìm thấy th
   "tang_vat_loai": "loại tang vật",
   "tang_vat_so_luong": "số lượng / khối lượng",
   "dia_danh": "tỉnh / thành phố nơi xảy ra vụ án (ví dụ: 'Hà Nội', 'Bình Thuận', 'TP. Hồ Chí Minh') — chỉ tên tỉnh/thành, null nếu không có",
-  "per_defendant_dates": [
-    {"name": "tên bị cáo", "ngay_pham_toi": "dd/mm/yyyy"}
-  ]
 }
-
-QUY TẮc TRÍCH XUẤT per_defendant_dates:
-- Chỉ điền nếu is_multi_defendant = true VÀ mỗi bị cáo có ngày phạm tội riêng trong mô tả.
-- Nếu một bị cáo không có ngày riêng → dùng ngày chung từ "ngay_pham_toi".
-- Nếu chỉ có một bị cáo hoặc không xác định được → để null (không phải []).
-- CHỈ trích xuất thông tin CÓ TRONG mô tả. TUYỆT ĐỐI KHÔNG bọa đặt thông tin.
 
 LƯỤ Ý: Trích xuất "ngay_xet_xu" nếu có trong mô tả (ví dụ: ngày tòa xét xử, ngày phiên tòa).
 Nếu không tìm thấy, trả về null — hệ thống sẽ tự động dùng ngày hiện tại.
@@ -91,10 +82,6 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
         else:
             print(f"  ngay_xet_xu extracted from input: {facts['ngay_xet_xu']}")
 
-        per_defendant = facts.pop("per_defendant_dates", None) or None
-        if per_defendant and not isinstance(per_defendant, list):
-            per_defendant = None
-
         sentencing_data = extract_sentencing_data(facts)
         print("  ┌─── Extracted Facts (JSON) ───────────────────────────────────────")
         for k, v in facts.items():
@@ -102,9 +89,8 @@ OUTPUT: CHỈ xuất JSON hợp lệ, không markdown, không giải thích."""
         print(f"  └─── Sentencing data: {json.dumps(sentencing_data, ensure_ascii=False)}")
 
         return {
-            "extracted_facts":     facts,
-            "sentencing_data":     sentencing_data,
-            "per_defendant_dates": per_defendant,
+            "extracted_facts": facts,
+            "sentencing_data": sentencing_data,
         }
 
     @measure_time('clarification_check')

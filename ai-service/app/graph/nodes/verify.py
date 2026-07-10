@@ -6,7 +6,7 @@ These are module-level pure functions — no LLM calls, no side effects.
 
 
 import re
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 from langchain_core.documents import Document
 
@@ -44,28 +44,18 @@ def _verify_temporal_validity(
     text: str,
     crime_date: str,
     documents: List[Document],
-    per_defendant_dates: Optional[List[dict]] = None,
 ) -> List[str]:
-    """L1-B: Return 'Di\u1ec1u X (WrongEdition)' where wrong BLHS edition is cited.
+    """L1-B: Return 'Điều X (WrongEdition)' where wrong BLHS edition is cited.
 
-    KEY DESIGN DECISIONS:
-    1. We SKIP documents whose _temporal_role is 'comparison' or 'adjustment'
-       because those are intentionally fetched for retroactivity analysis or
-       general sentencing mechanics — citing them is legal.
-    2. For multi-defendant cases, we collect ALL valid crime editions from
-       per_defendant_dates so defendants across BLHS boundaries do not trigger
-       false positives.
+    KEY DESIGN DECISION:
+    We SKIP documents whose _temporal_role is 'comparison' or 'adjustment'
+    because those are intentionally fetched for retroactivity analysis or
+    general sentencing mechanics — citing them is legal.
     """
     valid_editions: set = set()
-    if per_defendant_dates:
-        for d_info in per_defendant_dates:
-            ed = _edition_for_date(d_info.get("ngay_pham_toi", ""))
-            if ed:
-                valid_editions.add(ed)
-    if not valid_editions:
-        ed = _edition_for_date(crime_date)
-        if ed:
-            valid_editions.add(ed)
+    ed = _edition_for_date(crime_date)
+    if ed:
+        valid_editions.add(ed)
     if not valid_editions:
         return []
 

@@ -21,6 +21,5 @@ class AgentState(TypedDict):
     sentencing_data:     Optional[Dict[str, Any]]
     chat_history:        Optional[List[Dict[str, Any]]]
     _missing_fields:     Optional[List[str]]         # set by clarification_check_node
-    per_defendant_dates: Optional[List[Dict[str, str]]]  # multi-defendant support
     is_practice_mode:    Optional[bool]              # True when invoked from /practice/evaluate
     user_analysis:       Optional[str]               # user's written legal analysis (practice mode only)

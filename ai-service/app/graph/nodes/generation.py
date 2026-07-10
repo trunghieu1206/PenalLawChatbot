@@ -642,10 +642,7 @@ CẤU TRÚC OUTPUT BẮT BUỘC:
             print("  [VERIFY L1-A] ✅ All cited articles verified.")
 
         # L1-B: Temporal validity check
-        per_defendant = state.get("per_defendant_dates") or None
-        wrong_edition = _verify_temporal_validity(
-            ai_text, crime_date, documents, per_defendant_dates=per_defendant
-        )
+        wrong_edition = _verify_temporal_validity(ai_text, crime_date, documents)
         if wrong_edition:
             correct = _edition_for_date(crime_date) or "không xác định"
             issues.append(
@@ -1088,7 +1085,6 @@ OUTPUT: CHỈ JSON hợp lệ."""
         _facts        = state.get("extracted_facts") or {}
         _docs         = state.get("documents") or []
         _full_case    = state.get("full_case_content") or ""
-        _per_def      = state.get("per_defendant_dates") or []
         _sentencing   = state.get("sentencing_data") or {}
         # Pre-compute previews to avoid backslash-in-f-string SyntaxError (Python < 3.12)
         _laws_preview = [
@@ -1109,13 +1105,13 @@ OUTPUT: CHỈ JSON hợp lệ."""
         print(f"  |  extracted_facts fields  : {list(_facts.keys()) if _facts else '(empty)'}")
         print(f"  |  mapped_laws             : {len(mapped_laws)} entries -> {_laws_preview}")
         print(f"  |  documents               : {len(_docs)} docs -> {_docs_preview}")
-        print(f"  |  per_defendant_dates     : {len(_per_def)} defendants")
         print(f"  |  sentencing_data keys    : {list(_sentencing.keys()) if _sentencing else '(empty)'}")
         print( "  +----------------------------------------------------------------")
 
 
         print(f"  [FOLLOWUP] role={role} | history_turns={len(chat_history)} | query='{question[:60]}'")
         print(f"  [FOLLOWUP] restored mapped_laws={len(mapped_laws)} entries")
+
 
 
         # Find original case message from history

@@ -425,7 +425,6 @@ async def predict_judgment(req: RequestBody):
             "mapped_laws":         None,
             "sentencing_data":     None,
             "_missing_fields":     None,
-            "per_defendant_dates": None,
             "chat_history":        req.conversation_history,
             "is_practice_mode":    False,
             "user_analysis":       None,
@@ -542,7 +541,6 @@ async def practice_evaluate(req: PracticeEvalRequest):
         "mapped_laws":         None,
         "sentencing_data":     None,
         "_missing_fields":     None,
-        "per_defendant_dates": None,
         "chat_history":        [],
     }
 
