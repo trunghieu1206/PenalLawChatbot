@@ -138,6 +138,7 @@ from app.services.embeddings import JinaEmbeddings, MilvusRetriever
 from app.services.reranker import load_reranker, make_rerank_scorer
 from app.services.container import Services
 from app.graph.builder import build_graph
+from app.graph.nodes.routing import LEGAL_KEYWORDS
 
 # Load Environment Variables
 load_dotenv()
@@ -434,20 +435,35 @@ async def predict_judgment(req: RequestBody):
         # Follow-up — only pass what changes; checkpoint restores the rest.
         # documents, mapped_laws, extracted_facts,
         # sentencing_data, per_defendant_dates → all from Turn 1 checkpoint.
-        # full_case_content is included because if classify_intent routes to
-        # new_case (e.g. user re-submits corrected case after clarification),
-        # extract_facts must use the NEW text, not the stale checkpoint value.
+        #
+        # full_case_content is conditionally overwritten:
+        #   • Only if the input looks like a new/corrected case submission
+        #     (e.g. user re-sends the full case after a clarification prompt).
+        #   • For short follow-up questions we omit it so MemorySaver restores
+        #     the original Turn 1 case text from the checkpoint.
+        _text          = sanitize_text(req.case_content)
+        _looks_new_case = (
+            len(_text) > 300
+            or any(kw in _text.lower() for kw in LEGAL_KEYWORDS)
+        )
         inputs = {
-            "question":            sanitize_text(req.case_content),
-            "full_case_content":   sanitize_text(req.case_content),
-            "messages":            [HumanMessage(content=sanitize_text(req.case_content))],
+            "question":            _text,
+            "messages":            [HumanMessage(content=_text)],
             "user_role":           req.role,
             "_missing_fields":     None,
             "chat_history":        req.conversation_history,
             "is_practice_mode":    False,
             "user_analysis":       None,
         }
-        print(f"[PREDICT] Follow-up — minimal inputs (checkpoint restores state) | session_id={req.session_id}")
+        if _looks_new_case:
+            # Overwrite full_case_content so extract_facts uses the fresh text,
+            # not a stale value from a previous clarification attempt.
+            inputs["full_case_content"] = _text
+        print(
+            f"[PREDICT] Follow-up — minimal inputs (checkpoint restores state) "
+            f"| overwrite_case={'yes' if _looks_new_case else 'no'} "
+            f"| session_id={req.session_id}"
+        )
 
     # Build LangGraph config with thread_id for checkpointing.
     # If no session_id provided, generate a unique one (single-turn, no checkpoint reuse).

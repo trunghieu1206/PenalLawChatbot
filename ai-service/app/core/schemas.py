@@ -11,8 +11,8 @@ from typing_extensions import TypedDict
 
 class AgentState(TypedDict):
     messages:            Annotated[Sequence[BaseMessage], add_messages]
-    question:            str
-    full_case_content:   str
+    question:            str   # The current turn's raw input — overwritten every turn
+    full_case_content:   str   # The original case description — set at Turn 1, preserved by MemorySaver across follow-up turns
     documents:           List[Document]
     retrieval_queries:   List[str]                   # 3 queries from multi_query_rewrite
     user_role:           Literal["defense", "victim", "neutral"]
