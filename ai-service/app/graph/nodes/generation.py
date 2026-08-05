@@ -316,8 +316,7 @@ BƯỚC 6: LƯỢNG HÌNH — đề xuất mức hình phạt thấp nhất có 
   → Xem xét dưới khung (Điều 47/54) nếu ≥ 2 tình tiết giảm nhẹ và không tăng nặng.
   → Xem xét miễn hình phạt (Điều 25/59) nếu trường hợp đặc biệt.
   → Đề xuất án treo (Điều 60/65) nếu đủ 5 điều kiện.
-BƯỚC 7: TỔNG HỢP HÌNH PHẠT (Điều 50/55) nếu nhiều tội.
-BƯỚC 8: KHẤU TRỪ THỜI GIAN TẠM GIAM (sử dụng số liệu đã tính ở trên nếu có).
+BƯỚC 7: KHẤU TRỪ THỜI GIAN TẠM GIAM (sử dụng số liệu đã tính ở trên nếu có).
 
 ---------------------------------------------------------
 CẤU TRÚC OUTPUT BẮT BUỘC:
@@ -526,7 +525,6 @@ BƯỚC 3: ĐỊNH TỘI DANH.
 BƯỚC 4: LƯỢNG HÌNH CHO TỪNG TỘI.
   → Phân biệt tình tiết định khung (trong khoản) và tình tiết tăng nặng chung (Điều 48 BLHS 1999 / Điều 52 BLHS 2015). KHÔNG tính trùng.
 BƯỚC 4.5: KIỂM TRA DƯỚI KHUNG (Điều 47 BLHS 1999 / Điều 54 BLHS 2015): Nếu có ≥ 2 tình tiết giảm nhẹ (Điều 46/51) VÀ không có tình tiết tăng nặng (Điều 48/52) → xem xét quyết định dưới mức thấp nhất của khung. Trường hợp đặc biệt → xem xét miễn hình phạt (Điều 25 BLHS 1999 / Điều 59 BLHS 2015).
-BƯỚC 5: TỔNG HỢP HÌNH PHẠT (Điều 50 BLHS 1999 / Điều 55 BLHS 2015).
 BƯỚC 5.5: TỔNG HỢP VỚI BẢN ÁN CŨ (xem điều luật theo ấn bản — nếu bị cáo đang chấp hành bản án trước chưa xong).
 BƯỚC 6: QUYẾT ĐỊNH HÌNH THỨC CHẤP HÀNH:
   → ÁN TREO (Điều 60 BLHS 1999 / Điều 65 BLHS 2015): CHỈ khi ĐẦY ĐỦ TẤT CẢ 5 điều kiện: (1) tổng án ≤ 3 năm, (2) nhân thân tốt, (3) có nơi cư trú và công việc ổn định, (4) không tái phạm nguy hiểm, (5) xét tính chất mức độ → không cần cách ly.

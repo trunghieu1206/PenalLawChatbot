@@ -52,19 +52,18 @@ NGHIÊM CẤM truy xuất bất kỳ số điều nào từ kiến thức nội 
 Nếu tài liệu cung cấp không chứa điều luật phù hợp, chỉ ánh xạ đến những gì có trong tài liệu và ghi rõ hạn chế này trong applicable_reason.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-BƯỚC 0 — PHÂN TÍCH Ý ĐỊNH CHỦ QUAN — BẮT BUỘC TRƯỚC KHI ÁNH XẠ
+CÁC BƯỚC ÁNH XẠ:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-⚠️ NGUYÊN TẮC NỀN TẢNG: Tội danh (điều luật áp dụng) được xác định bởi Ý ĐỊNH của bị cáo,
-KHÔNG phải kết quả thực tế. Kết quả thực tế (tỷ lệ thương tích, số tiền thiệt hại, nạn nhân
-có chết hay không...) CHỈ ảnh hưởng đến:
+Kết quả thực tế (tỷ lệ thương tích, số tiền thiệt hại, nạn nhân
+có chết hay không...) ảnh hưởng đến:
   (a) Khoản áp dụng trong điều luật đã xác định (Khoản 1 / 2 / 3), HOẶC
   (b) Giai đoạn phạm tội (hoàn thành / chưa đạt / chuẩn bị — áp dụng Điều 15, 57 BLHS).
-NGHIÊM CẤM dùng kết quả thực tế là CĂN CỨ CHÍNH để xác định tội danh.
 
-QUY TRÌNH BẮT BUỘC (thực hiện tuần tự trước khi viết JSON):
 
-Bước 0.1 — XÁC ĐỊNH Ý ĐỊNH (Intent):
+QUY TRÌNH BẮT BUỘC ĐỂ SUY LUẬN (thực hiện tuần tự trước khi viết JSON):
+
+Bước 1 — XÁC ĐỊNH Ý ĐỊNH (Intent):
   Bị cáo muốn đạt được điều gì thông qua hành vi? Trả lời một trong các loại sau:
   - Tước đoạt tính mạng nạn nhân?
   - Gây thương tích / đau đớn (không nhất thiết muốn chết)?
@@ -73,7 +72,7 @@ Bước 0.1 — XÁC ĐỊNH Ý ĐỊNH (Intent):
   - Vi phạm quy tắc/quy định (không có chủ đích gây hại)?
   Nếu ý định KHÔNG được nêu rõ trong hồ sơ → chuyển sang Bước 0.2.
 
-Bước 0.2 — SUY LUẬN Ý ĐỊNH TỪ HÀNH VI KHÁCH QUAN (khi ý định không nêu rõ):
+Bước 2 — SUY LUẬN Ý ĐỊNH TỪ HÀNH VI KHÁCH QUAN (khi ý định không nêu rõ):
   Đặt câu hỏi: "Tại THỜI ĐIỂM THỰC HIỆN HÀNH VI, bị cáo có BIẾT hành vi này có thể gây chết người không?"
   Nếu CÓ → ý định là giết người (dù cố ý trực tiếp hay gián tiếp).
 
@@ -114,7 +113,7 @@ Bước 0.2 — SUY LUẬN Ý ĐỊNH TỪ HÀNH VI KHÁCH QUAN (khi ý định 
   - Nhận tài sản hợp pháp, sau đó mới bỏ trốn/gian dối/tiêu xài hết
     → SUY LUẬN: Lạm dụng tín nhiệm chiếm đoạt tài sản (Điều 175).
 
-Bước 0.3 — XÁC ĐỊNH GIAI ĐOẠN PHẠM TỘI (tách biệt hoàn toàn khỏi loại tội):
+Bước 3 — XÁC ĐỊNH GIAI ĐOẠN PHẠM TỘI (tách biệt hoàn toàn khỏi loại tội):
   - Ý định: giết người → nạn nhân SỐNG
     → Tội GIẾT NGƯỜI chưa đạt. Áp dụng Điều 123 + Điều 15 + Điều 57 khoản 3.
     ★ TUYỆT ĐỐI KHÔNG hạ xuống Điều 134 chỉ vì nạn nhân sống sót.
@@ -124,7 +123,7 @@ Bước 0.3 — XÁC ĐỊNH GIAI ĐOẠN PHẠM TỘI (tách biệt hoàn toàn
   - Ý định: gây thương tích → nạn nhân bị thương thực tế
     → Hoàn thành. Chọn khoản theo % thương tích trong Điều 134.
 
-Bước 0.4 — CHỈ SAU KHI ĐÃ XÁC ĐỊNH Ý ĐỊNH VÀ GIAI ĐOẠN, mới đọc % thương tích / số
+Bước 4 — CHỈ SAU KHI ĐÃ XÁC ĐỊNH Ý ĐỊNH VÀ GIAI ĐOẠN, mới đọc % thương tích / số
   tiền thiệt hại để chọn khoản trong điều luật đã xác định.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
