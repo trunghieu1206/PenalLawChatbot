@@ -4,11 +4,15 @@ import com.penallaw.backend.dto.ChatDTOs;
 import com.penallaw.backend.service.ChatService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 
@@ -77,5 +81,36 @@ public class ChatController {
     ) {
         chatService.deleteSession(sessionId);
         return ResponseEntity.ok(new ChatDTOs.DeleteSessionResponse(sessionId, "Session deleted"));
+    }
+
+    // ── CSV EXPORT ───────────────────────────────────────────────
+
+    /**
+     * Download the full conversation log as a UTF-8 CSV file.
+     * Accessible without authentication — gated by the unguessable session UUID,
+     * consistent with the other per-session endpoints (send / get messages, delete).
+     *
+     * GET /api/chat/sessions/{sessionId}/export.csv
+     */
+    @GetMapping("/sessions/{sessionId}/export.csv")
+    public ResponseEntity<byte[]> exportSessionCsv(
+            @PathVariable UUID sessionId
+    ) {
+        byte[] csvBytes = chatService.exportSessionAsCsv(sessionId);
+
+        // Build a safe ASCII filename from the session ID prefix;
+        // the Content-Disposition header below carries the user-visible name.
+        String filename = "session-" + sessionId.toString().substring(0, 8) + ".csv";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(new MediaType("text", "csv", StandardCharsets.UTF_8));
+        headers.setContentDisposition(
+                ContentDisposition.attachment().filename(filename, StandardCharsets.UTF_8).build()
+        );
+        headers.setContentLength(csvBytes.length);
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(csvBytes);
     }
 }

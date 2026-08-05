@@ -12,17 +12,17 @@ tmux new -s deploy
 
 # upload scripts + .env template + DB backup ───────────────────────
 # Run these from your LOCAL machine (inside PenalLawChatbot/ directory):
-scp -P 2423 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@n3.ckey.vn:/root/
-scp -P 2423 .env.example root@n3.ckey.vn:/root/.env.example
+scp -P 1501 scripts/setup_server.sh scripts/deploy.sh scripts/deploy_nodocker.sh scripts/backup_database.sh scripts/restore_database.sh root@n3.ckey.vn:/root/
+scp -P 1501 .env.example root@n3.ckey.vn:/root/.env.example
 
 # ── ON SERVER: Run the base setup first ──────────────────────────────────────
 chmod +x setup_server.sh deploy_nodocker.sh restore_database.sh
 bash setup_server.sh
 
 # Create directories on the server first (scp cannot create them automatically)
-ssh -p 2423 root@n3.ckey.vn "mkdir -p ~/PenalLawChatbot/database/backups ~/PenalLawChatbot/ai-service/scraped_datasets"
+ssh -p 1501 root@n3.ckey.vn "mkdir -p ~/PenalLawChatbot/database/backups ~/PenalLawChatbot/ai-service/scraped_datasets"
 
-scp -P 2423 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260505_150435.sql \
+scp -P 1501 ~/Desktop/Projects/PenalLawChatbot/database/backups/penallaw_backup_20260704_105955.sql \
     root@n3.ckey.vn:~/PenalLawChatbot/database/backups/
 
 # ── ON SERVER: Finish deployment ─────────────────────────────────────────────
@@ -32,11 +32,11 @@ bash deploy_nodocker.sh
 
 ## upload results back to server (if server was restarted/reset)
 # Run from LOCAL machine:
-scp -P 2423 -r \
-  ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/results/* \
+scp -P 1501 -r \
+  ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/results/new_combined_* \
   root@n3.ckey.vn:~/PenalLawChatbot/ai-service/evaluation/results/
 
-scp -P 2423 \
+scp -P 1501 \
   ~/Desktop/Projects/PenalLawChatbot/ai-service/logs/eval_*.txt \
   root@n3.ckey.vn:~/PenalLawChatbot/ai-service/logs/
 
@@ -121,29 +121,25 @@ python3 ai-service/evaluation/eval_rubric_victim.py \
 ## Step 3 — download ALL results to local machine
 ## Run these from your LOCAL machine (inside ~/Desktop/Projects/PenalLawChatbot/)
 
-# Download result JSONs and JSONL files
-scp -P 2319 -r \
-  'root@n3.ckey.vn:~/PenalLawChatbot/ai-service/evaluation/results/' \
-  ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/
+# Download result JSONs and JSONL files (new_combined_* files only)
+scp -P 1501 \
+  'root@n3.ckey.vn:~/PenalLawChatbot/ai-service/evaluation/results/new_combined_*' \
+  ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/results/
 
-# Download log .txt files
-scp -P 2319 \
-  'root@n3.ckey.vn:~/PenalLawChatbot/ai-service/logs/eval_*.txt' \
-  ~/Desktop/Projects/PenalLawChatbot/ai-service/logs/
+# Download eval log .txt file (saved inside evaluation/logs/ on server)
+scp -P 1501 \
+  'root@n3.ckey.vn:~/PenalLawChatbot/ai-service/evaluation/logs/eval_1_100.txt' \
+  ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/logs/
 
-## (alt server — if using 74.81.39.6:10000 instead of n3.ckey.vn:1927)
-scp -P 10000 -r \
-  'root@74.81.39.6:~/PenalLawChatbot/ai-service/evaluation/results/' \
-  ~/Desktop/Projects/PenalLawChatbot/ai-service/evaluation/
-
-scp -P 10000 \
-  'root@74.81.39.6:~/PenalLawChatbot/ai-service/logs/eval_*.txt' \
-  ~/Desktop/Projects/PenalLawChatbot/ai-service/logs/
-
-## Step 4 — resume an interrupted eval (e.g. primary_recall crashed at case 200)
-python3 ai-service/evaluation/eval_primary_recall.py \
-  --resume \
-  --log-file ai-service/logs/eval_primary_recall.txt
+## Step 4 — resume an interrupted eval (run ON SERVER inside evaluation/ dir)
+cd ~/PenalLawChatbot/ai-service/evaluation
+python3 eval_combined_hallucination_recall_role_adherence.py \
+    --start 1 \
+    --end 100 \
+    --resume \
+    --ai-url http://localhost:8000 \
+    --timeout 600 \
+    --log-file logs/eval_1_100.txt
 
 # Logs
 [INFO]  Logs:

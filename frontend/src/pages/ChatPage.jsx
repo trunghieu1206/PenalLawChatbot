@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import Topbar from '../components/Topbar.jsx';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { chatApi, lawsApi } from '../services/api.js';
 import MessageBubble from '../components/MessageBubble.jsx';
@@ -10,8 +9,7 @@ import Sidebar from '../components/Sidebar.jsx';
 import styles from './ChatPage.module.css';
 
 export default function ChatPage() {
-  const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   const [sessions, setSessions] = useState([]);
   const [currentSession, setCurrentSession] = useState(null);
@@ -37,12 +35,27 @@ export default function ChatPage() {
   const [pendingContent, setPendingContent] = useState('');
   // showRoleLockPopup: brief tooltip shown when user clicks locked role button
   const [showRoleLockPopup, setShowRoleLockPopup] = useState(false);
+  // showDownloadMenu: controls the TXT / CSV dropdown
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
 
   // In-memory message cache per session
   const [sessionMessages, setSessionMessages] = useState({});
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+  const downloadMenuRef = useRef(null);
+
+  // Close download menu when clicking outside of it
+  useEffect(() => {
+    if (!showDownloadMenu) return;
+    const handleClickOutside = (e) => {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target)) {
+        setShowDownloadMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showDownloadMenu]);
 
   // Always read role from the active session — never stale
   const activeRole = currentSession?.mode || role;
@@ -217,6 +230,7 @@ export default function ChatPage() {
   /** Export the current conversation to a .txt file. */
   const handleDownload = () => {
     if (!messages.length) return;
+    setShowDownloadMenu(false);
     const title = currentSession?.title || 'Phiên hội thoại';
     const lines = messages.map(m => {
       const speaker = m.role === 'user' ? 'Người dùng' : `Trợ lý (${roleLabel})`;
@@ -229,6 +243,28 @@ export default function ChatPage() {
     a.download = `${title.replace(/[^a-z0-9\u00C0-\u024F\s]/gi, '').trim() || 'phien-tu-van'}.txt`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  /** Export the current conversation to a .csv file via the backend endpoint. */
+  const handleDownloadCsv = async () => {
+    if (!currentSession || !messages.length) return;
+    setShowDownloadMenu(false);
+    try {
+      const blob = await chatApi.exportCsv(currentSession.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const safeTitle = (currentSession.title || 'phien-tu-van')
+        .replace(/[^a-z0-9\u00C0-\u024F\s]/gi, '')
+        .trim()
+        .replace(/\s+/g, '-')
+        || 'phien-tu-van';
+      a.download = `${safeTitle}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError('Không thể xuất CSV. Vui lòng thử lại.');
+    }
   };
 
   /**
@@ -269,9 +305,6 @@ export default function ChatPage() {
     }
   };
 
-  const userInitials = user?.fullName
-    ? user.fullName.split(' ').slice(0, 2).map(part => part[0]).join('')
-    : user?.email?.[0]?.toUpperCase() || 'G';
 
     return (
       <div className="bg-background text-on-background font-body-md text-body-md h-full min-h-screen flex overflow-hidden">
@@ -307,7 +340,7 @@ export default function ChatPage() {
                     >
                       <div className="flex justify-between items-start mb-1">
                         <span className={`font-label-sm text-[12px] ${isActive ? 'text-primary' : 'text-on-surface-variant'}`}>
-                          {new Date(s.createdAt).toLocaleDateString('vi-VN')}
+                          {new Date(s.createdAt).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
                         </span>
                         <span 
                           onClick={(e) => handleDeleteSession(e, s.id)}
@@ -325,7 +358,7 @@ export default function ChatPage() {
 
             {/* Main Chat Area */}
             <section className="flex-1 flex flex-col bg-surface relative min-w-0">
-              <div className="px-8 py-3 border-b border-surface-variant bg-surface-container-lowest flex-shrink-0">
+              <div className="px-8 py-3 border-b border-surface-variant bg-surface-container-lowest flex-shrink-0 relative z-10">
                 <div className="max-w-3xl mx-auto flex items-center justify-between">
                   <div className="flex flex-col">
                     <h2 className="text-lg font-bold text-on-surface truncate max-w-sm mb-0.5">
@@ -333,7 +366,7 @@ export default function ChatPage() {
                     </h2>
                     <div className="flex items-center gap-1 text-xs text-on-surface-variant">
                       <span className="material-symbols-outlined text-[14px]">calendar_today</span>
-                      <span>Ngày: {(currentSession?.createdAt ? new Date(currentSession.createdAt) : new Date()).toLocaleDateString('vi-VN')}</span>
+                      <span>Ngày: {(currentSession?.createdAt ? new Date(currentSession.createdAt) : new Date()).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 relative">
@@ -347,9 +380,37 @@ export default function ChatPage() {
                         Vai trò đã bị khóa cho phiên này.
                       </div>
                     )}
-                    <button onClick={handleDownload} disabled={!messages.length} className="text-primary hover:bg-surface-container p-2 rounded transition-colors border border-transparent hover:border-surface-variant disabled:opacity-40 disabled:cursor-not-allowed" title="Tải xuống cuộc trò chuyện">
-                      <span className="material-symbols-outlined">download</span>
-                    </button>
+                    {/* Download dropdown */}
+                    <div className="relative" ref={downloadMenuRef}>
+                      <button
+                        onClick={() => setShowDownloadMenu(prev => !prev)}
+                        disabled={!messages.length}
+                        className="text-primary hover:bg-surface-container p-2 rounded transition-colors border border-transparent hover:border-surface-variant disabled:opacity-40 disabled:cursor-not-allowed"
+                        title="Tải xuống cuộc trò chuyện"
+                      >
+                        <span className="material-symbols-outlined">download</span>
+                      </button>
+                      {showDownloadMenu && (
+                        <div
+                          className="absolute right-0 top-full mt-1 bg-surface-container-highest border border-surface-variant rounded shadow-lg z-50 overflow-hidden min-w-[140px]"
+                        >
+                          <button
+                            onClick={handleDownload}
+                            className="w-full text-left flex items-center gap-2 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-high transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">description</span>
+                            Tải file TXT
+                          </button>
+                          <button
+                            onClick={handleDownloadCsv}
+                            className="w-full text-left flex items-center gap-2 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-high transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">table_chart</span>
+                            Tải file CSV
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -389,7 +450,8 @@ export default function ChatPage() {
 
               <div className="p-3 bg-surface-container-lowest border-t border-surface-variant flex-shrink-0">
                 <div className="max-w-3xl mx-auto relative flex items-center bg-surface border border-surface-variant rounded-full pr-12 pl-4 focus-within:ring-1 focus-within:border-primary-container shadow-sm">
-                  <button className="text-outline hover:text-primary-container transition-colors mr-2">
+                  {/* TODO: file attachment not yet implemented */}
+                  <button className="text-outline transition-colors mr-2 opacity-40 cursor-not-allowed" disabled title="Đính kèm tài liệu (chưa hỗ trợ)">
                     <span className="material-symbols-outlined text-[20px]">attach_file</span>
                   </button>
                   <textarea

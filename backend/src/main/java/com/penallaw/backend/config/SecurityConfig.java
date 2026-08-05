@@ -48,9 +48,11 @@ public class SecurityConfig {
                                 "/api/chat/guest/**",            // anonymous guest sessions
                                 "/api/chat/sessions/*/messages", // send & get messages (session-id gated)
                                 "/api/chat/sessions/*",          // delete session (session-id gated)
+                                "/api/chat/sessions/*/export.csv", // CSV export (session-id gated)
                                 "/api/laws/**",                  // law reference sidebar — public read
                                 "/api/home",                     // public system statistics
                                 "/api/home/track-visit",         // unique daily visitor tracking (public)
+                                "/api/training/evaluate",        // Study Mode — open to guests & logged-in users
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()

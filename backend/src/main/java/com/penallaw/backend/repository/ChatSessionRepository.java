@@ -3,7 +3,6 @@ package com.penallaw.backend.repository;
 import com.penallaw.backend.entity.ChatSession;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -21,7 +20,13 @@ public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> 
     @Query("SELECT s.user, COUNT(s) FROM ChatSession s WHERE s.user IS NOT NULL GROUP BY s.user")
     List<Object[]> findUserSessionCounts();
 
-    /** Session count per registered user since a given timestamp (used for \"today\" counts). */
-    @Query("SELECT s.user, COUNT(s) FROM ChatSession s WHERE s.user IS NOT NULL AND s.createdAt >= :startOfDay GROUP BY s.user")
-    List<Object[]> findUserSessionCountsToday(@Param("startOfDay") LocalDateTime startOfDay);
+    /** Session count grouped by role. Returns [role, count] pairs.
+     *  Named groupByMode (not countByMode) to avoid Spring Data's derived-query
+     *  parsing treating 'countBy' as a WHERE clause prefix. */
+    @Query("SELECT COALESCE(s.mode, 'neutral'), COUNT(s) FROM ChatSession s GROUP BY s.mode")
+    List<Object[]> groupByMode();
+
+    /** Count distinct sessions that have at least one assistant message with extracted facts. */
+    @Query("SELECT COUNT(DISTINCT m.session.id) FROM ChatMessage m WHERE m.role = 'assistant' AND m.extractedFacts IS NOT NULL")
+    long countDistinctSessionsWithFacts();
 }

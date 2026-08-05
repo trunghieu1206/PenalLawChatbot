@@ -58,16 +58,18 @@ public class JwtService {
         return extractClaim(token, Claims::getExpiration);
     }
 
+    // generic method to extract information from a JWT token
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
         final Claims claims = extractAllClaims(token);
         return claimsResolver.apply(claims);
     }
 
+    // core decryption engine
     private Claims extractAllClaims(String token) {
-        return Jwts.parser()
-                .verifyWith(getSigningKey())
+        return Jwts.parser() // set up parser
+                .verifyWith(getSigningKey()) // get the server secret password and check the signature of the incoming token
                 .build()
-                .parseSignedClaims(token)
-                .getPayload();
+                .parseSignedClaims(token) // build token
+                .getPayload(); // return the data
     }
 }

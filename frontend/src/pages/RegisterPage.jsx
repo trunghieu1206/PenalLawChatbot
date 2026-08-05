@@ -48,9 +48,11 @@ export default function RegisterPage() {
         ← Quay lại
       </button>
       <div className={`${styles.container} animate-fade-in`}>
-        <div className={styles.logo}>
-          <h1 className={styles.logoText}>VNPLaw</h1>
-          <p className={styles.logoSub}>Tạo tài khoản mới</p>
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 rounded-2xl bg-primary text-on-primary flex items-center justify-center font-bold text-3xl mx-auto mb-4 shadow-sm">
+            V
+          </div>
+          <h1 className="text-2xl font-bold text-on-surface tracking-tight mb-1">VNPLaw</h1>
         </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>

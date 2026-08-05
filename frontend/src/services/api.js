@@ -72,13 +72,12 @@ export const chatApi = {
   },
 
   // Send a message within an existing session
-  // Backend SendMessageRequest expects: { content, role, rebuttal_against }
+  // Backend SendMessageRequest expects: { content, role }
   // NOTE: 'content' is @NotBlank — must not be empty or missing!
-  sendMessage: (sessionId, content, role = 'neutral', rebuttalAgainst = null) =>
+  sendMessage: (sessionId, content, role = 'neutral') =>
     apiClient.post(`/chat/sessions/${sessionId}/messages`, {
       content,                              // ← must be 'content', NOT 'caseContent'
       role,
-      rebuttal_against: rebuttalAgainst,   // ← must match @JsonProperty("rebuttal_against")
     }).then(r => r.data),
 
   // Load message history for a session
@@ -88,6 +87,13 @@ export const chatApi = {
   // Delete a session
   deleteSession: (sessionId) =>
     apiClient.delete(`/chat/sessions/${sessionId}`).then(r => r.data),
+
+  // Download the full conversation as a CSV file.
+  // Returns a Blob — caller is responsible for creating the download link.
+  exportCsv: (sessionId) =>
+    apiClient.get(`/chat/sessions/${sessionId}/export.csv`, {
+      responseType: 'blob',
+    }).then(r => r.data),
 };
 
 // ---- LAWS API ----
@@ -182,16 +188,10 @@ export const trackVisitApi = {
   },
 };
 
-export default apiClient;
-
-// ---- AI SERVICE DIRECT CLIENT (proxied via /ai-api/) ----
-const aiServiceClient = axios.create({
-  baseURL: '/ai-api',
-  headers: { 'Content-Type': 'application/json' },
-  timeout: 660000, // 660s (11 min) — CPU LLM inference can take 5-10 min
-});
-
 // ---- PRACTICE MODE API ----
+// NOTE: Previously called /ai-api/practice/evaluate directly (bypassing backend,
+// no auth). Now correctly routed through the authenticated Spring Boot backend
+// at /api/training/evaluate so JWT validation and rate limiting apply.
 export const practiceApi = {
   /**
    * Evaluate user's legal analysis.
@@ -200,7 +200,7 @@ export const practiceApi = {
    * @param {string} userAnalysis - The user's written analysis
    */
   evaluate: (caseDescription, mode, userAnalysis) =>
-    aiServiceClient.post('/practice/evaluate', {
+    apiClient.post('/training/evaluate', {
       case_description: caseDescription,
       user_mode: mode,
       user_analysis: userAnalysis,

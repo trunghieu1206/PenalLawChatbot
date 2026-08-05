@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar.jsx';
-import { useNavigate } from 'react-router-dom';
+import Topbar from '../components/Topbar.jsx';
 import { adminApi } from '../services/api.js';
 import styles from './AdminPage.module.css';
 
 const ROLE_LABEL = { neutral: 'Thẩm phán', defense: 'Luật sư Bào chữa', victim: 'Luật sư Bị hại' };
 
 export default function AdminPage() {
-  const navigate = useNavigate();
   const [feedback, setFeedback] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
@@ -37,7 +36,9 @@ export default function AdminPage() {
       .catch(e => { setError('Không thể tải phản hồi. ' + (e.message || '')); setLoading(false); });
   }, []);
 
-  // Lazy-load user stats when that tab is first opened
+  // Lazy-load user stats when that tab is first opened.
+  // All three variables are listed in deps; userStats.length and loadingUsers guard
+  // against double-fetch when the tab is re-selected after data is already loaded.
   useEffect(() => {
     if (activeTab === 'users' && userStats.length === 0 && !loadingUsers) {
       setLoadingUsers(true);
@@ -45,7 +46,7 @@ export default function AdminPage() {
         .then(data => { setUserStats(data); setLoadingUsers(false); })
         .catch(() => setLoadingUsers(false));
     }
-  }, [activeTab]);
+  }, [activeTab, userStats.length, loadingUsers]);
 
   useEffect(() => {
     if (!selectedId && feedback.length > 0) {
@@ -90,23 +91,19 @@ export default function AdminPage() {
       <Sidebar activeTab="admin" />
 
       <main className="ml-64 flex-1 flex flex-col h-screen bg-surface overflow-y-auto pt-16">
-        <header className="bg-white/80 backdrop-blur-md fixed top-0 right-0 w-[calc(100%-16rem)] z-40 border-b border-surface-variant flex justify-between items-center h-16 px-8 transition-all duration-300">
-                <div className="flex items-center gap-6">
-                  <span className="text-lg font-black text-slate-900 font-h3">VNPLaw</span>
-                </div>
-              </header>
+        <Topbar />
 
         <div className={styles.content}>
           <div className={styles.pageHeader}>
             {activeTab === 'feedback' ? (
               <>
                 <h1>Quản lý phản hồi</h1>
-                <p>Xem xét và quản lý phản hồi của người dùng về tính chính xác của câu trả lời AI để cải thiện độ chính xác của hệ thống.</p>
+                <p>Xem xét và quản lý phản hồi của người dùng về tính chính xác của câu trả lời AI để cải thiện độ chính xác của Chatbot.</p>
               </>
             ) : (
               <>
                 <h1>Thống kê người dùng</h1>
-                <p>Theo dõi số lượng vụ án được tạo bởi từng người dùng và mức độ sử dụng hệ thống trong ngày.</p>
+                <p>Quản lý và theo dõi thông tin tài khoản người dùng tham gia trên hệ thống.</p>
               </>
             )}
           </div>
@@ -142,7 +139,6 @@ export default function AdminPage() {
                   <select>
                     <option>Mới nhất</option>
                     <option>Cũ nhất</option>
-                    <option>Trạng thái</option>
                   </select>
                 </div>
                 <div className={styles.toolbarActions}>
@@ -301,8 +297,7 @@ export default function AdminPage() {
           {activeTab === 'users' && (
             <div className={styles.userStatsPanel}>
               <div className={styles.userStatsHeader}>
-                <h2>Thống kê vụ án theo người dùng</h2>
-                <p>Giới hạn: Khách <strong>3 vụ/ngày</strong> • Đăng nhập <strong>5 vụ/ngày</strong> • Admin <strong>không giới hạn</strong></p>
+                <h2>Danh sách người dùng</h2>
               </div>
               {loadingUsers ? (
                 <div className={styles.loadingState}><span className="loader" /> Đang tải...</div>
@@ -316,15 +311,11 @@ export default function AdminPage() {
                         <th>Người dùng</th>
                         <th>Email</th>
                         <th>Vai trò</th>
-                        <th>Hôm nay</th>
                         <th>Tổng vụ án</th>
                       </tr>
                     </thead>
                     <tbody>
                       {userStats.map(u => {
-                        const limit = u.role === 'admin' ? null : 5;
-                        const pct   = limit ? Math.min((u.cases_today / limit) * 100, 100) : 0;
-                        const atLimit = limit && u.cases_today >= limit;
                         return (
                           <tr key={u.user_id}>
                             <td>
@@ -338,23 +329,6 @@ export default function AdminPage() {
                               <span className={`${styles.rolePill} ${u.role === 'admin' ? styles.rolePillAdmin : styles.rolePillUser}`}>
                                 {u.role === 'admin' ? 'Quản trị viên' : 'Người dùng'}
                               </span>
-                            </td>
-                            <td>
-                              {limit ? (
-                                <div className={styles.usageWrap}>
-                                  <div className={styles.usageBar}>
-                                    <div
-                                      className={`${styles.usageFill} ${atLimit ? styles.usageFillFull : ''}`}
-                                      style={{ width: `${pct}%` }}
-                                    />
-                                  </div>
-                                  <span className={atLimit ? styles.usageLimitReached : ''}>
-                                    {u.cases_today}&nbsp;/&nbsp;{limit}
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className={styles.unlimitedBadge}>{u.cases_today} ∞</span>
-                              )}
                             </td>
                             <td className={styles.totalCell}>{u.total_cases}</td>
                           </tr>

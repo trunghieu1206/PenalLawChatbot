@@ -1,484 +1,534 @@
-# VNPLaw — Vietnamese Penal Law Chatbot
+# ⚖️ VNPLaw Chatbot
 
-Hệ thống tư vấn pháp lý hình sự thông minh dựa trên AI, RAG, và LangGraph.
+> An AI-powered legal assistant for the Vietnamese Penal Code, built on a multi-agent Retrieval-Augmented Generation (RAG) pipeline.
+
+PenalLawChatbot is a full-stack intelligent chatbot that helps users consult and understand Vietnamese criminal law. Given a user's question or case description, the system retrieves the most relevant legal articles from a pre-built vector database, applies cross-encoder reranking, performs temporal validity filtering, and then uses an LLM to generate a precise, source-cited legal response. An admin panel provides session management, visitor statistics, and user management.
 
 ---
 
-## Architecture
+## ✨ Key Features
+
+- **Multi-query RAG pipeline** — Rewrites the user query into multiple search variants for broader recall, then deduplicates and reranks results.
+- **Temporal filtering** — Automatically tags articles by effective date and prioritises the most legally current version.
+- **LoRA fine-tuned embedding** — A custom Jina Embedding V5 Text Nano model fine-tuned on ~4 k Vietnamese legal case question pairs for domain-specific retrieval.
+- **BM25 hybrid retrieval** — Combines dense vector search with sparse keyword search (BM25) for more robust results.
+- **LangGraph agentic flow** — Nodes for fact extraction, clarification, law mapping, retrieval, reranking, generation, and answer verification are orchestrated as a stateful graph.
+- **JWT authentication** — Secure user registration, login, and role-based access (user / admin).
+- **Admin dashboard** — Visitor tracking, chat session viewer, and user management.
+
+---
+
+## 🏗️ System Architecture
 
 ```
-React Frontend (Vite + React Router)
-       ↓  REST API via nginx proxy (/api, /ai-api)
-Spring Boot Backend (JWT Auth, Chat Sessions, History, Admin)
-       ↓  Internal HTTP (WebFlux WebClient)
-Python FastAPI AI Service (RAG + LangGraph + Gemini 2.5 Flash)
-       ↓
-Milvus Lite (local .db, semantic vector search)  +  PostgreSQL (relational data)
-       ↓
-OpenRouter API → google/gemini-2.5-flash
+User Browser
+    │  HTTP :80
+    ▼
+ Nginx (reverse proxy)
+    ├── /api/*     → Spring Boot Backend  :8080  (Auth, Sessions, Stats)
+    └── /ai-api/*  → FastAPI AI Service   :8000  (LangGraph RAG pipeline)
+                            │
+                   ┌────────┴────────┐
+                   │                 │
+           Milvus Lite DB       PostgreSQL
+          (VN_law_lora.db)    (Users, Sessions,
+          Vector search         Laws, Logs)
 ```
 
 ---
 
-## Features
-
-**Part A — Core Case-Resolution**
-- Analyzes criminal cases from three legal perspectives: Judge (Thẩm phán), Defense Lawyer for the accused (Luật sư Bào chữa), Defense Lawyer for the victim (Luật sư Bị hại)
-- Returns structured legal reasoning: applicable articles (Bộ luật Hình sự), key facts, role-specific argument direction
-- Law sidebar: click any cited article to read the full text from PostgreSQL, with automatic version selection based on crime date
-- Practice Mode: submit your own legal analysis and get an AI score (0–100) with detailed structured feedback
-
-**Part B — Administration & Quality Monitoring**
-- Dashboard with aggregate statistics: total sessions, case count, breakdown by role and province
-- Unique daily visitor tracking via client-side UUID (localStorage) + DB-level deduplication
-- Users submit Correct/Incorrect feedback on AI responses with optional comment
-- Admin can view all feedback with full conversation context and update review status
-- Per-user case statistics for admin monitoring
-
-**Core Infrastructure**
-- Optional authentication — chat as guest or register for persistent history
-- Guest sessions identified by browser-generated `guestId` (localStorage)
-- Authenticated sessions saved to PostgreSQL (accessible from any device)
-- JWT-based security via Spring Security
-
----
-
-## Technology Stack
+## 🛠️ Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React 19, Vite 6, React Router v7, React Markdown, Axios, CSS Modules |
-| Backend | Java 21, Spring Boot 3.4.5, Spring Security (JWT, jjwt 0.12.6), Spring Data JPA, WebFlux (WebClient), Spring Cache, PostgreSQL |
-| AI Service | Python 3.10+, FastAPI 0.111, Uvicorn 0.30, LangGraph, LangChain, langchain-openai |
-| Embedding | `trunghieu1206/jina-embeddings-v5-text-nano-retrieval-vn-legal-lora-2026-04-28-19-05` (LoRA fine-tuned Jina v5 Nano, via PEFT + SentenceTransformers) |
-| Reranker | `BAAI/bge-reranker-v2-m3` — multilingual cross-encoder, 8192-token context |
-| LLM | `google/gemini-2.5-flash` via OpenRouter (1M token context, temp=0) |
-| Vector DB | Milvus Lite (local `.db` file — no separate server required) |
-| Relational DB | PostgreSQL 16 |
-| Serving | nginx (static frontend + reverse proxy for `/api` and `/ai-api`) |
-| Deployment | Bare-metal (Ubuntu 22.04) via `deploy_nodocker.sh` |
+| **AI Service** | Python 3.11, FastAPI, LangGraph, LangChain, PyTorch |
+| **Embedding** | `trunghieu1206/jina-embeddings-v5-text-nano-retrieval-vn-legal-lora` (768-dim, LoRA fine-tuned) |
+| **Reranker** | `BAAI/bge-reranker-v2-m3` (multilingual cross-encoder) |
+| **LLM** | `google/gemini-2.5-flash` via OpenRouter API |
+| **Vector DB** | Milvus Lite (local `.db` file, `pymilvus 2.4.x`) |
+| **BM25** | `rank-bm25` (hybrid keyword retrieval) |
+| **Backend API** | Java 21, Spring Boot 3.4, Spring Security, JWT (jjwt 0.12.6), Bucket4j rate limiting |
+| **Database** | PostgreSQL, Hibernate/JPA, Lombok |
+| **Frontend** | React 19, Vite 6, Tailwind CSS 3, React Router 7, React Markdown |
+| **Web Server** | Nginx (static SPA + reverse proxy) |
+| **Deployment** | AWS EC2 Ubuntu 24.04, bare-metal (no Docker) |
 
 ---
 
-## Project Structure
+## 📁 Repository Structure
 
 ```
 PenalLawChatbot/
-├── ai-service/
+├── ai-service/          # Python FastAPI + LangGraph RAG pipeline
 │   ├── app/
-│   │   └── main.py                # LangGraph pipeline: fact extraction, law mapping,
-│   │                               # sentencing calculation, rebuttal, practice eval
-│   ├── scripts/                   # Data ingestion, embedding, dataset analysis
-│   ├── VN_law_lora.db             # Pre-built Milvus Lite vector DB
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   └── .env.example
-├── backend/
-│   └── src/main/java/com/penallaw/backend/
-│       ├── controller/            # AuthController, ChatController, LawController,
-│       │                           # StatsController, AdminController
-│       ├── service/               # AuthService, ChatService, AdminService,
-│       │                           # VisitorTrackingService
-│       ├── entity/                # User, ChatSession, ChatMessage, Law,
-│       │                           # Feedback, DailyVisit, SiteStats
-│       ├── repository/            # JPA repositories
-│       ├── security/              # JwtService, JwtAuthenticationFilter
-│       ├── config/                # SecurityConfig, CacheConfig
-│       ├── client/                # AiServiceClient (WebFlux WebClient)
-│       ├── converter/             # JsonListConverter (JPA attribute converter)
-│       ├── dto/                   # AuthDTOs, ChatDTOs, AdminDTOs, LawDTOs
-│       └── exception/             # GlobalExceptionHandler
-├── frontend/
+│   │   ├── graph/
+│   │   │   ├── builder.py          # LangGraph graph assembly
+│   │   │   └── nodes/              # extract, retrieve, law_mapping, generation, verify
+│   │   ├── services/               # embedding, reranking, BM25
+│   │   └── main.py                 # FastAPI app + lifespan startup
+│   └── requirements.txt
+├── backend/             # Java Spring Boot REST API
+│   └── src/main/java/com/penallaw/
+├── frontend/            # React + Vite SPA
 │   └── src/
-│       ├── pages/                 # ChatPage, TrainingPage, LoginPage,
-│       │                           # RegisterPage, AdminPage, StatsPage
-│       ├── components/            # UI components (RoleSelector, MessageBubble, etc.)
-│       ├── services/
-│       │   └── api.js             # Axios client: authApi, chatApi, lawsApi,
-│       │                           # adminApi, practiceApi, trackVisitApi
-│       └── hooks/
-│           └── useAuth.jsx        # Auth context + JWT management
 ├── database/
-│   └── migrations/                # SQL migration scripts
-├── scripts/
-│   ├── setup_server.sh            # Initial server setup (Ubuntu 22.04)
-│   ├── deploy_nodocker.sh         # Bare-metal full deployment (all services)
-│   ├── restore_database.sh        # PostgreSQL restore from backup
-│   ├── backup_database.sh         # PostgreSQL backup
-│   ├── check_db_status.sh         # Database health check
-│   └── merge_backups.py           # Merge partial backup files
-├── docs/                          # Tutorials, troubleshooting guides
-├── docker-compose.yml
-└── .env.example
+│   └── backups/         # PostgreSQL .sql backup files (gitignored)
+└── scripts/
+    ├── setup_server.sh       # One-time server environment setup
+    ├── restore_database.sh   # Restore PostgreSQL from backup
+    └── deploy_nodocker.sh    # Build & launch all 4 services
 ```
 
 ---
 
-## Environment Variables
+## 🚀 Installation Guide
 
-Copy `.env.example` to `.env` on the server and fill in exactly two values:
-
-```bash
-cp .env.example .env
-```
-
-| Variable | Default | Required | Description |
-|----------|---------|----------|-------------|
-| `OPENROUTER_API_KEY` | — | Yes | API key from openrouter.ai |
-| `HF_TOKEN` | — | Yes | HuggingFace token (to download LoRA adapter) |
-| `JWT_SECRET` | (pre-filled) | Yes | Secret for signing JWTs |
-| `POSTGRES_DB` | `penallaw` | No | PostgreSQL database name |
-| `POSTGRES_USER` | `postgres` | No | PostgreSQL username |
-| `POSTGRES_PASSWORD` | `postgres` | No | PostgreSQL password |
-
-AI Service config (`COLLECTION_NAME`, `LLM_MODEL`, `TOP_K`, `FORCE_CPU`, `EMBEDDING_ADAPTER`) is set directly in `ai-service/app/main.py` — no `.env` override needed unless you want to change models.
+This guide describes the complete steps to deploy on an **AWS EC2 Ubuntu 24.04** server **without Docker**.
 
 ---
 
-## Deployment (Bare-Metal, No Docker)
+## Table of Contents
 
-The production deployment runs four services directly on the host (Ubuntu 22.04):
+1. [System Requirements](#1-system-requirements)
+2. [Pre-Installation Checklist](#2-pre-installation-checklist)
+3. [Connecting to the EC2 Instance](#3-connecting-to-the-ec2-instance)
+4. [Step 1 — Install Server Environment](#4-step-1--install-server-environment)
+5. [Step 2 — Upload Required Data Files](#5-step-2--upload-required-data-files)
+6. [Step 3 — Configure Environment Variables (.env)](#6-step-3--configure-environment-variables-env)
+7. [Step 4 — Restore the Database](#7-step-4--restore-the-database)
+8. [Step 5 — Deploy All Services](#8-step-5--deploy-all-services)
+9. [Post-Deployment Health Checks](#9-post-deployment-health-checks)
+10. [Troubleshooting Common Errors](#10-troubleshooting-common-errors)
+11. [Restarting Individual Services](#11-restarting-individual-services)
 
-| Service | Port | Process |
-|---------|------|---------|
-| PostgreSQL | 5432 | `pg_ctlcluster` |
-| AI Service | 8000 | `uvicorn` (Python 3.10) |
-| Spring Boot Backend | 8080 | `java -jar` (Java 21) |
-| Frontend | 80 | `nginx` (static files) |
+---
 
-**First-time setup:**
+## 1. System Specifications
+
+| Component        | Specifications                                       |
+|------------------|------------------------------------------------------|
+| **OS**           | Ubuntu 24.04 LTS (64-bit)                            |
+| **RAM**          | 8 GB                                                 |
+| **Storage**      | 20 GB                                                |
+| **CPU**          | 2 vCPU or more                                       |
+| **Open Ports**   | `22` (SSH), `80` (HTTP), `443` (HTTPS, optional)     |
+| **Access Level** | Root (`sudo`) or `ubuntu` user with sudo privileges  |
+
+> **Note:** The system runs on CPU-only (no GPU required). A GPU will significantly speed up AI inference if available.
+
+---
+
+## 2. Pre-Installation Checklist
+
+Prepare the following information and resources **before you start**:
+
+### 2.1. API Keys
+- **`OPENROUTER_API_KEY`** — Get it at [openrouter.ai](https://openrouter.ai)
+- **`HF_TOKEN`** — Get it at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) *(required to download the private LoRA embedding model)*
+
+### 2.2. Files to Upload to the Server
+| File | Description | Target Path on Server |
+|------|-------------|------------------------|
+| `penallaw_backup_*.sql` | PostgreSQL database backup | `/root/PenalLawChatbot/database/backups/` |
+| `VN_law_lora.db` | Pre-embedded Milvus vector database | `/root/PenalLawChatbot/ai-service/` |
+| `chatbot-key.pem` | EC2 SSH key pair | On your local machine |
+
+### 2.3. AWS Security Group Configuration
+In the AWS Console, open the Security Group for your instance and add the following **Inbound Rules**:
+
+| Type  | Protocol | Port | Source    |
+|-------|----------|------|-----------|
+| SSH   | TCP      | 22   | Your IP   |
+| HTTP  | TCP      | 80   | 0.0.0.0/0 |
+
+---
+
+## 3. Connecting to the EC2 Instance
+
+From your local machine terminal, connect via SSH:
+
 ```bash
-# 1. Provision the server (installs Java 21, Python 3.10, Node.js 20, nginx, PostgreSQL)
+# Set correct permissions on the PEM file (only needed once)
+chmod 400 chatbot-key.pem
+
+# Connect to the server
+ssh -i chatbot-key.pem ubuntu@<EC2_PUBLIC_IP>
+
+# Switch to root
+sudo su -
+```
+
+> Replace `<EC2_PUBLIC_IP>` with the public IP address of your EC2 instance.
+
+---
+
+## 4. Step 1 — Install Server Environment
+
+The `setup_server.sh` script automatically installs the entire required environment. It is safe to run multiple times — every step checks whether it is already installed before proceeding.
+
+**What this script does:**
+- Installs core system packages: `git`, `curl`, `nginx`, `build-essential`
+- Installs **Python 3.11** (automatically handles cases where the default Python version is incompatible)
+- Installs **Node.js 20 LTS**, **Java 21 JDK**, and **Maven**
+- Installs **PostgreSQL**
+- Clones the `PenalLawChatbot` repository from GitHub (`dev` branch)
+- Installs **PyTorch** (GPU-enabled if a GPU is detected; CPU-only otherwise)
+- Installs all Python dependencies from `ai-service/requirements.txt`
+- Pre-downloads both AI models to local cache (prevents timeout on first startup):
+  - `BAAI/bge-reranker-v2-m3`
+  - `trunghieu1206/jina-embeddings-v5-text-nano-retrieval-vn-legal-lora-2026-04-28-19-05`
+
+**Run the script:**
+
+```bash
+# On the server (as root) — download and run directly
+curl -fsSL https://raw.githubusercontent.com/trunghieu1206/PenalLawChatbot/dev/scripts/setup_server.sh -o setup_server.sh
+chmod +x setup_server.sh
+bash setup_server.sh
+```
+
+Or, if the repository has already been cloned:
+
+```bash
+cd /root/PenalLawChatbot
 bash scripts/setup_server.sh
+```
 
-# 2. Restore the database backup
+> ⏳ This script takes approximately **5–15 minutes** depending on the server's internet speed (primarily due to downloading PyTorch and the AI models).
+
+**Log file is saved to:** `/root/penallaw_setup.log`
+
+---
+
+## 5. Step 2 — Upload Required Data Files
+
+Run the following commands **from your local machine** (not on the server):
+
+### 5.1. Upload the Database Backup
+
+```bash
+# Create the backup directory on the server first
+ssh -i chatbot-key.pem ubuntu@<EC2_PUBLIC_IP> \
+    "sudo mkdir -p /root/PenalLawChatbot/database/backups"
+
+# Upload the PostgreSQL backup file
+scp -i chatbot-key.pem \
+    ./database/backups/penallaw_backup_*.sql \
+    ubuntu@<EC2_PUBLIC_IP>:/tmp/
+
+# Move it to the correct directory (on the server)
+ssh -i chatbot-key.pem ubuntu@<EC2_PUBLIC_IP> \
+    "sudo mv /tmp/penallaw_backup_*.sql /root/PenalLawChatbot/database/backups/"
+```
+
+### 5.2. Upload the Vector Database (Milvus)
+
+The `VN_law_lora.db` file contains all pre-embedded legal articles using the LoRA fine-tuned model.
+
+```bash
+scp -i chatbot-key.pem \
+    ./ai-service/VN_law_lora.db \
+    ubuntu@<EC2_PUBLIC_IP>:/tmp/
+
+ssh -i chatbot-key.pem ubuntu@<EC2_PUBLIC_IP> \
+    "sudo mkdir -p /root/PenalLawChatbot/ai-service && \
+     sudo mv /tmp/VN_law_lora.db /root/PenalLawChatbot/ai-service/"
+```
+
+> ⏳ Uploading `VN_law_lora.db` may take several minutes depending on the file size and your network bandwidth.
+
+---
+
+## 6. Step 3 — Configure Environment Variables (.env)
+
+On the server, create the `.env` file from the provided template:
+
+```bash
+cd /root/PenalLawChatbot
+
+# Copy the template
+cp .env.example .env
+
+# Edit the file
+nano .env
+```
+
+Fill in the **required** values:
+
+```env
+# ---- REQUIRED — must be filled in ----
+OPENROUTER_API_KEY=sk-or-xxxxxxxxxxxxxxxxxxxx
+HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# ---- Pre-filled — do not change ----
+JWT_SECRET=j1WQjbYqkjImzp0etlJQRgI4alxtRxGTgAJalevJKKDAuuHFm2gbPNXcRxMzYNQ1nUJd6hYNVPkScjrEZr0aGA==
+POSTGRES_DB=penallaw
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+```
+
+Save the file: `Ctrl+X` → `Y` → `Enter`
+
+> **Important:** `OPENROUTER_API_KEY` and `HF_TOKEN` are **mandatory**. The deployment script will error out and stop if either is missing.
+
+---
+
+## 7. Step 4 — Restore the Database
+
+The `restore_database.sh` script will automatically:
+- Start PostgreSQL if it is not already running
+- Find the latest backup file in `database/backups/`
+- Drop and recreate the `penallaw` database
+- Import all data from the `.sql` file
+- Report record counts after restoration (laws, visitor_logs, chat_sessions)
+
+```bash
+cd /root/PenalLawChatbot
 bash scripts/restore_database.sh
-
-# 3. Deploy all services
-bash scripts/deploy_nodocker.sh
 ```
 
-**Re-deploy after code changes:**
+If the database already contains data, the script will prompt for confirmation:
+```
+Type 'yes' to continue, or Ctrl+C to cancel:
+yes
+```
+
+**A successful restore looks like this:**
+```
+✅  Database Ready!
+
+  Database : penallaw
+  Source   : penallaw_backup_20260628_031720.sql
+  Tables   : 6
+  Laws     : 1247 articles
+  Visitors : 352 rows
+  Sessions : 89 rows
+```
+
+---
+
+## 8. Step 5 — Deploy All Services
+
+The `deploy_nodocker.sh` script starts **4 services** in the correct order:
+
+| Service | Port | Description |
+|---------|------|-------------|
+| **PostgreSQL** | 5432 | Relational database |
+| **AI Service** (FastAPI/uvicorn) | 8000 | AI processing, LangGraph, RAG pipeline |
+| **Backend** (Spring Boot) | 8080 | REST API, JWT authentication |
+| **Frontend** (nginx) | 80 | React SPA + reverse proxy |
+
 ```bash
+cd /root/PenalLawChatbot
 bash scripts/deploy_nodocker.sh
 ```
 
-The deploy script is idempotent — it skips `npm install` / `mvn build` / PostgreSQL startup if nothing has changed.
+**What this script does automatically:**
+1. Verifies and installs any missing tools (Java, Maven, Node.js)
+2. Pulls the latest code from the `dev` branch
+3. Reads `.env` and validates all required keys
+4. Starts PostgreSQL and auto-restores from backup if the database is empty
+5. Checks for `VN_law_lora.db` and warns if it is missing
+6. Installs Python dependencies (skips packages already installed)
+7. Enforces the correct `pymilvus 2.4.x` version (version `3.x` is incompatible)
+8. Builds the Spring Boot backend with Maven (skipped if source is unchanged)
+9. Builds the React frontend with `npm run build` (skipped if source is unchanged)
+10. Configures and starts nginx with reverse proxy rules
+11. Waits and performs health checks on each service (up to 300 seconds)
 
-**Process persistence (prevent services stopping when SSH closes):**
+> ⏳ **First run:** Takes approximately **5–10 minutes** for the Maven build and model loading.
+> ⚡ **Subsequent runs:** Takes only **1–2 minutes** since build steps are skipped when source is unchanged.
+
+**View live logs:**
 ```bash
-# Use tmux to keep processes running after disconnect
-tmux new -s deploy
-bash scripts/deploy_nodocker.sh
-# Press Ctrl+B then D to detach. Services stay running.
+tail -f /var/log/penallaw/ai-service.log   # AI Service
+tail -f /var/log/penallaw/backend.log      # Spring Boot Backend
+tail -f /var/log/penallaw/postgres.log     # PostgreSQL
+tail -f /var/log/nginx/error.log           # nginx
 ```
 
-**Log locations:**
+---
+
+## 9. Post-Deployment Health Checks
+
+### 9.1. Check via Browser
+
+Open your browser and navigate to:
+
 ```
-/var/log/penallaw/ai-service.log
-/var/log/penallaw/backend.log
-/var/log/nginx/error.log
+http://<EC2_PUBLIC_IP>
 ```
 
-**Manual restart commands:**
+You should see the VNPLaw Chatbot login interface.
+
+### 9.2. Manual Health Check Commands
+
 ```bash
 # AI Service
-pkill -f uvicorn; cd /root/PenalLawChatbot/ai-service && \
-  nohup /usr/bin/python3.10 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 \
-  >> /var/log/penallaw/ai-service.log 2>&1 &
+curl http://localhost:8000/health
 
-# Backend
-pkill -f java; nohup java -jar /root/PenalLawChatbot/backend/target/*.jar \
-  --server.port=8080 >> /var/log/penallaw/backend.log 2>&1 &
+# Spring Boot Backend
+curl http://localhost:8080/actuator/health
+
+# Frontend (via nginx)
+curl -I http://localhost:80
+```
+
+### 9.3. Verify Running Processes
+
+```bash
+# AI service (uvicorn)
+ps aux | grep uvicorn
+
+# Backend (Java)
+ps aux | grep java
 
 # nginx
-pkill nginx; nginx
+ps aux | grep nginx
+
+# PostgreSQL
+pg_isready
 ```
 
 ---
 
-## API Reference
+## 10. Troubleshooting Common Errors
 
-### Authentication (`/api/auth`)
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| POST | `/api/auth/register` | None | Register new user |
-| POST | `/api/auth/login` | None | Login, returns JWT token |
-
-### Dashboard & Visitor Tracking (`/api/home`)
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/api/home` | None | Aggregate system statistics |
-| POST | `/api/home/track-visit` | None | Record a unique daily visit (body: `{ "visitor_id": "<uuid>" }`) |
-
-### Chat — Guest Sessions (`/api/chat/guest`)
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| POST | `/api/chat/guest/{guestId}/sessions` | None | Create a guest session |
-| GET | `/api/chat/guest/{guestId}/sessions` | None | List guest sessions |
-
-### Chat — Authenticated Sessions (`/api/chat`)
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| POST | `/api/chat/sessions` | JWT | Create a new session |
-| GET | `/api/chat/sessions` | JWT | List user's sessions |
-
-### Chat — Messages (guest & authenticated)
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| POST | `/api/chat/sessions/{sessionId}/messages` | None | Send message → triggers AI pipeline |
-| GET | `/api/chat/sessions/{sessionId}/messages` | None | Get conversation history |
-| DELETE | `/api/chat/sessions/{sessionId}` | None | Delete a session |
-
-**`POST /api/chat/sessions/{sessionId}/messages` request body:**
-```json
-{
-  "content": "Bị cáo A dùng dao...",
-  "role": "defense | victim | neutral",
-  "rebuttal_against": "optional — the opposing argument text to rebut"
-}
-```
-
-### Law Lookup (`/api/laws`)
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/api/laws/{articleNumber}` | None | Fetch full article text from PostgreSQL |
-
-Query params: `crimeDate=YYYY-MM-DD` (selects historically applicable version), `source=Bộ luật Hình sự 2025` (exact source filter).
-
-### Admin (`/api/admin`)
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/api/admin/stats` | ROLE_ADMIN | Admin dashboard statistics |
-| GET | `/api/admin/feedback` | ROLE_ADMIN | All feedback with full session context |
-| POST | `/api/admin/feedback` | None | Submit feedback on an AI response |
-| PATCH | `/api/admin/feedback/{id}/status` | ROLE_ADMIN | Update feedback review status |
-| GET | `/api/admin/user-stats` | ROLE_ADMIN | Per-user case counts |
-
-**`POST /api/admin/feedback` request body:**
-```json
-{
-  "session_id": "<uuid>",
-  "message_id": "<uuid>",
-  "is_correct": true,
-  "comment": "optional explanation"
-}
-```
-
-### AI Service (internal + proxied via `/ai-api/`)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/predict` | Full legal analysis (RAG + LangGraph pipeline) |
-| POST | `/practice/evaluate` | Score & feedback for user's own legal analysis |
-| GET | `/health` | Health check + device status (CPU/GPU) |
+### Error: `OPENROUTER_API_KEY not set in .env`
+**Cause:** The `.env` file was not created or the key was not filled in.
+**Fix:** Redo Step 3 and provide a valid API key.
 
 ---
 
-## LangGraph Pipeline (`/predict`)
+### Error: `Milvus DB not found at .../VN_law_lora.db`
+**Cause:** The vector database file was not uploaded.
+**Fix:** Redo Step 5.2 to upload `VN_law_lora.db`.
 
-The pipeline classifies intent on every request and routes accordingly:
-
-```
-START
-  └─► classify_intent
-          ├─► casual       → casual_respond       → END
-          ├─► followup     → followup_generate     → END
-          └─► new_case
-                  └─► extract_facts
-                          └─► clarification_check
-                                  ├─► [MUST HAVEs missing] → clarification_node → END
-                                  └─► [OK] → multi_query_rewrite  (3 role-biased queries)
-                                                  └─► parallel_retrieve
-                                                          ├─► semantic search (3 queries × Milvus)
-                                                          └─► pinned_fetch(role)  ← direct metadata lookup
-                                                                  └─► temporal_priority_tagger
-                                                                          └─► rerank
-                                                                                  └─► map_laws
-                                                                                          ├─► [rebuttal_against set] → rebuttal_node → END
-                                                                                          └─► [normal] → generate → END
-```
-
-**Complete graph edges (as registered in `main.py`):**
-
-| From | To | Condition |
-|------|----|----------|
-| `START` | `extract_facts` | `classify_intent` → `new_case` |
-| `START` | `followup_generate` | `classify_intent` → `followup` |
-| `START` | `casual_respond` | `classify_intent` → `casual` |
-| `extract_facts` | `clarification_check` | always |
-| `clarification_check` | `clarification_node` | `clarification_router` → `clarify` |
-| `clarification_check` | `multi_query_rewrite` | `clarification_router` → `continue` |
-| `clarification_node` | `END` | always |
-| `multi_query_rewrite` | `parallel_retrieve` | always |
-| `parallel_retrieve` | `temporal_priority_tagger` | always |
-| `temporal_priority_tagger` | `rerank` | always |
-| `rerank` | `map_laws` | always |
-| `map_laws` | `rebuttal_node` | `check_rebuttal` → `rebuttal` |
-| `map_laws` | `generate` | `check_rebuttal` → `generate` |
-| `generate` / `rebuttal` / `followup_generate` / `casual_respond` | `END` | always |
-
-**Pipeline nodes:**
-
-| Node | Description |
-|------|-------------|
-| `classify_intent` | Router: classifies message as `new_case`, `followup`, or `casual` |
-| `extract_facts` | LLM-based structured JSON extraction of case facts (hanh_vi, ngay_pham_toi, aggravating/mitigating factors, multi-defendant dates, etc.) |
-| `clarification_check` | Validates required fields: `hanh_vi` and `ngay_pham_toi`. Rejects crime dates before 01/07/2000 (pre-BLHS 1999). |
-| `clarification_node` | Returns a user-facing prompt listing missing information |
-| `multi_query_rewrite` | Generates 3 retrieval queries in Vietnamese court-verdict narrative style: `behavior_query`, `circumstance_query` (role-biased), `evidence_query` |
-| `parallel_retrieve` | Two-step retrieval: (1) semantic search with all 3 queries against Milvus (deduped by article+source key); (2) pinned fetch of role-critical procedural articles by Milvus metadata filter (zero extra LLM calls) |
-| `temporal_priority_tagger` | Tags each retrieved document with `_temporal_role`: `primary` (crime-date edition), `comparison` (newer edition, for leniency check), or `adjustment` (always-applicable sentencing articles) |
-| `rerank` | Cross-encoder reranking using `BAAI/bge-reranker-v2-m3` directly via `AutoTokenizer` + `AutoModelForSequenceClassification`. Keeps top-5 semantic docs + all pinned docs (guaranteed inclusion). Replaces `grade_documents` (no serial LLM calls). |
-| `map_laws` | Maps extracted facts to specific BLHS articles, applying Article 7 retroactivity rules (crime-date edition = baseline; newer edition if more lenient) |
-| `generate` | Role-specific legal argument generation with mandatory ĐIỀU KHOẢN ÁP DỤNG citation table |
-| `rebuttal_node` | Study mode grader: scores user's submitted legal argument (0–100) against ground-truth `mapped_laws` on 4 criteria |
-| `followup_generate` | Follow-up answers reusing cached `documents` and `mapped_laws` from the previous turn — no re-retrieval |
-| `casual_respond` | Handles greetings and off-topic messages |
-
-**Required fields for `extract_facts` (MUST HAVE — pipeline blocks if missing):**
-
-| Field | Description |
-|-------|-------------|
-| `hanh_vi` | Description of the criminal act (what the defendant did) |
-| `ngay_pham_toi` | Date of the offense in `dd/mm/yyyy` format |
-
-All other fields (`hau_qua`, `tinh_tiet_tang_nang`, `tinh_tiet_giam_nhe`, `co_tien_an`, `per_defendant_dates`, etc.) are optional — the pipeline continues with `null` values if absent.
-
-**Pinned-fetch articles per role** — procedural articles that semantic search reliably misses because they share no vocabulary with case descriptions:
-
-| Role | Always-pinned purposes | BLHS 2015-era articles | BLHS 1999-era articles |
-|------|-----------------------|------------------------|------------------------|
-| All | Retroactivity | Điều 7 | Điều 7 |
-| `neutral` | Mitigating, Aggravating, Penalty consolidation | 51, 52, 55 | 46, 48, 50 |
-| `defense` | Mitigating, Below-minimum, Attempt reduction, Suspended sentence | 51, 54, 57, 65 | 46, 47, 52, 60 |
-| `victim` | Aggravating, Recidivism, Civil compensation, Penalty types | 52, 53, 48, 32 | 48, 49, 42, 28 |
-
-**Legal code edition routing** — applied by `temporal_priority_tagger` based on crime date:
-
-| Crime Date Range | Applied Edition |
-|-----------------|----------------|
-| 01/07/2000 – 31/12/2009 | BLHS 1999 |
-| 01/01/2010 – 31/12/2017 | BLHS 1999 (sửa đổi 2009) |
-| 01/01/2018 – 30/06/2025 | BLHS 2015 (sửa đổi 2017) |
-| 01/07/2025 – present | BLHS 2015 (sửa đổi 2025) |
-
-> **Retroactivity (Điều 7 BLHS):** The pipeline retrieves both the crime-date edition (`primary`) and any newer edition (`comparison`). `map_laws` then applies the more lenient edition per charge. Hard-filtering to a single edition is prohibited.
-
----
-
-## Roles (Bias Modes)
-
-| Role value | Vietnamese Label | Analysis Bias |
-|------------|-----------------|---------------|
-| `neutral` | Thẩm phán | Objective, balanced judgment |
-| `defense` | Luật sư Bào chữa | Minimize sentence, maximize mitigating factors (Điều 51 BLHS) |
-| `victim` | Luật sư Bị hại | Maximize sentence, maximize civil compensation, cite aggravating factors (Điều 52 BLHS) |
-
----
-
-## Practice Mode (`/practice/evaluate`)
-
-Users write their own legal analysis for a given case, then submit it for AI scoring.
-
-**Request:**
-```json
-{
-  "case_description": "Bị cáo A dùng dao...",
-  "user_mode": "defense | victim | neutral",
-  "user_analysis": "Theo tôi, bị cáo phạm tội..."
-}
-```
-
-**Response:**
-```json
-{
-  "score": 75,
-  "feedback": {
-    "strengths": ["Xác định đúng tội danh theo Điều 134..."],
-    "improvements": ["Chưa phân tích tình tiết giảm nhẹ Điều 51..."],
-    "missed_articles": ["Điều 51 Bộ luật Hình sự 2015 (tình tiết giảm nhẹ)"],
-    "suggestion": "Cần bổ sung phân tích về thời gian tạm giam..."
-  }
-}
-```
-
----
-
-## CPU Optimization
-
-The AI service is optimized for CPU-only inference (no GPU required):
-
-- PyTorch thread count pinned to all available physical cores via `OMP_NUM_THREADS`, `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, and `torch.set_num_threads()` / `torch.set_num_interop_threads()`
-- Auto-detection: uses CUDA GPU if available (with a kernel probe to verify), falls back to CPU with a warning
-- Override with `FORCE_CPU=1` env var to always use CPU regardless of GPU availability
-- BGE-M3 reranker uses 8192-token context — fits the longest Vietnamese law articles (up to ~3,574 tokens for Điều 232 BLHS 2017) without truncation
-- Reranker runs in fp16 on GPU (`model.half()`), fp32 on CPU
-- Reranker implementation uses `AutoTokenizer` + `AutoModelForSequenceClassification` directly (not `CrossEncoder` wrapper, which breaks on `transformers >= 4.57`)
-
-**Known limitation:** `sentence_transformers.CrossEncoder` and `FlagEmbedding.FlagReranker` both call `prepare_for_model`, which was removed in `transformers 4.57`. The project uses direct `AutoModel` inference to avoid this.
-
-**Surrogate sanitization:** All text passed to the LLM and Milvus is sanitized via `sanitize_text()` to strip lone UTF-16 surrogates (U+D800–U+DFFF) that appear in Vietnamese law text scraped from PDFs, which would otherwise crash Python's UTF-8 JSON encoder.
-
----
-
-## Database Entities
-
-| Entity | Table | Description |
-|--------|-------|-------------|
-| `User` | `users` | Registered accounts (email, bcrypt password, role) |
-| `ChatSession` | `chat_sessions` | Conversation containers (userId or guestId, role) |
-| `ChatMessage` | `chat_messages` | Individual messages with AI response metadata |
-| `Feedback` | `feedbacks` | User ratings on AI responses (isCorrect, comment, status) |
-| `Law` | `laws` | Full article text from all BLHS editions |
-| `DailyVisit` | `daily_visits` | Unique visitor tracking (visitor_id, visit_date, unique constraint) |
-| `SiteStats` | `site_stats` | Aggregate counters |
-
----
-
-## Development Mode (Local)
-
-**AI Service:**
 ```bash
-cd ai-service
-cp .env.example .env   # fill in OPENROUTER_API_KEY and HF_TOKEN
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-```
-
-**Backend:**
-```bash
-cd backend
-# Set env vars: OPENROUTER_API_KEY, HF_TOKEN, JWT_SECRET, POSTGRES_* 
-# or update src/main/resources/application.yml
-mvn spring-boot:run
-```
-
-**Frontend:**
-```bash
-cd frontend
-npm install
-npm run dev   # runs on http://localhost:5173
-# Vite proxies: /api → http://localhost:8080, /ai-api → http://localhost:8000
+scp -i chatbot-key.pem VN_law_lora.db ubuntu@<EC2_PUBLIC_IP>:/tmp/
+ssh -i chatbot-key.pem ubuntu@<EC2_PUBLIC_IP> \
+    "sudo mv /tmp/VN_law_lora.db /root/PenalLawChatbot/ai-service/"
 ```
 
 ---
 
-## Deployment Scripts
+### Error: `No backup files found in .../database/backups`
+**Cause:** The `.sql` backup file was not uploaded.
+**Fix:** Redo Step 5.1 to upload the backup file.
 
-| Script | Description |
-|--------|-------------|
-| `scripts/setup_server.sh` | Initial server provisioning (Java 21, Python 3.10, Node.js 20, nginx, PostgreSQL) |
-| `scripts/deploy_nodocker.sh` | Full bare-metal deployment — builds and starts all four services |
-| `scripts/restore_database.sh` | Restore PostgreSQL from a `.dump` backup file |
-| `scripts/backup_database.sh` | Create a PostgreSQL backup |
-| `scripts/check_db_status.sh` | Database connectivity and table health check |
-| `scripts/merge_backups.py` | Merge split backup files into one |
-| `scripts/deploy.sh` | Docker-based deployment (alternative) |
+---
+
+### Git pull error: `untracked working tree files would be overwritten`
+**Cause:** Local untracked files conflict with files incoming from the remote branch.
+**Fix:**
+
+```bash
+# Remove the conflicting files (usually temporary .sql backup files)
+rm database/backups/penallaw_backup_*.sql
+git pull origin dev
+```
+
+Or, to completely discard all local changes:
+```bash
+git fetch origin
+git reset --hard origin/dev
+git clean -fd
+```
+
+---
+
+### AI Service not ready after 300 seconds
+**Cause:** Model download failed, or `HF_TOKEN` is missing/incorrect.
+**Fix:** Check the log and verify the token:
+
+```bash
+tail -50 /var/log/penallaw/ai-service.log
+
+# Verify HF_TOKEN is set correctly
+grep HF_TOKEN /root/PenalLawChatbot/.env
+```
+
+---
+
+### Backend cannot connect to the database
+**Cause:** PostgreSQL is not running or credentials are incorrect.
+**Fix:**
+
+```bash
+# Check PostgreSQL status
+pg_isready
+
+# Start it manually if not running
+PG_VER=$(ls /etc/postgresql/ | sort -V | tail -1)
+pg_ctlcluster $PG_VER main start
+```
+
+---
+
+## 11. Restarting Individual Services
+
+After a server reboot or when you need to restart everything, simply re-run the deploy script:
+
+```bash
+cd /root/PenalLawChatbot
+bash scripts/deploy_nodocker.sh
+```
+
+To restart individual services manually:
+
+```bash
+# Restart AI Service
+pkill -f uvicorn || true
+_GC=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | wc -l || echo 0)
+[ "$_GC" -lt 1 ] && _GC=1
+cd /root/PenalLawChatbot/ai-service
+GPU_COUNT=$_GC nohup python3 -m uvicorn app.main:app \
+    --host 0.0.0.0 --port 8000 --workers $_GC \
+    >> /var/log/penallaw/ai-service.log 2>&1 &
+
+# Restart Backend
+pkill -f "java.*penallaw" || pkill -f "java.*backend" || true
+nohup java -jar /root/PenalLawChatbot/backend/target/*.jar \
+    --server.port=8080 \
+    >> /var/log/penallaw/backend.log 2>&1 &
+
+# Restart nginx
+pkill nginx || true && nginx
+
+# Restart PostgreSQL
+PG_VER=$(ls /etc/postgresql/ | sort -V | tail -1)
+pg_ctlcluster $PG_VER main start
+```
+
+---
+
+## Quick Reference
+
+```bash
+# 1. Connect to the server
+ssh -i chatbot-key.pem ubuntu@<EC2_PUBLIC_IP>
+sudo su -
+
+# 2. Install environment (first time only)
+bash scripts/setup_server.sh
+
+# 3. Upload files from your local machine
+scp -i chatbot-key.pem database/backups/penallaw_backup_*.sql ubuntu@<IP>:/tmp/
+scp -i chatbot-key.pem ai-service/VN_law_lora.db ubuntu@<IP>:/tmp/
+
+# 4. Move files to the correct locations (on the server)
+mv /tmp/penallaw_backup_*.sql /root/PenalLawChatbot/database/backups/
+mv /tmp/VN_law_lora.db /root/PenalLawChatbot/ai-service/
+
+# 5. Configure environment
+cp .env.example .env && nano .env
+
+# 6. Restore the database
+bash scripts/restore_database.sh
+
+# 7. Deploy all services
+bash scripts/deploy_nodocker.sh
+
+# 8. Access the application
+# Open browser: http://<EC2_PUBLIC_IP>
+```

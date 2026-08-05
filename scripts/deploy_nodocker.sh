@@ -34,7 +34,7 @@ error() { echo -e "${RED}[ERR]${NC}   $*"; exit 1; }
 REPO_URL="https://github.com/trunghieu1206/PenalLawChatbot"
 PROJECT_DIR="/root/PenalLawChatbot"
 LOG_DIR="/var/log/penallaw"
-BRANCH="bm25"
+BRANCH="dev"
 mkdir -p "$LOG_DIR"
 chmod 777 "$LOG_DIR"
 
@@ -137,11 +137,11 @@ if [ -d "$PROJECT_DIR/.git" ]; then
     info "Git repo found — pulling latest ($BRANCH)..."
     git -C "$PROJECT_DIR" checkout "$BRANCH"
     git -C "$PROJECT_DIR" pull origin "$BRANCH"
-elif [ -d "$PROJECT_DIR/ai-service" ]; then
+elif [ -f "$PROJECT_DIR/ai-service/requirements.txt" ]; then
     # Full project present (uploaded via scp) — use as-is, no clone needed
-    warn "Project directory found (non-git, uploaded via scp). Using as-is."
+    warn "Project directory found (non-git, uploaded via scp) — skipping clone."
 else
-    # Directory missing OR exists but is incomplete (e.g. only database/backups/ was created)
+    # Directory missing OR exists but is incomplete (e.g. only database/backups/ or empty ai-service/ was created)
     warn "Project incomplete or missing — cloning fresh (preserving any backups and .env)..."
     _clone_fresh "$PROJECT_DIR"
 fi
@@ -291,15 +291,28 @@ cd "$PROJECT_DIR/ai-service"
 # for Python 3.13+. Ubuntu 26.04 ships python3 → Python 3.14 by default.
 # If the system Python is too new (>= 3.13), auto-install python3.11 which has
 # full wheel coverage for all our dependencies.
+# On Ubuntu 24.04/26.04 python3.11 is NOT in the default apt repos — it must
+# come from the deadsnakes PPA (ppa:deadsnakes/ppa).
 _SYS_PY_MAJOR=$(python3 -c "import sys; print(sys.version_info.major)" 2>/dev/null || echo "3")
 _SYS_PY_MINOR=$(python3 -c "import sys; print(sys.version_info.minor)" 2>/dev/null || echo "0")
 if [ "$_SYS_PY_MAJOR" -ge 3 ] && [ "$_SYS_PY_MINOR" -ge 13 ]; then
     warn "System python3 is Python ${_SYS_PY_MAJOR}.${_SYS_PY_MINOR} — too new for pydantic-core/torch wheels."
     if ! command -v python3.11 &>/dev/null; then
-        info "Auto-installing python3.11 (required for ML package wheel compatibility)..."
+        info "Auto-installing python3.11 via deadsnakes PPA (required for ML wheel compatibility)..."
+        # Add deadsnakes PPA — the only reliable source of old Python versions on Ubuntu 24/26
         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            python3.11 python3.11-venv python3.11-dev python3-pip 2>&1 | tail -3 || \
+            software-properties-common 2>&1 | tail -2 || true
+        add-apt-repository -y ppa:deadsnakes/ppa 2>&1 | tail -3 || true
+        apt-get update -qq 2>&1 | tail -2 || true
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            python3.11 python3.11-venv 2>&1 | tail -3 || \
             warn "python3.11 install failed — will try to continue with system Python."
+        # Bootstrap pip for python3.11 (deadsnakes doesn't include pip directly)
+        if command -v python3.11 &>/dev/null && ! python3.11 -m pip --version &>/dev/null 2>&1; then
+            info "Bootstrapping pip for python3.11..."
+            curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 2>&1 | tail -2 || \
+                warn "pip bootstrap for python3.11 failed."
+        fi
     fi
     if command -v python3.11 &>/dev/null; then
         info "Using python3.11 ($(python3.11 --version)) instead of system python3 ${_SYS_PY_MAJOR}.${_SYS_PY_MINOR}."
@@ -640,7 +653,7 @@ _TORCH_CUDA_BEFORE=$("$AI_PYTHON" -c "import torch; print(torch.cuda.is_availabl
 # already satisfies the requirement spec — no redundant downloads.
 if "$AI_PYTHON" -c "
 import fastapi, transformers, langchain, langchain_openai, langgraph
-import sentence_transformers, peft, uvicorn, FlagEmbedding
+import peft, uvicorn
 " 2>/dev/null; then
     skip "AI service requirements already installed — skipping pip install."
 else
@@ -664,8 +677,6 @@ else
     # Fix Numpy 2.0 ABI incompatibilities with scipy
     "$AI_PYTHON" -m pip install "numpy>=2.0.0" "scipy>=1.13.0" --upgrade --quiet 2>&1 | tail -2 || true
 
-    # Install FlagEmbedding (required by bge-reranker-v2-m3)
-    "$AI_PYTHON" -m pip install "FlagEmbedding>=1.2.0" --quiet 2>&1 | tail -2 || true
 fi
 
 # ── Torchvision: uninstall only if actually present ──────────────────────────────────────
@@ -724,8 +735,7 @@ info "AI service requirements installed."
 info "Verifying critical imports..."
 "$AI_PYTHON" -c "
 import torch
-from transformers import AutoModel, AutoTokenizer
-from sentence_transformers import CrossEncoder
+from transformers import AutoModel, AutoTokenizer, AutoModelForSequenceClassification
 import peft, transformers, uvicorn, fastapi, langchain_openai, langgraph
 from peft import PeftModel
 print(f'✅ All imports OK | torch={torch.__version__} | peft={peft.__version__} | transformers={transformers.__version__}')
@@ -932,27 +942,65 @@ info "nginx started."
 echo ""
 info "Waiting for AI service to be ready (up to 300s)..."
 info "  (First run: model loading takes 60-120s on GPU, 180-300s on CPU)"
+info "  PID $AI_PID — watching log: $LOG_DIR/ai-service.log"
 _ai_ready=false
 _ai_elapsed=0
-_ai_last_log=0
+
 while [ $_ai_elapsed -lt 300 ]; do
     if curl -sf --max-time 2 "http://localhost:8000/health" > /dev/null 2>&1; then
         info "  ✅ AI Service is up! (after ${_ai_elapsed}s)"
         _ai_ready=true
         break
     fi
-    # Print last 2 lines of AI log every 10 seconds so user can see progress
+
+    # Every 10s: print last 5 log lines + process alive check
     if [ $((_ai_elapsed % 10)) -eq 0 ] && [ $_ai_elapsed -gt 0 ]; then
-        _last_lines=$(tail -2 "$LOG_DIR/ai-service.log" 2>/dev/null | tr '\n' ' ')
-        printf "\r  ⏳ [%3ds] %s\n" "$_ai_elapsed" "$_last_lines"
+        echo ""
+        echo "  ── [${_ai_elapsed}s] AI service log (last 5 lines) ──────────────────"
+        tail -5 "$LOG_DIR/ai-service.log" 2>/dev/null | while IFS= read -r line; do
+            echo "  │  $line"
+        done
+        echo "  ────────────────────────────────────────────────────────────────"
+
+        # Check if the process is still alive
+        if kill -0 "$AI_PID" 2>/dev/null; then
+            _mem=$(ps -o rss= -p "$AI_PID" 2>/dev/null | awk '{printf "%.0f MB", $1/1024}' || echo "?")
+            echo "  │  Process $AI_PID is alive | RAM: $_mem"
+        else
+            echo ""
+            warn "  ❌ AI service process $AI_PID has DIED — not alive anymore!"
+            warn "     Last 20 lines of log:"
+            tail -20 "$LOG_DIR/ai-service.log" 2>/dev/null | while IFS= read -r line; do
+                warn "     | $line"
+            done
+            warn "  Fix the crash above, then re-run deploy_nodocker.sh"
+            break
+        fi
+
+        # Every 30s: check if HuggingFace model download is in progress
+        if [ $((_ai_elapsed % 30)) -eq 0 ]; then
+            _hf_cache_size=$(du -sh ~/.cache/huggingface 2>/dev/null | cut -f1 || echo "?")
+            echo "  │  HuggingFace cache size: $_hf_cache_size  (growing = models downloading)"
+            _open_net=$(ls -l /proc/"$AI_PID"/fd 2>/dev/null | grep -c socket || echo "?")
+            echo "  │  Open sockets: $_open_net  (>0 = active download or Milvus init)"
+        fi
+        echo ""
     else
-        printf "\r  ⏳ Elapsed: %3ds / 300s — waiting..." "$_ai_elapsed"
+        printf "\r  ⏳ [%3ds / 300s] waiting for /health ..." "$_ai_elapsed"
     fi
+
     sleep 1
     _ai_elapsed=$((_ai_elapsed + 1))
 done
+
 echo ""
-[ "$_ai_ready" = false ] && warn "  ⚠️  AI Service not ready after 300s — check $LOG_DIR/ai-service.log"
+[ "$_ai_ready" = false ] && {
+    warn "  ⚠️  AI Service not ready after 300s — check $LOG_DIR/ai-service.log"
+    warn "  Last 30 lines of log:"
+    tail -30 "$LOG_DIR/ai-service.log" 2>/dev/null | while IFS= read -r line; do
+        warn "  | $line"
+    done
+}
 
 info "Waiting for Backend to be ready (up to 60s)..."
 _be_ready=false

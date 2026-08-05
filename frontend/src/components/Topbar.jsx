@@ -14,8 +14,9 @@ export default function Topbar() {
       <div className="flex items-center gap-6">
         <span className="text-lg font-black text-slate-900 font-h3 hover:text-primary transition-colors cursor-pointer" onClick={() => navigate('/home')}>VNPLaw</span>
         <nav className="hidden md:flex gap-4">
-          <button className="font-newsreader text-sm font-medium text-slate-500 hover:text-slate-900 transition-all duration-300">Tài liệu</button>
-          <button className="font-newsreader text-sm font-medium text-slate-500 hover:text-slate-900 transition-all duration-300">Lưu trữ</button>
+          {/* TODO: Docs and Archive pages not yet implemented */}
+          <button className="font-newsreader text-sm font-medium text-slate-400 cursor-not-allowed" disabled title="Chưa có">Tài liệu</button>
+          <button className="font-newsreader text-sm font-medium text-slate-400 cursor-not-allowed" disabled title="Chưa có">Lưu trữ</button>
         </nav>
       </div>
       <div className="flex items-center gap-4">

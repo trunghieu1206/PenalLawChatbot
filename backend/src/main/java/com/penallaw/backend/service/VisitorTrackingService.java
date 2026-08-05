@@ -53,13 +53,4 @@ public class VisitorTrackingService {
             log.debug("Duplicate visit insert ignored (race condition): {}", e.getMessage());
         }
     }
-
-    /**
-     * Returns the total number of unique daily visit events ever recorded.
-     * Each row = 1 unique visitor on 1 unique day.
-     * Persistent across server restarts and migrations (stored in PostgreSQL).
-     */
-    public long getTotalVisitorCount() {
-        return visitorLogRepository.count();
-    }
 }

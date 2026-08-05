@@ -84,6 +84,8 @@
 
 .inputWrap {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .inputIcon {
@@ -93,10 +95,19 @@
   transform: translateY(-50%);
   color: var(--outline);
   font-size: 18px;
+  line-height: 1;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
 }
 
 .input {
-  padding-left: 40px;
+  padding-left: 42px !important;
 }
 
 .optionsRow {

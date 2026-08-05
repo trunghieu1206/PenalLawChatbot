@@ -2,7 +2,6 @@ package com.penallaw.backend.service;
 
 import com.penallaw.backend.dto.StatsDTOs;
 import com.penallaw.backend.entity.ChatMessage;
-import com.penallaw.backend.entity.ChatSession;
 import com.penallaw.backend.repository.ChatMessageRepository;
 import com.penallaw.backend.repository.ChatSessionRepository;
 import com.penallaw.backend.repository.VisitorLogRepository;
@@ -15,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -51,18 +49,17 @@ public class StatsService {
         long totalSessions = sessionRepository.count();
         long totalUsers    = userRepository.count();
 
-        // Sessions that ran the new_case pipeline (AI response has extracted_facts)
-        List<ChatMessage> aiMessages = messageRepository.findAssistantMessagesWithFacts();
-        long casesProcessed = aiMessages.stream()
-                .map(m -> m.getSession().getId())
-                .distinct()
-                .count();
+        // Sessions that ran the new_case pipeline — single COUNT DISTINCT query (no N+1)
+        long casesProcessed = sessionRepository.countDistinctSessionsWithFacts();
 
-        // -- Sessions by role --
-        Map<String, Long> byRole = sessionRepository.findAll().stream()
-                .collect(Collectors.groupingBy(
-                        s -> Optional.ofNullable(s.getMode()).orElse("neutral"),
-                        Collectors.counting()
+        // Still need the full message list for province/crime-type breakdowns
+        List<ChatMessage> aiMessages = messageRepository.findAssistantMessagesWithFacts();
+
+        // -- Sessions by role (DB-aggregated) --
+        Map<String, Long> byRole = sessionRepository.groupByMode().stream()
+                .collect(Collectors.toMap(
+                        row -> (String) row[0],
+                        row -> (Long) row[1]
                 ));
 
         // -- Cases by province (dia_danh from extracted_facts) --

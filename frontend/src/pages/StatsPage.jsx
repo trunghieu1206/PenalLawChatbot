@@ -86,10 +86,10 @@ export default function StatsPage() {
           <div className={styles.descriptionCard}>
             <div className={styles.descriptionHeader}>
               <span className="material-symbols-outlined text-primary">gavel</span>
-              <h3>Về Hệ thống VNPLaw</h3>
+              <h3>Về VNPLaw Chatbot</h3>
             </div>
             <p>
-              VNPLaw là hệ thống được phát triển để giải quyết một vụ án hình sự, tích hợp chức năng điều chỉnh góc nhìn (thẩm phán, luật sư bảo vệ bị hại, luật sư bảo vệ bị cáo). Hệ thống hỗ trợ phân tích tình tiết vụ án, trích dẫn điều luật tương ứng trong Bộ luật Hình sự và đưa ra câu trả lời dưới từng góc nhìn.
+              VNPLaw là Chatbot được phát triển để giải quyết một vụ án hình sự, tích hợp chức năng điều chỉnh góc nhìn (thẩm phán, luật sư bảo vệ bị hại, luật sư bảo vệ bị cáo). Chatbot hỗ trợ phân tích tình tiết vụ án, trích dẫn điều luật tương ứng trong Bộ luật Hình sự và đưa ra câu trả lời dưới từng góc nhìn.
             </p>
             <div className={styles.featureGrid}>
               <div className={styles.featureItem}>
@@ -184,7 +184,7 @@ export default function StatsPage() {
             </button>
           </div>
         </div>
-        <Footer />
+        {/* <Footer /> */}
       </main>
     </div>
   );

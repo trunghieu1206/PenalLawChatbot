@@ -6,15 +6,11 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
+      // All API calls (including Practice Mode) go through the Spring Boot backend.
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
-      '/ai-api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/ai-api/, ''),
-      }
     }
   }
 })

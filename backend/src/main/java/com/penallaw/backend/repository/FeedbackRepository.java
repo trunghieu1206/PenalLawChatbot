@@ -18,4 +18,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
 
     /** Efficient upsert lookup — replaces the full-scan in AdminService.submitFeedback. */
     Optional<Feedback> findByMessageId(UUID messageId);
+
+    /** Delete all feedback records belonging to a session (used before session deletion). */
+    void deleteBySessionId(UUID sessionId);
 }

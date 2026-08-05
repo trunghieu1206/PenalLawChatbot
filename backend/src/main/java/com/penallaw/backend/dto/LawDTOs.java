@@ -19,8 +19,7 @@ public class LawDTOs {
             String source,
             @JsonProperty("effective_date") LocalDate effectiveDate,
             @JsonProperty("effective_end_date") LocalDate effectiveEndDate,
-            @JsonProperty("is_active") Boolean isActive,
-            Integer version
+            @JsonProperty("is_active") Boolean isActive
     ) {}
 
     /**

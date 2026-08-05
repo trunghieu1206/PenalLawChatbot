@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import Footer from '../components/Footer.jsx';
 import Topbar from '../components/Topbar.jsx';
-import { Link, useNavigate } from 'react-router-dom';
 import { practiceApi, lawsApi } from '../services/api.js';
 import styles from './TrainingPage.module.css';
 import Sidebar from '../components/Sidebar.jsx';
@@ -27,12 +26,9 @@ const MODES = [
   },
 ];
 
-// Regex to extract article number and source from law citation text
-// Properly matches: "Điều 249", "Điều 51 Bộ luật Hình sự 2025", "Điều 51 Bộ luật Hình sự 2015 (sửa đổi 2017)"
-const LAW_CITATION_REGEX = /Điều\s+(\d+[A-Z]?)(?:\s+(Bộ\s+luật\s+Hình\s+sự(?:\s+\d{4})?(?:\s+\(sửa\s+đổi(?:\s+\d{4})?\))?|BLHS(?:\s+\d{4})?|BLTTHS))?/g;
+
 
 export default function TrainingPage() {
-  const navigate = useNavigate();
   const [mode, setMode] = useState('neutral');
   const [caseDesc, setCaseDesc] = useState('');
   const [userAnalysis, setUserAnalysis] = useState('');
@@ -117,45 +113,6 @@ export default function TrainingPage() {
     });
   };
 
-  // Parse law citations and make them clickable
-  const renderLawCitations = (text) => {
-    if (!text) return text;
-    
-    const parts = [];
-    let lastIndex = 0;
-    const matches = [...text.matchAll(LAW_CITATION_REGEX)];
-    
-    matches.forEach((match) => {
-      const fullMatch = match[0];
-      const articleNum = match[1];
-      const sourceStr = match[2]?.trim() || '';
-      
-      // Add text before this match
-      parts.push(text.substring(lastIndex, match.index));
-      
-      // Add clickable law citation
-      parts.push(
-        <button
-          key={`law-${match.index}`}
-          className="law-citation"
-          style={{ cursor: 'pointer', textDecoration: 'underline', background: 'none', border: 'none', padding: 0 }}
-          onClick={() => handleLawClick(articleNum, sourceStr)}
-          title={`Xem Điều ${articleNum}`}
-        >
-          {fullMatch}
-        </button>
-      );
-      
-      lastIndex = match.index + fullMatch.length;
-    });
-    
-    if (lastIndex < text.length) {
-      parts.push(text.substring(lastIndex));
-    }
-    
-    return parts.length > 0 ? parts : text;
-  };
-
   const getScoreClass = (score) => {
     if (score >= 80) return styles.scoreHigh;
     if (score >= 60) return styles.scoreMid;
@@ -205,10 +162,11 @@ export default function TrainingPage() {
               <div className={styles.cardHeader}>
                 <h2>Nội dung Vụ án</h2>
                 <div className={styles.cardActions}>
-                  <button type="button" title="Nhập tài liệu">
+                  {/* TODO: Upload and template features not yet implemented */}
+                  <button type="button" title="Nhập tài liệu (chưa hỗ trợ)" disabled className="opacity-40 cursor-not-allowed">
                     <span className="material-symbols-outlined">upload_file</span>
                   </button>
-                  <button type="button" title="Tải mẫu">
+                  <button type="button" title="Tải mẫu (chưa hỗ trợ)" disabled className="opacity-40 cursor-not-allowed">
                     <span className="material-symbols-outlined">description</span>
                   </button>
                 </div>
@@ -261,7 +219,7 @@ export default function TrainingPage() {
                 </div>
                 <div className={styles.emptyBody}>
                   <h3>Chưa có dữ liệu đánh giá</h3>
-                  <p>Nhập "Nội dung Vụ án" và "Phân tích của bạn", sau đó nhấn "Bắt đầu đánh giá" để hệ thống AI phân tích lập luận pháp lý của bạn.</p>
+                  <p>Nhập "Nội dung Vụ án" và "Phân tích của bạn", sau đó nhấn "Bắt đầu đánh giá" để phân tích lập luận pháp lý của bạn.</p>
                 </div>
               </section>
             ) : (
@@ -348,7 +306,6 @@ export default function TrainingPage() {
             )}
           </div>
         </div>
-        <Footer />
       </main>
 
       {lawModal.open && (
