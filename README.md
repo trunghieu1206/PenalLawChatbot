@@ -48,9 +48,8 @@ User Browser
 | **Vector DB** | Milvus Lite (local `.db` file, `pymilvus 2.4.x`) |
 | **BM25** | `rank-bm25` (hybrid keyword retrieval) |
 | **Backend API** | Java 21, Spring Boot 3.4 |
-| **Database** | PostgreSQL, Hibernate/JPA, Lombok |
+| **Database** | PostgreSQL, Hibernate/JPA |
 | **Frontend** | React 19, Vite 6, Tailwind CSS 3 |
-| **Web Server** | Nginx (static SPA + reverse proxy) |
 | **Deployment** | AWS EC2 Ubuntu 24.04, bare-metal (no Docker) |
 
 ---
