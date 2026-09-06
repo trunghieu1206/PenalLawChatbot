@@ -47,9 +47,9 @@ User Browser
 | **LLM** | `google/gemini-2.5-flash` via OpenRouter API |
 | **Vector DB** | Milvus Lite (local `.db` file, `pymilvus 2.4.x`) |
 | **BM25** | `rank-bm25` (hybrid keyword retrieval) |
-| **Backend API** | Java 21, Spring Boot 3.4, Spring Security, JWT (jjwt 0.12.6), Bucket4j rate limiting |
+| **Backend API** | Java 21, Spring Boot 3.4 |
 | **Database** | PostgreSQL, Hibernate/JPA, Lombok |
-| **Frontend** | React 19, Vite 6, Tailwind CSS 3, React Router 7, React Markdown |
+| **Frontend** | React 19, Vite 6, Tailwind CSS 3 |
 | **Web Server** | Nginx (static SPA + reverse proxy) |
 | **Deployment** | AWS EC2 Ubuntu 24.04, bare-metal (no Docker) |
 
